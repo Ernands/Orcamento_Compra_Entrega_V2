@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+supabase/.branches/
+supabase/.temp/
+supabase/functions/.env
+playwright-report/
+test-results/
+*.log
+.DS_Store
+Thumbs.db
