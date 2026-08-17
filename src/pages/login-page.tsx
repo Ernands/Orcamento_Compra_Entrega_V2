@@ -1,13 +1,9 @@
 import { Eye, EyeOff, KeyRound, LoaderCircle, LogIn, ShieldCheck } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { EdgeFunctionError } from '../lib/edge-function';
 import { useSession } from '../app/session-provider';
 import { formatCpfInput, isValidCpf } from '../../supabase/functions/_shared/cpf';
-
-interface LoginLocationState {
-  from?: string;
-}
 
 function loginMessage(error: unknown): string {
   if (error instanceof EdgeFunctionError) {
@@ -28,15 +24,13 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const { session, viewer, loading, login } = useSession();
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as LoginLocationState | null)?.from || '/lojas';
 
   useEffect(() => {
     document.title = 'Entrar | Implanta 27';
   }, []);
 
   if (!loading && session && viewer) {
-    return <Navigate to={viewer.mustChangePassword ? '/alterar-senha' : from} replace />;
+    return <Navigate to={viewer.mustChangePassword ? '/alterar-senha' : '/dashboard'} replace />;
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -51,7 +45,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(cpf, password);
-      void navigate(from, { replace: true });
+      void navigate('/dashboard', { replace: true });
     } catch (loginError) {
       setError(loginMessage(loginError));
     } finally {
