@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
 import {
   loadImplementationDashboard,
@@ -397,6 +398,8 @@ function SupplyView({ data, compact = false }: { data: SupplyDashboard; compact?
 }
 
 export function DashboardPage({ view }: { view: DashboardView }) {
+  const { can } = useSession();
+  const canViewSupply = can('items.view') || can('suppliers.view') || can('quotes.view');
   const [implementation, setImplementation] = useState<ImplementationDashboard | null>(null);
   const [supply, setSupply] = useState<SupplyDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -411,7 +414,7 @@ export function DashboardPage({ view }: { view: DashboardView }) {
       else {
         const [implementationData, supplyData] = await Promise.all([
           loadImplementationDashboard(),
-          loadSupplyDashboard(),
+          canViewSupply ? loadSupplyDashboard() : Promise.resolve(null),
         ]);
         setImplementation(implementationData);
         setSupply(supplyData);
@@ -421,7 +424,7 @@ export function DashboardPage({ view }: { view: DashboardView }) {
     } finally {
       setLoading(false);
     }
-  }, [view]);
+  }, [canViewSupply, view]);
 
   useEffect(() => {
     void load();
@@ -451,10 +454,12 @@ export function DashboardPage({ view }: { view: DashboardView }) {
           <Factory size={17} />
           Implantacao
         </Link>
-        <Link className={view === 'supply' ? 'active' : ''} to="/dashboard/suprimentos">
-          <Boxes size={17} />
-          Suprimentos
-        </Link>
+        {canViewSupply && (
+          <Link className={view === 'supply' ? 'active' : ''} to="/dashboard/suprimentos">
+            <Boxes size={17} />
+            Suprimentos
+          </Link>
+        )}
       </nav>
       {loading ? (
         <InlineLoading label="Carregando dashboard" />
@@ -462,10 +467,10 @@ export function DashboardPage({ view }: { view: DashboardView }) {
         <ErrorState message={error} onRetry={() => void load()} />
       ) : (
         <>
-          {view === 'overview' && implementation && supply && (
+          {view === 'overview' && implementation && (
             <>
               <ImplementationView data={implementation} compact />
-              <SupplyView data={supply} compact />
+              {canViewSupply && supply && <SupplyView data={supply} compact />}
             </>
           )}
           {view === 'implementation' && implementation && (
