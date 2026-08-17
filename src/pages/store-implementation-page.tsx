@@ -233,7 +233,7 @@ export function StoreImplementationPage() {
                   </select>
                 </label>
                 <label className="field">
-                  Data-base
+                  Data prevista de inauguração
                   <input
                     type="date"
                     value={baseDate}

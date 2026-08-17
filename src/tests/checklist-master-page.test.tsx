@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createChecklistItem,
   createChecklistVersion,
   listChecklistItems,
   listChecklistVersions,
@@ -49,6 +50,7 @@ const item = {
 
 describe('ChecklistMasterPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(listChecklistVersions).mockResolvedValue([version]);
     vi.mocked(listChecklistItems).mockResolvedValue([item]);
   });
@@ -81,5 +83,35 @@ describe('ChecklistMasterPage', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Salvar versao' }));
     expect(createChecklistVersion).toHaveBeenCalledWith('Padrao revisado', '', 'version-1');
+  });
+
+  it('aceita offset negativo e explica a relacao com a inauguracao', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ChecklistMasterPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Adicionar atividade' }));
+    const offsetInput = screen.getByRole('spinbutton', { name: /Offset da inauguração/ });
+
+    expect(offsetInput).toHaveAttribute('min', '-3650');
+    expect(offsetInput).toHaveAttribute('max', '3650');
+    expect(
+      screen.getByText('Negativo: antes; 0: no dia da inauguração; positivo: depois.'),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Titulo'), 'Preparar abertura');
+    await user.type(screen.getByLabelText('Categoria'), 'Planejamento');
+    await user.clear(offsetInput);
+    await user.type(offsetInput, '-30');
+    await user.click(screen.getByRole('button', { name: 'Salvar atividade' }));
+
+    expect(createChecklistItem).toHaveBeenCalledWith(
+      version.id,
+      expect.objectContaining({ relativeDueDays: -30 }),
+    );
+    expect(screen.queryByText('Prazo relativo (dias)')).not.toBeInTheDocument();
   });
 });

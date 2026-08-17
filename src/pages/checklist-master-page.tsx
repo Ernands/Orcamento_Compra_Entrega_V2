@@ -223,16 +223,17 @@ function ItemModal({ open, versionId, item, nextPosition, onClose, onSaved }: It
             />
           </label>
           <label className="field">
-            Prazo relativo (dias)
+            Offset da inauguração (dias)
             <input
               type="number"
-              min="0"
+              min="-3650"
               max="3650"
               value={values.relativeDueDays ?? ''}
               onChange={(event) =>
                 set('relativeDueDays', event.target.value ? Number(event.target.value) : null)
               }
             />
+            <small>Negativo: antes; 0: no dia da inauguração; positivo: depois.</small>
           </label>
           <label className="field">
             Prioridade

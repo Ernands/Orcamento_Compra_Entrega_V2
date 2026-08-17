@@ -20,7 +20,7 @@ Somente draft aceita alteracao estrutural. A publicacao arquiva a versao
 publicada anterior, mas nao remove nem altera seu conteudo.
 
 `checklist_master_items` guarda atividades ordenadas, categoria, obrigatoriedade,
-prazo relativo, orientacao, tipo de responsavel, evidencia e prioridade.
+offset da inauguracao, orientacao, tipo de responsavel, evidencia e prioridade.
 
 `store_implementations` vincula uma loja a uma versao publicada. Existe no
 maximo uma implantacao ativa por loja.
@@ -53,6 +53,23 @@ Percentuais nao sao armazenados. A UI calcula total, concluidas, em andamento,
 pendentes, bloqueadas, atrasadas e percentual. `not_applicable` nao compoe o
 denominador. Uma atividade e atrasada quando possui prazo anterior a data atual
 e ainda nao foi concluida.
+
+## Data prevista de inauguração
+
+`store_implementations.base_date` representa a data prevista de inauguração da
+loja. A data-alvo de cada atividade do snapshot segue a fórmula:
+
+`Data prevista de inauguração + Offset da atividade = Data-alvo da atividade`
+
+Exemplo: `25/09/2026 + (-30 dias) = 26/08/2026`. Offset negativo indica uma
+atividade anterior à inauguração, `0` indica o próprio dia e offset positivo
+indica uma atividade posterior.
+
+O Checklist Mestre define o modelo e os offsets. Ele não armazena o status nem
+o percentual de conclusão de uma loja, e também não persiste uma data-alvo
+específica por loja. Esses dados pertencem à execução em
+`store_implementations` e `store_implementation_items`; o percentual é calculado
+pela interface.
 
 ## Autorizacao
 
