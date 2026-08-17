@@ -1,15 +1,20 @@
-import { ArrowRight, MapPin, Search, Store as StoreIcon, UserRound } from 'lucide-react';
+import { ArrowRight, MapPin, Plus, Search, Store as StoreIcon, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
-import { listStores } from '../data/stores/stores-repository';
-import type { Store } from '../domain/types';
+import { StoreFormModal } from '../components/store-form-modal';
+import { createStore, listResponsibleUsers, listStores } from '../data/stores/stores-repository';
+import type { ResponsibleUser, Store } from '../domain/types';
+import { useSession } from '../app/session-provider';
 
 export function StoresPage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [responsibleUsers, setResponsibleUsers] = useState<ResponsibleUser[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const { can } = useSession();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,6 +31,14 @@ export function StoresPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (can('stores.create')) {
+      void listResponsibleUsers()
+        .then(setResponsibleUsers)
+        .catch(() => setResponsibleUsers([]));
+    }
+  }, [can]);
 
   const filtered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
@@ -46,9 +59,17 @@ export function StoresPage() {
           <h2>Lojas</h2>
           <p>Visualize somente as unidades liberadas para seu acesso.</p>
         </div>
-        <div className="summary-number">
-          <strong>{stores.length}</strong>
-          <span>lojas acessiveis</span>
+        <div className="page-heading__actions">
+          <div className="summary-number">
+            <strong>{stores.length}</strong>
+            <span>lojas acessiveis</span>
+          </div>
+          {can('stores.create') && (
+            <button className="button button--primary" onClick={() => setFormOpen(true)}>
+              <Plus size={18} />
+              Nova loja
+            </button>
+          )}
         </div>
       </header>
       <label className="search-field">
@@ -97,7 +118,7 @@ export function StoresPage() {
               <StatusBadge status={store.status} />
               <Link
                 className="icon-button"
-                to={`/lojas/${store.id}`}
+                to={`/lojas/${store.id}/implantacao`}
                 aria-label={`Abrir ${store.name}`}
                 title="Abrir loja"
               >
@@ -107,6 +128,15 @@ export function StoresPage() {
           ))}
         </div>
       )}
+      <StoreFormModal
+        open={formOpen}
+        responsibleUsers={responsibleUsers}
+        onClose={() => setFormOpen(false)}
+        onSave={async (values) => {
+          await createStore(values);
+          await load();
+        }}
+      />
     </section>
   );
 }

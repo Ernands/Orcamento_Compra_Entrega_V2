@@ -47,7 +47,7 @@ if (authError || !authData.user)
 
 const cpfLookup = createHmac('sha256', lookupSecret).update(`cpf:${cpf}`).digest('hex');
 const { data: userId, error: recordError } = await supabase.rpc('admin_create_user_record', {
-  p_actor_auth_user_id: null,
+  p_actor_auth_user_id: null!,
   p_auth_user_id: authData.user.id,
   p_technical_email: technicalEmail,
   p_cpf_lookup: cpfLookup,

@@ -1,6 +1,11 @@
 # V2 Database Model
 
-Status: desenho relacional inicial. Nao criar migrations nesta rodada.
+Status: fundacao e pacote de Implantacao implementados; modulos futuros permanecem como desenho.
+
+O pacote implementado usa `checklist_master_versions`, `checklist_master_items`,
+`store_implementations`, `store_implementation_items`, `store_needs` e
+`store_attachments`. Esses nomes substituem, nesta etapa, os nomes conceituais
+anteriores e estao detalhados em `V2_IMPLANTATION_PACKAGE.md`.
 
 ## Principios
 

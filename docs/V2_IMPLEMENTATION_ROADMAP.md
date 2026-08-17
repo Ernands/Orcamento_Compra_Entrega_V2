@@ -1,6 +1,11 @@
 # V2 Implementation Roadmap
 
-Status: proposta de sequencia. Implementacao depende de aprovacao do Plano Mestre.
+Status: Fase 1 concluida; pacote integrado antecipou entregas das Fases 2 a 5.
+
+O pacote atual conclui CRUD de Lojas, Checklist Mestre versionado, Implantacao
+por snapshot, Pendencias, Necessidades MVP e Anexos privados por loja. Dashboard
+geral, timeline detalhada, bloqueios historicos, evidencias por atividade e o
+fluxo de Suprimentos permanecem nas proximas rodadas.
 
 ## Fase 0 - Fundacao
 

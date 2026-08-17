@@ -1,4 +1,4 @@
-import type { Store } from '../../domain/types';
+import type { ResponsibleUser, Store, StoreFormValues } from '../../domain/types';
 import { supabase } from '../supabase/client';
 
 interface StoreRow {
@@ -22,6 +22,7 @@ function mapStore(row: StoreRow, responsibleName: string | null): Store {
     city: row.cidade,
     state: row.uf,
     address: row.endereco,
+    responsibleUserId: row.responsavel_usuario_id,
     status: row.status,
     plannedOpeningDate: row.data_inauguracao_planejada,
     notes: row.observacoes,
@@ -86,4 +87,45 @@ export async function getStore(id: string): Promise<Store> {
     data,
     data.responsavel_usuario_id ? names.get(data.responsavel_usuario_id) || null : null,
   );
+}
+
+export async function listResponsibleUsers(): Promise<ResponsibleUser[]> {
+  const { data, error } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+    .eq('status', 'active')
+    .order('nome');
+
+  if (error) throw error;
+  return data.map((user) => ({ id: user.id, name: user.nome }));
+}
+
+function storePayload(values: StoreFormValues) {
+  return {
+    nome: values.name.trim(),
+    cidade: values.city.trim(),
+    uf: values.state,
+    endereco: values.address.trim() || null,
+    responsavel_usuario_id: values.responsibleUserId || null,
+    status: values.status,
+    data_inauguracao_planejada: values.plannedOpeningDate || null,
+    observacoes: values.notes.trim() || null,
+  };
+}
+
+export async function createStore(values: StoreFormValues): Promise<Store> {
+  const { data, error } = await supabase
+    .from('lojas')
+    .insert(storePayload(values))
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return getStore(data.id);
+}
+
+export async function updateStore(id: string, values: StoreFormValues): Promise<Store> {
+  const { error } = await supabase.from('lojas').update(storePayload(values)).eq('id', id);
+  if (error) throw error;
+  return getStore(id);
 }

@@ -49,6 +49,18 @@ export function StatusBadge({ status }: { status: string }) {
     inactive: 'Inativo',
     blocked: 'Bloqueado',
     planning: 'Planejamento',
+    draft: 'Draft',
+    published: 'Publicada',
+    archived: 'Arquivada',
+    not_started: 'Nao iniciada',
+    in_progress: 'Em andamento',
+    completed: 'Concluida',
+    cancelled: 'Cancelada',
+    pending: 'Pendente',
+    not_applicable: 'Nao aplicavel',
+    identified: 'Identificada',
+    under_review: 'Em analise',
+    resolved: 'Resolvida',
   };
   return <span className={`status-badge status-badge--${status}`}>{labels[status] || status}</span>;
 }

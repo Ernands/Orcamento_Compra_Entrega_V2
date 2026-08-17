@@ -1,6 +1,17 @@
 # V2 Authorization and RLS
 
-Status: desenho de autorizacao. Nao implementar nesta rodada.
+Status: fundacao e matriz do pacote de Implantacao implementadas.
+
+Capabilities atuais do pacote:
+
+- `checklists.view`, `checklists.manage`;
+- `implementation.view`, `implementation.edit`;
+- `needs.view`, `needs.create`, `needs.edit`;
+- `attachments.view`, `attachments.create`, `attachments.delete`.
+
+Administrador recebe todas. Prospector recebe operacao nas lojas atribuidas.
+Consulta recebe apenas `implementation.view`, `needs.view` e `attachments.view`,
+sempre combinadas com o escopo relacional da loja.
 
 ## Principio
 

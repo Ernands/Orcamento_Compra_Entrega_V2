@@ -2,7 +2,7 @@
 
 **Implantacao, Compra & entrega**
 
-Fundacao segura da V2 para identidade, autorizacao, RLS, usuarios, perfis e lojas.
+V2 segura para identidade, autorizacao, lojas e operacao do pacote de implantacao.
 
 ## Stack
 
@@ -86,3 +86,10 @@ O primeiro acesso nao e criado por migration nem seed. Use o procedimento em [V2
 - [Primeiro Administrador](./docs/V2_FIRST_ADMIN.md)
 - [Matriz de RLS](./docs/V2_RLS_TEST_MATRIX.md)
 - [ADR do endpoint CPF](./docs/ADR-001_CPF_LOGIN_EDGE_FUNCTION.md)
+
+## Pacote de Implantacao
+
+- [Implementacao do pacote](./docs/V2_IMPLANTATION_PACKAGE.md)
+- [Modelo de dados](./docs/V2_DATABASE_MODEL.md)
+- [Autorizacao e RLS](./docs/V2_AUTHORIZATION_AND_RLS.md)
+- [Arquivos e Storage](./docs/V2_FILES_AND_STORAGE.md)

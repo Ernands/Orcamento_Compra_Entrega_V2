@@ -1,7 +1,26 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(26);
+
+create or replace function pg_temp.storage_bucket_private()
+returns boolean
+language plpgsql
+as $$
+declare
+  v_private boolean;
+begin
+  if to_regclass('storage.buckets') is null then
+    return true;
+  end if;
+  execute $query$
+    select exists(
+      select 1 from storage.buckets where id = 'store-attachments' and not public
+    )
+  $query$ into v_private;
+  return v_private;
+end;
+$$;
 
 select ok((select relrowsecurity from pg_class where oid = 'public.usuarios'::regclass), 'RLS habilitada em usuarios');
 select ok((select relrowsecurity from pg_class where oid = 'public.perfis'::regclass), 'RLS habilitada em perfis');
@@ -13,6 +32,12 @@ select ok((select relrowsecurity from pg_class where oid = 'public.usuario_permi
 select ok((select relrowsecurity from pg_class where oid = 'public.lojas'::regclass), 'RLS habilitada em lojas');
 select ok((select relrowsecurity from pg_class where oid = 'public.usuario_lojas'::regclass), 'RLS habilitada em usuario_lojas');
 select ok((select relrowsecurity from pg_class where oid = 'public.audit_logs'::regclass), 'RLS habilitada em auditoria');
+select ok((select relrowsecurity from pg_class where oid = 'public.checklist_master_versions'::regclass), 'RLS habilitada em versoes do checklist');
+select ok((select relrowsecurity from pg_class where oid = 'public.checklist_master_items'::regclass), 'RLS habilitada em itens do checklist');
+select ok((select relrowsecurity from pg_class where oid = 'public.store_implementations'::regclass), 'RLS habilitada em implantacoes');
+select ok((select relrowsecurity from pg_class where oid = 'public.store_implementation_items'::regclass), 'RLS habilitada em snapshots');
+select ok((select relrowsecurity from pg_class where oid = 'public.store_needs'::regclass), 'RLS habilitada em necessidades');
+select ok((select relrowsecurity from pg_class where oid = 'public.store_attachments'::regclass), 'RLS habilitada em anexos');
 
 select ok(not has_function_privilege('anon', 'public.auth_begin_login_attempt(text,text)', 'EXECUTE'), 'Anonimo nao executa lookup de login');
 select ok(not has_function_privilege('authenticated', 'public.admin_create_user_record(uuid,uuid,text,text,text,text,uuid,uuid[],boolean,public.user_status,text)', 'EXECUTE'), 'Usuario autenticado nao executa RPC administrativa privilegiada');
@@ -20,6 +45,10 @@ select ok(has_function_privilege('service_role', 'public.auth_begin_login_attemp
 select ok(not has_schema_privilege('authenticated', 'private', 'USAGE'), 'Schema privado nao e exposto ao usuario');
 select ok(not exists(select 1 from pg_policies where schemaname = 'public' and (trim(qual) = 'true' or trim(with_check) = 'true')), 'Nao existem policies USING true ou WITH CHECK true');
 select ok(not exists(select 1 from pg_proc where prosecdef and pronamespace in ('app'::regnamespace, 'public'::regnamespace) and coalesce(array_to_string(proconfig, ','), '') not like '%search_path=%'), 'Toda funcao SECURITY DEFINER fixa search_path');
+select ok(pg_temp.storage_bucket_private(), 'Bucket e privado quando Storage esta disponivel');
+select ok(to_regclass('storage.objects') is null or exists(select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'store_attachments_objects_read'), 'Storage possui policy de leitura quando disponivel');
+select ok(to_regclass('storage.objects') is null or exists(select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'store_attachments_objects_create'), 'Storage possui policy de upload quando disponivel');
+select ok(to_regclass('storage.objects') is null or exists(select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'store_attachments_objects_delete'), 'Storage possui policy de remocao quando disponivel');
 
 select * from finish();
 rollback;

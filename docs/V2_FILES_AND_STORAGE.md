@@ -1,6 +1,12 @@
 # V2 Files and Storage
 
-Status: arquitetura de arquivos. Nao implementar nesta rodada.
+Status: anexos privados por loja implementados; vinculos genericos e thumbnails permanecem futuros.
+
+O MVP usa o bucket privado `store-attachments` e a tabela
+`store_attachments`. O path e `lojas/{loja_id}/loja/{arquivo_id}/{nome}`,
+com limite de 15 MB e MIME types explicitamente permitidos. A leitura usa URL
+assinada de 60 segundos, nunca persistida. O modelo generico descrito abaixo
+continua sendo a direcao para anexos de Suprimentos e Financeiro.
 
 ## Principios
 

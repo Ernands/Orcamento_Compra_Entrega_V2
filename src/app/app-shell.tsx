@@ -1,4 +1,14 @@
-import { Building2, KeyRound, LogOut, Menu, ShieldCheck, Store, X } from 'lucide-react';
+import {
+  Building2,
+  ClipboardCheck,
+  KeyRound,
+  ListTodo,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  Store,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { IconButton } from '../components/ui';
@@ -8,6 +18,8 @@ const routeTitles: Record<string, string> = {
   '/lojas': 'Lojas',
   '/acessos': 'Acessos',
   '/alterar-senha': 'Alterar senha',
+  '/implantacao/pendencias': 'Pendencias',
+  '/implantacao/checklist-mestre': 'Checklist Mestre',
 };
 
 export function AppShell() {
@@ -16,7 +28,11 @@ export function AppShell() {
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
   const title = location.pathname.startsWith('/lojas/')
-    ? 'Detalhe da loja'
+    ? location.pathname.endsWith('/anexos')
+      ? 'Anexos da loja'
+      : location.pathname.endsWith('/resumo-necessidades')
+        ? 'Resumo e Necessidades'
+        : 'Implantacao da loja'
     : routeTitles[location.pathname] || 'Implanta 27';
 
   const handleSignOut = async () => {
@@ -40,11 +56,23 @@ export function AppShell() {
         </span>
       </div>
       <nav className="sidebar__nav" aria-label="Navegacao principal">
-        <span className="nav-section">Operacao</span>
+        <span className="nav-section">Implantacao</span>
         {can('stores.view') && (
           <NavLink to="/lojas" onClick={() => setMobileOpen(false)}>
             <Store size={19} />
             Lojas
+          </NavLink>
+        )}
+        {can('implementation.view') && (
+          <NavLink to="/implantacao/pendencias" onClick={() => setMobileOpen(false)}>
+            <ListTodo size={19} />
+            Pendencias
+          </NavLink>
+        )}
+        {can('checklists.view') && (
+          <NavLink to="/implantacao/checklist-mestre" onClick={() => setMobileOpen(false)}>
+            <ClipboardCheck size={19} />
+            Checklist Mestre
           </NavLink>
         )}
         {can('access.view') && (

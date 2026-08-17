@@ -2,7 +2,12 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AccessPage } from '../pages/access-page';
 import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
-import { StoreDetailPage } from '../pages/store-detail-page';
+import { ChecklistMasterPage } from '../pages/checklist-master-page';
+import { PendingItemsPage } from '../pages/pending-items-page';
+import { StoreAttachmentsPage } from '../pages/store-attachments-page';
+import { StoreImplementationPage } from '../pages/store-implementation-page';
+import { StoreSummaryNeedsPage } from '../pages/store-summary-needs-page';
+import { StoreWorkspacePage } from '../pages/store-workspace-page';
 import { StoresPage } from '../pages/stores-page';
 import { AppShell } from './app-shell';
 import { RequireCapability, RequirePasswordChanged, RequireSession } from './guards';
@@ -36,7 +41,49 @@ export function App() {
               path="lojas/:id"
               element={
                 <RequireCapability capability="stores.view">
-                  <StoreDetailPage />
+                  <StoreWorkspacePage />
+                </RequireCapability>
+              }
+            >
+              <Route index element={<Navigate to="implantacao" replace />} />
+              <Route
+                path="implantacao"
+                element={
+                  <RequireCapability capability="implementation.view">
+                    <StoreImplementationPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="resumo-necessidades"
+                element={
+                  <RequireCapability capability="needs.view">
+                    <StoreSummaryNeedsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="anexos"
+                element={
+                  <RequireCapability capability="attachments.view">
+                    <StoreAttachmentsPage />
+                  </RequireCapability>
+                }
+              />
+            </Route>
+            <Route
+              path="implantacao/pendencias"
+              element={
+                <RequireCapability capability="implementation.view">
+                  <PendingItemsPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="implantacao/checklist-mestre"
+              element={
+                <RequireCapability capability="checklists.view">
+                  <ChecklistMasterPage />
                 </RequireCapability>
               }
             />

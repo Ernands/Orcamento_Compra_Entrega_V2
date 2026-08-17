@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(34);
 
 select has_table('public', 'usuarios', 'Tabela de usuarios existe');
 select has_table('public', 'perfis', 'Tabela de perfis existe');
@@ -11,6 +11,12 @@ select has_table('public', 'usuario_permissoes', 'Ajustes individuais existem');
 select has_table('public', 'lojas', 'Tabela de lojas existe');
 select has_table('public', 'usuario_lojas', 'Relacao usuario-loja existe');
 select has_table('public', 'audit_logs', 'Auditoria existe');
+select has_table('public', 'checklist_master_versions', 'Versoes do checklist existem');
+select has_table('public', 'checklist_master_items', 'Itens do checklist existem');
+select has_table('public', 'store_implementations', 'Implantacoes por loja existem');
+select has_table('public', 'store_implementation_items', 'Snapshots por loja existem');
+select has_table('public', 'store_needs', 'Necessidades por loja existem');
+select has_table('public', 'store_attachments', 'Metadados de anexos existem');
 
 select col_is_pk('public', 'usuarios', 'id', 'Usuario usa UUID como PK');
 select col_type_is('public', 'usuarios', 'id', 'uuid', 'PK de usuario e UUID');
@@ -20,11 +26,15 @@ select col_is_fk('public', 'usuarios', 'perfil_id', 'Usuario referencia perfil')
 select col_is_fk('public', 'usuario_lojas', 'usuario_id', 'Escopo referencia usuario');
 select col_is_fk('public', 'usuario_lojas', 'loja_id', 'Escopo referencia loja');
 select col_is_fk('public', 'usuario_permissoes', 'permissao_id', 'Ajuste referencia permissao');
+select col_is_fk('public', 'checklist_master_items', 'version_id', 'Item referencia versao');
+select col_is_fk('public', 'store_implementations', 'store_id', 'Implantacao referencia loja');
+select col_is_fk('public', 'store_implementation_items', 'implementation_id', 'Snapshot referencia implantacao');
+select col_is_fk('public', 'store_needs', 'source_implementation_item_id', 'Necessidade aceita origem da implantacao');
 
 select is((select count(*) from public.perfis), 3::bigint, 'Tres perfis iniciais foram criados');
-select is((select count(*) from public.permissoes), 9::bigint, 'Nove capacidades da fundacao foram criadas');
-select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'consultation'), 1::bigint, 'Consulta recebe somente leitura de lojas');
-select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'administrator'), 9::bigint, 'Administrador recebe capacidades da fundacao');
+select is((select count(*) from public.permissoes), 19::bigint, 'Dezenove capacidades foram criadas');
+select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'consultation'), 4::bigint, 'Consulta recebe somente capacidades de leitura');
+select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'administrator'), 19::bigint, 'Administrador recebe todas as capacidades');
 
 select throws_ok(
   $$insert into public.lojas (codigo_negocio, nome, cidade, uf) values ('LOJ-980', 'UF invalida', 'Teste', 'XX1')$$,

@@ -43,11 +43,18 @@ describe('AppShell', () => {
     expect(screen.getAllByRole('link', { name: 'Lojas' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Acessos' })).not.toBeInTheDocument();
     expect(screen.queryByText('Financeiro')).not.toBeInTheDocument();
-    expect(screen.queryByText('Implantacao')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Implantacao').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Pendencias' })).not.toBeInTheDocument();
   });
 
   it('mostra Acessos somente com a capacidade correspondente', () => {
     renderShell(['stores.view', 'access.view']);
     expect(screen.getAllByRole('link', { name: 'Acessos' }).length).toBeGreaterThan(0);
+  });
+
+  it('separa operacao e administracao do checklist por capability', () => {
+    renderShell(['stores.view', 'implementation.view', 'checklists.view']);
+    expect(screen.getAllByRole('link', { name: 'Pendencias' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Checklist Mestre' }).length).toBeGreaterThan(0);
   });
 });

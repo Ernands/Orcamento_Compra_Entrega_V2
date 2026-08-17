@@ -61,14 +61,11 @@ export async function invokeEdgeFunction<TResponse>(
 
   let response: Response;
   try {
-    response = await fetch(
-      `${publicEnv.supabaseUrl}/functions/v1/${encodeURIComponent(name)}`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      },
-    );
+    response = await fetch(`${publicEnv.supabaseUrl}/functions/v1/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
   } catch {
     throw new EdgeFunctionError(
       'Nao foi possivel acessar a funcao segura.',

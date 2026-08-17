@@ -27,7 +27,7 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 select is((select count(*) from public.lojas), 2::bigint, 'Administrador ve as duas lojas iniciais');
 select is((select count(*) from public.usuarios), 3::bigint, 'Administrador ve todos os usuarios');
-select is((select count(*) from public.permissoes), 9::bigint, 'Administrador ve permissoes da fundacao');
+select is((select count(*) from public.permissoes), 19::bigint, 'Administrador ve todas as permissoes atuais');
 insert into public.lojas (codigo_negocio, nome, cidade, uf, status, created_by)
 values ('LOJ-903', 'Loja RLS Admin', 'Recife', 'PE', 'planning', '20000000-0000-4000-8000-000000000001');
 select ok(exists(select 1 from public.lojas where codigo_negocio = 'LOJ-903'), 'Administrador executa escrita autorizada');
