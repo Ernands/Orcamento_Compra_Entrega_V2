@@ -1,4 +1,5 @@
 import { supabase } from '../data/supabase/client';
+import { publicEnv } from './env';
 
 export class EdgeFunctionError extends Error {
   constructor(
@@ -16,17 +17,8 @@ interface FunctionErrorBody {
   message?: string;
 }
 
-interface FunctionInvocationResult {
-  data: unknown;
-  error: unknown;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isInvocationResult(value: unknown): value is FunctionInvocationResult {
-  return isRecord(value) && 'data' in value && 'error' in value;
 }
 
 function parseErrorBody(value: unknown): FunctionErrorBody | undefined {
@@ -38,52 +30,70 @@ function parseErrorBody(value: unknown): FunctionErrorBody | undefined {
   };
 }
 
-function responseFromError(value: unknown): Response | undefined {
-  if (!isRecord(value)) return undefined;
-  return value.context instanceof Response ? value.context : undefined;
+async function readResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 export async function invokeEdgeFunction<TResponse>(
   name: string,
   body: Record<string, unknown>,
 ): Promise<TResponse> {
-  const invocation: unknown = await supabase.functions.invoke<TResponse>(name, { body });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!isInvocationResult(invocation)) {
+  const headers: Record<string, string> = {
+    apikey: publicEnv.supabasePublishableKey,
+    'Content-Type': 'application/json',
+  };
+
+  // Publishable keys are not JWTs. Only send Authorization when we have a real user session.
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${publicEnv.supabaseUrl}/functions/v1/${encodeURIComponent(name)}`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      },
+    );
+  } catch {
     throw new EdgeFunctionError(
-      'A funcao segura retornou uma resposta invalida.',
-      'INVALID_FUNCTION_RESPONSE',
+      'Nao foi possivel acessar a funcao segura.',
+      'EDGE_FUNCTION_UNAVAILABLE',
     );
   }
 
-  const { data, error } = invocation;
+  const responseBody = await readResponseBody(response);
 
-  if (!error && data !== null) {
-    return data as TResponse;
+  if (response.ok && responseBody !== null) {
+    return responseBody as TResponse;
   }
 
-  if (!error) {
+  if (response.ok) {
     throw new EdgeFunctionError(
       'A funcao segura retornou uma resposta vazia.',
       'EMPTY_FUNCTION_RESPONSE',
+      response.status,
     );
   }
 
-  let parsed: FunctionErrorBody | undefined;
-
-  const response = responseFromError(error);
-  if (response) {
-    try {
-      const responseBody: unknown = await response.clone().json();
-      parsed = parseErrorBody(responseBody);
-    } catch {
-      parsed = undefined;
-    }
-  }
-
+  const parsed = parseErrorBody(responseBody);
   throw new EdgeFunctionError(
     parsed?.message || 'Nao foi possivel concluir a operacao.',
     parsed?.code || 'EDGE_FUNCTION_ERROR',
-    response?.status,
+    response.status,
   );
 }
