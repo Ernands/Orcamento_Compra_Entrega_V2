@@ -1,8 +1,10 @@
 import {
   Building2,
+  Boxes,
   ClipboardCheck,
   ChartNoAxesCombined,
   KeyRound,
+  LayoutDashboard,
   ListTodo,
   LogOut,
   Menu,
@@ -19,12 +21,16 @@ import { IconButton } from '../components/ui';
 import { useSession } from './session-provider';
 
 const routeTitles: Record<string, string> = {
+  '/dashboard': 'Visao Geral',
+  '/dashboard/implantacao': 'Dashboard de Implantacao',
+  '/dashboard/suprimentos': 'Dashboard de Suprimentos',
   '/lojas': 'Lojas',
   '/acessos': 'Acessos',
   '/alterar-senha': 'Alterar senha',
   '/implantacao/pendencias': 'Pendencias',
   '/implantacao/checklist-mestre': 'Checklist Mestre',
-  '/suprimentos/itens-necessidades': 'Itens e Necessidades',
+  '/suprimentos/itens': 'Itens',
+  '/suprimentos/necessidades': 'Necessidades',
   '/suprimentos/fornecedores': 'Fornecedores',
   '/suprimentos/cotacoes': 'Cotacoes',
   '/suprimentos/comparativo': 'Comparativo',
@@ -35,13 +41,15 @@ export function AppShell() {
   const [signingOut, setSigningOut] = useState(false);
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
-  const title = location.pathname.startsWith('/lojas/')
-    ? location.pathname.endsWith('/anexos')
-      ? 'Anexos da loja'
-      : location.pathname.endsWith('/resumo-necessidades')
-        ? 'Resumo e Necessidades'
-        : 'Implantacao da loja'
-    : routeTitles[location.pathname] || 'Implanta 27';
+  const title = location.pathname.startsWith('/suprimentos/itens/')
+    ? 'Detalhe do item'
+    : location.pathname.startsWith('/lojas/')
+      ? location.pathname.endsWith('/anexos')
+        ? 'Anexos da loja'
+        : location.pathname.endsWith('/resumo-necessidades')
+          ? 'Resumo e Necessidades'
+          : 'Implantacao da loja'
+      : routeTitles[location.pathname] || 'Implanta 27';
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -64,17 +72,30 @@ export function AppShell() {
         </span>
       </div>
       <nav className="sidebar__nav" aria-label="Navegacao principal">
-        <span className="nav-section">Implantacao</span>
+        {can('dashboard.view') && (
+          <>
+            <span className="nav-section">Dashboard</span>
+            <NavLink to="/dashboard" end onClick={() => setMobileOpen(false)}>
+              <LayoutDashboard size={19} />
+              Visao Geral
+            </NavLink>
+            <NavLink to="/dashboard/implantacao" onClick={() => setMobileOpen(false)}>
+              <Building2 size={19} />
+              Implantacao
+            </NavLink>
+            <NavLink to="/dashboard/suprimentos" onClick={() => setMobileOpen(false)}>
+              <Boxes size={19} />
+              Suprimentos
+            </NavLink>
+          </>
+        )}
+        <span className={`nav-section${can('dashboard.view') ? ' nav-section--spaced' : ''}`}>
+          Implantacao
+        </span>
         {can('stores.view') && (
           <NavLink to="/lojas" onClick={() => setMobileOpen(false)}>
             <Store size={19} />
             Lojas
-          </NavLink>
-        )}
-        {can('implementation.view') && (
-          <NavLink to="/implantacao/pendencias" onClick={() => setMobileOpen(false)}>
-            <ListTodo size={19} />
-            Pendencias
           </NavLink>
         )}
         {can('checklists.view') && (
@@ -83,13 +104,28 @@ export function AppShell() {
             Checklist Mestre
           </NavLink>
         )}
-        {(can('items.view') || can('suppliers.view') || can('quotes.view')) && (
+        {can('implementation.view') && (
+          <NavLink to="/implantacao/pendencias" onClick={() => setMobileOpen(false)}>
+            <ListTodo size={19} />
+            Pendencias
+          </NavLink>
+        )}
+        {(can('items.view') ||
+          can('needs.view') ||
+          can('suppliers.view') ||
+          can('quotes.view')) && (
           <span className="nav-section nav-section--spaced">Suprimentos</span>
         )}
         {can('items.view') && (
-          <NavLink to="/suprimentos/itens-necessidades" onClick={() => setMobileOpen(false)}>
+          <NavLink to="/suprimentos/itens" onClick={() => setMobileOpen(false)}>
             <PackageSearch size={19} />
-            Itens e Necessidades
+            Itens
+          </NavLink>
+        )}
+        {can('needs.view') && (
+          <NavLink to="/suprimentos/necessidades" onClick={() => setMobileOpen(false)}>
+            <ListTodo size={19} />
+            Necessidades
           </NavLink>
         )}
         {can('suppliers.view') && (

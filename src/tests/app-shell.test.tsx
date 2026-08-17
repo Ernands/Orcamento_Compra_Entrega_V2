@@ -59,10 +59,19 @@ describe('AppShell', () => {
   });
 
   it('mostra somente as opcoes de Suprimentos liberadas por capability', () => {
-    renderShell(['items.view', 'quotes.view']);
-    expect(screen.getAllByRole('link', { name: 'Itens e Necessidades' }).length).toBeGreaterThan(0);
+    renderShell(['items.view', 'needs.view', 'quotes.view']);
+    expect(screen.getAllByRole('link', { name: 'Itens' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Necessidades' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Cotacoes' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Comparativo' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Fornecedores' })).not.toBeInTheDocument();
+  });
+
+  it('mostra as tres visoes do dashboard somente com dashboard.view', () => {
+    renderShell(['dashboard.view']);
+    expect(screen.getAllByRole('link', { name: 'Visao Geral' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Implantacao' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Suprimentos' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Lojas' })).not.toBeInTheDocument();
   });
 });

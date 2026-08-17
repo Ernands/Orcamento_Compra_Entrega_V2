@@ -4,6 +4,7 @@ import type {
   SupplierChannel,
   SupplierValues,
   SupplyItem,
+  SupplyItemDetail,
   SupplyItemValues,
   SupplyNeed,
   SupplyQuote,
@@ -49,10 +50,14 @@ function mapItem(row: ItemRow): SupplyItem {
     description: row.description,
     category: row.category,
     subcategory: row.subcategory,
+    groupName: row.group_name,
+    areaName: row.area_name,
     type: row.item_type,
     defaultUnit: row.default_unit,
+    defaultQuantity: row.default_quantity === null ? null : Number(row.default_quantity),
     brandReference: row.brand_reference,
     technicalSpecification: row.technical_specification,
+    productLink: row.product_link,
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -84,10 +89,14 @@ function itemPayload(values: SupplyItemValues) {
     description: values.description.trim() || null,
     category: values.category.trim(),
     subcategory: values.subcategory.trim() || null,
+    group_name: values.groupName.trim() || null,
+    area_name: values.areaName.trim() || null,
     item_type: values.type,
     default_unit: values.defaultUnit.trim(),
+    default_quantity: values.defaultQuantity ? Number(values.defaultQuantity) : null,
     brand_reference: values.brandReference.trim() || null,
     technical_specification: values.technicalSpecification.trim() || null,
+    product_link: values.productLink.trim() || null,
     active: values.active,
   };
 }
@@ -114,6 +123,54 @@ export async function updateSupplyItem(
     .single();
   if (error) throw error;
   return mapItem(data);
+}
+
+export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDetail> {
+  const [itemResult, needs, quoteItemsResult] = await Promise.all([
+    supabase.from('supply_items').select('*').eq('id', itemId).single(),
+    listSupplyNeeds(),
+    supabase
+      .from('supply_quote_items')
+      .select('id, quote_id, quantity, unit, unit_price')
+      .eq('supply_item_id', itemId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (itemResult.error) throw itemResult.error;
+  if (quoteItemsResult.error) throw quoteItemsResult.error;
+
+  const quoteIds = [...new Set(quoteItemsResult.data.map((usage) => usage.quote_id))];
+  const quotesResult = quoteIds.length
+    ? await supabase
+        .from('supply_quotes')
+        .select('id, codigo_negocio, supplier_name_snapshot, status, quote_date')
+        .in('id', quoteIds)
+    : { data: [], error: null };
+
+  if (quotesResult.error) throw quotesResult.error;
+  const quotes = new Map(quotesResult.data.map((quote) => [quote.id, quote]));
+
+  return {
+    item: mapItem(itemResult.data),
+    needs: needs.filter((need) => need.supplyItemId === itemId),
+    quoteUsages: quoteItemsResult.data.flatMap((usage) => {
+      const quote = quotes.get(usage.quote_id);
+      if (!quote) return [];
+      return [
+        {
+          id: usage.id,
+          quoteId: quote.id,
+          quoteCode: quote.codigo_negocio,
+          supplierName: quote.supplier_name_snapshot,
+          status: quote.status,
+          quoteDate: quote.quote_date,
+          quantity: Number(usage.quantity),
+          unit: usage.unit,
+          unitPrice: Number(usage.unit_price),
+        },
+      ];
+    }),
+  };
 }
 
 export async function listSupplyNeeds(): Promise<SupplyNeed[]> {

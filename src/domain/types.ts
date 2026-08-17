@@ -37,6 +37,7 @@ export type Capability =
   | 'attachments.view'
   | 'attachments.create'
   | 'attachments.delete'
+  | 'dashboard.view'
   | 'items.view'
   | 'items.manage'
   | 'suppliers.view'
@@ -218,10 +219,14 @@ export interface SupplyItem {
   description: string | null;
   category: string;
   subcategory: string | null;
+  groupName: string | null;
+  areaName: string | null;
   type: SupplyItemType;
   defaultUnit: string;
+  defaultQuantity: number | null;
   brandReference: string | null;
   technicalSpecification: string | null;
+  productLink: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -232,11 +237,33 @@ export interface SupplyItemValues {
   description: string;
   category: string;
   subcategory: string;
+  groupName: string;
+  areaName: string;
   type: SupplyItemType;
   defaultUnit: string;
+  defaultQuantity: string;
   brandReference: string;
   technicalSpecification: string;
+  productLink: string;
   active: boolean;
+}
+
+export interface SupplyItemQuoteUsage {
+  id: string;
+  quoteId: string;
+  quoteCode: string;
+  supplierName: string;
+  status: SupplyQuoteStatus;
+  quoteDate: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+}
+
+export interface SupplyItemDetail {
+  item: SupplyItem;
+  needs: SupplyNeed[];
+  quoteUsages: SupplyItemQuoteUsage[];
 }
 
 export interface SupplyNeed extends StoreNeed {
@@ -379,6 +406,66 @@ export interface SupplyQuote {
   createdAt: string;
   stores: Pick<Store, 'id' | 'code' | 'name' | 'city' | 'state'>[];
   items: SupplyQuoteItem[];
+}
+
+export interface ImplementationDashboardStore {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  state: string;
+  responsibleName: string | null;
+  plannedOpeningDate: string | null;
+  status: ImplementationStatus;
+  progress: number;
+  pendingCount: number;
+  overdueCount: number;
+  criticalCount: number;
+  nextDueDate: string | null;
+  nextDueTitle: string | null;
+}
+
+export interface ImplementationDashboardBreakdown {
+  label: string;
+  storeCount: number;
+  averageProgress: number;
+  overdueStores: number;
+  pendingActivities: number;
+}
+
+export interface ImplementationDashboard {
+  totalStores: number;
+  notStartedStores: number;
+  inProgressStores: number;
+  readyStores: number;
+  overdueStores: number;
+  pendingActivities: number;
+  criticalActivities: number;
+  stores: ImplementationDashboardStore[];
+  byState: ImplementationDashboardBreakdown[];
+  byResponsible: ImplementationDashboardBreakdown[];
+  upcomingOpenings: ImplementationDashboardStore[];
+}
+
+export interface SupplyDashboardBreakdown {
+  label: string;
+  count: number;
+  secondaryValue?: number;
+}
+
+export interface SupplyDashboard {
+  activeItems: number;
+  openNeeds: number;
+  unlinkedNeeds: number;
+  activeSuppliers: number;
+  totalQuotes: number;
+  receivedQuotes: number;
+  comparableQuotes: number;
+  needsByStatus: SupplyDashboardBreakdown[];
+  needsByStore: SupplyDashboardBreakdown[];
+  recurringItems: SupplyDashboardBreakdown[];
+  quotesByStore: SupplyDashboardBreakdown[];
+  quotesByItem: SupplyDashboardBreakdown[];
 }
 
 export interface AccessUser {

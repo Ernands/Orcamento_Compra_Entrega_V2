@@ -931,16 +931,20 @@ export type Database = {
       supply_items: {
         Row: {
           active: boolean;
+          area_name: string | null;
           brand_reference: string | null;
           category: string;
           codigo_negocio: string;
           created_at: string;
           created_by: string | null;
+          default_quantity: number | null;
           default_unit: string;
           description: string | null;
+          group_name: string | null;
           id: string;
           item_type: Database['public']['Enums']['supply_item_type'];
           name: string;
+          product_link: string | null;
           subcategory: string | null;
           technical_specification: string | null;
           updated_at: string;
@@ -948,16 +952,20 @@ export type Database = {
         };
         Insert: {
           active?: boolean;
+          area_name?: string | null;
           brand_reference?: string | null;
           category: string;
           codigo_negocio?: string;
           created_at?: string;
           created_by?: string | null;
+          default_quantity?: number | null;
           default_unit: string;
           description?: string | null;
+          group_name?: string | null;
           id?: string;
           item_type: Database['public']['Enums']['supply_item_type'];
           name: string;
+          product_link?: string | null;
           subcategory?: string | null;
           technical_specification?: string | null;
           updated_at?: string;
@@ -965,16 +973,20 @@ export type Database = {
         };
         Update: {
           active?: boolean;
+          area_name?: string | null;
           brand_reference?: string | null;
           category?: string;
           codigo_negocio?: string;
           created_at?: string;
           created_by?: string | null;
+          default_quantity?: number | null;
           default_unit?: string;
           description?: string | null;
+          group_name?: string | null;
           id?: string;
           item_type?: Database['public']['Enums']['supply_item_type'];
           name?: string;
+          product_link?: string | null;
           subcategory?: string | null;
           technical_specification?: string | null;
           updated_at?: string;

@@ -3,6 +3,7 @@ import { AccessPage } from '../pages/access-page';
 import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
+import { DashboardPage } from '../pages/dashboard-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
 import { StoreAttachmentsPage } from '../pages/store-attachments-page';
 import { StoreImplementationPage } from '../pages/store-implementation-page';
@@ -12,6 +13,8 @@ import { StoresPage } from '../pages/stores-page';
 import { SuppliersPage } from '../pages/suppliers-page';
 import { SupplyComparisonPage } from '../pages/supply-comparison-page';
 import { SupplyItemsPage } from '../pages/supply-items-page';
+import { SupplyItemDetailPage } from '../pages/supply-item-detail-page';
+import { SupplyNeedsPage } from '../pages/supply-needs-page';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
 import { RequireCapability, RequirePasswordChanged, RequireSession } from './guards';
@@ -32,7 +35,31 @@ export function App() {
               </RequireSession>
             }
           >
-            <Route index element={<Navigate to="/lojas" replace />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route
+              path="dashboard"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <DashboardPage view="overview" />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/implantacao"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <DashboardPage view="implementation" />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/suprimentos"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <DashboardPage view="supply" />
+                </RequireCapability>
+              }
+            />
             <Route
               path="lojas"
               element={
@@ -92,12 +119,32 @@ export function App() {
               }
             />
             <Route
-              path="suprimentos/itens-necessidades"
+              path="suprimentos/itens"
               element={
                 <RequireCapability capability="items.view">
                   <SupplyItemsPage />
                 </RequireCapability>
               }
+            />
+            <Route
+              path="suprimentos/itens/:itemId"
+              element={
+                <RequireCapability capability="items.view">
+                  <SupplyItemDetailPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/necessidades"
+              element={
+                <RequireCapability capability="needs.view">
+                  <SupplyNeedsPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/itens-necessidades"
+              element={<Navigate to="/suprimentos/itens" replace />}
             />
             <Route
               path="suprimentos/fornecedores"
