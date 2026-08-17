@@ -32,9 +32,9 @@ select col_is_fk('public', 'store_implementation_items', 'implementation_id', 'S
 select col_is_fk('public', 'store_needs', 'source_implementation_item_id', 'Necessidade aceita origem da implantacao');
 
 select is((select count(*) from public.perfis), 3::bigint, 'Tres perfis iniciais foram criados');
-select is((select count(*) from public.permissoes), 19::bigint, 'Dezenove capacidades foram criadas');
-select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'consultation'), 4::bigint, 'Consulta recebe somente capacidades de leitura');
-select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'administrator'), 19::bigint, 'Administrador recebe todas as capacidades');
+select is((select count(*) from public.permissoes), 26::bigint, 'Vinte e seis capacidades foram criadas');
+select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'consultation'), 7::bigint, 'Consulta recebe somente capacidades de leitura');
+select is((select count(*) from public.perfil_permissoes pp join public.perfis p on p.id = pp.perfil_id where p.chave = 'administrator'), 26::bigint, 'Administrador recebe todas as capacidades');
 
 select throws_ok(
   $$insert into public.lojas (codigo_negocio, nome, cidade, uf) values ('LOJ-980', 'UF invalida', 'Teste', 'XX1')$$,

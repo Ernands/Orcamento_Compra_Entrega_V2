@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(32);
 
 create or replace function pg_temp.storage_bucket_private()
 returns boolean
@@ -38,6 +38,12 @@ select ok((select relrowsecurity from pg_class where oid = 'public.store_impleme
 select ok((select relrowsecurity from pg_class where oid = 'public.store_implementation_items'::regclass), 'RLS habilitada em snapshots');
 select ok((select relrowsecurity from pg_class where oid = 'public.store_needs'::regclass), 'RLS habilitada em necessidades');
 select ok((select relrowsecurity from pg_class where oid = 'public.store_attachments'::regclass), 'RLS habilitada em anexos');
+select ok((select relrowsecurity from pg_class where oid = 'public.supply_items'::regclass), 'RLS habilitada em itens de Suprimentos');
+select ok((select relrowsecurity from pg_class where oid = 'public.suppliers'::regclass), 'RLS habilitada em fornecedores');
+select ok((select relrowsecurity from pg_class where oid = 'public.supplier_channels'::regclass), 'RLS habilitada em canais de fornecedor');
+select ok((select relrowsecurity from pg_class where oid = 'public.supply_quotes'::regclass), 'RLS habilitada em cotacoes');
+select ok((select relrowsecurity from pg_class where oid = 'public.supply_quote_stores'::regclass), 'RLS habilitada em lojas da cotacao');
+select ok((select relrowsecurity from pg_class where oid = 'public.supply_quote_items'::regclass), 'RLS habilitada em itens cotados');
 
 select ok(not has_function_privilege('anon', 'public.auth_begin_login_attempt(text,text)', 'EXECUTE'), 'Anonimo nao executa lookup de login');
 select ok(not has_function_privilege('authenticated', 'public.admin_create_user_record(uuid,uuid,text,text,text,text,uuid,uuid[],boolean,public.user_status,text)', 'EXECUTE'), 'Usuario autenticado nao executa RPC administrativa privilegiada');

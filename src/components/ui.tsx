@@ -50,6 +50,8 @@ export function StatusBadge({ status }: { status: string }) {
     blocked: 'Bloqueado',
     planning: 'Planejamento',
     draft: 'Draft',
+    received: 'Recebida',
+    expired: 'Expirada',
     published: 'Publicada',
     archived: 'Arquivada',
     not_started: 'Nao iniciada',
@@ -73,13 +75,21 @@ interface ModalProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
 }
 
-export function Modal({ open, title, description, onClose, children, ...props }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+  className,
+  ...props
+}: ModalProps) {
   if (!open) return null;
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
-        className="modal"
+        className={`modal${className ? ` ${className}` : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

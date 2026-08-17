@@ -46,6 +46,7 @@ const need = {
   notes: null,
   origin: 'manual' as const,
   sourceImplementationItemId: null,
+  supplyItemId: null,
   createdAt: '2026-08-16T00:00:00Z',
 };
 

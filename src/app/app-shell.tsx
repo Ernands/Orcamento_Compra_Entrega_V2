@@ -1,12 +1,16 @@
 import {
   Building2,
   ClipboardCheck,
+  ChartNoAxesCombined,
   KeyRound,
   ListTodo,
   LogOut,
   Menu,
+  PackageSearch,
+  ReceiptText,
   ShieldCheck,
   Store,
+  Truck,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -20,6 +24,10 @@ const routeTitles: Record<string, string> = {
   '/alterar-senha': 'Alterar senha',
   '/implantacao/pendencias': 'Pendencias',
   '/implantacao/checklist-mestre': 'Checklist Mestre',
+  '/suprimentos/itens-necessidades': 'Itens e Necessidades',
+  '/suprimentos/fornecedores': 'Fornecedores',
+  '/suprimentos/cotacoes': 'Cotacoes',
+  '/suprimentos/comparativo': 'Comparativo',
 };
 
 export function AppShell() {
@@ -74,6 +82,33 @@ export function AppShell() {
             <ClipboardCheck size={19} />
             Checklist Mestre
           </NavLink>
+        )}
+        {(can('items.view') || can('suppliers.view') || can('quotes.view')) && (
+          <span className="nav-section nav-section--spaced">Suprimentos</span>
+        )}
+        {can('items.view') && (
+          <NavLink to="/suprimentos/itens-necessidades" onClick={() => setMobileOpen(false)}>
+            <PackageSearch size={19} />
+            Itens e Necessidades
+          </NavLink>
+        )}
+        {can('suppliers.view') && (
+          <NavLink to="/suprimentos/fornecedores" onClick={() => setMobileOpen(false)}>
+            <Truck size={19} />
+            Fornecedores
+          </NavLink>
+        )}
+        {can('quotes.view') && (
+          <>
+            <NavLink to="/suprimentos/cotacoes" onClick={() => setMobileOpen(false)}>
+              <ReceiptText size={19} />
+              Cotacoes
+            </NavLink>
+            <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
+              <ChartNoAxesCombined size={19} />
+              Comparativo
+            </NavLink>
+          </>
         )}
         {can('access.view') && (
           <>

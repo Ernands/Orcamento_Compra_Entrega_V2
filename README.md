@@ -2,7 +2,7 @@
 
 **Implantacao, Compra & entrega**
 
-V2 segura para identidade, autorizacao, lojas e operacao do pacote de implantacao.
+V2 segura para identidade, autorizacao, lojas, implantacao e primeira etapa de Suprimentos.
 
 ## Stack
 
@@ -93,3 +93,7 @@ O primeiro acesso nao e criado por migration nem seed. Use o procedimento em [V2
 - [Modelo de dados](./docs/V2_DATABASE_MODEL.md)
 - [Autorizacao e RLS](./docs/V2_AUTHORIZATION_AND_RLS.md)
 - [Arquivos e Storage](./docs/V2_FILES_AND_STORAGE.md)
+
+## Pacote de Suprimentos
+
+- [Itens, fornecedores, cotacoes e comparativo](./docs/V2_SUPPLY_PACKAGE.md)

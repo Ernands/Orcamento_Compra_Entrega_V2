@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
@@ -699,6 +698,7 @@ export type Database = {
           source_implementation_item_id: string | null;
           status: Database['public']['Enums']['need_status'];
           store_id: string;
+          supply_item_id: string | null;
           title: string;
           unit: string | null;
           updated_at: string;
@@ -717,6 +717,7 @@ export type Database = {
           source_implementation_item_id?: string | null;
           status?: Database['public']['Enums']['need_status'];
           store_id: string;
+          supply_item_id?: string | null;
           title: string;
           unit?: string | null;
           updated_at?: string;
@@ -735,6 +736,7 @@ export type Database = {
           source_implementation_item_id?: string | null;
           status?: Database['public']['Enums']['need_status'];
           store_id?: string;
+          supply_item_id?: string | null;
           title?: string;
           unit?: string | null;
           updated_at?: string;
@@ -763,7 +765,457 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
+            foreignKeyName: 'store_needs_supply_item_id_fkey';
+            columns: ['supply_item_id'];
+            isOneToOne: false;
+            referencedRelation: 'supply_items';
+            referencedColumns: ['id'];
+          },
+          {
             foreignKeyName: 'store_needs_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      supplier_channels: {
+        Row: {
+          active: boolean;
+          channel_type: Database['public']['Enums']['supplier_channel_type'];
+          city: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          label: string | null;
+          serves_nationally: boolean;
+          state: string | null;
+          supplier_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          active?: boolean;
+          channel_type: Database['public']['Enums']['supplier_channel_type'];
+          city?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          label?: string | null;
+          serves_nationally?: boolean;
+          state?: string | null;
+          supplier_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          active?: boolean;
+          channel_type?: Database['public']['Enums']['supplier_channel_type'];
+          city?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          label?: string | null;
+          serves_nationally?: boolean;
+          state?: string | null;
+          supplier_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'supplier_channels_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supplier_channels_supplier_id_fkey';
+            columns: ['supplier_id'];
+            isOneToOne: false;
+            referencedRelation: 'suppliers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supplier_channels_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      suppliers: {
+        Row: {
+          active: boolean;
+          address: string | null;
+          city: string | null;
+          codigo_negocio: string;
+          contact_name: string | null;
+          created_at: string;
+          created_by: string | null;
+          document: string | null;
+          email: string | null;
+          id: string;
+          legal_name: string | null;
+          notes: string | null;
+          person_type: Database['public']['Enums']['supplier_person_type'];
+          phone: string | null;
+          state: string | null;
+          trade_name: string;
+          updated_at: string;
+          updated_by: string | null;
+          website: string | null;
+        };
+        Insert: {
+          active?: boolean;
+          address?: string | null;
+          city?: string | null;
+          codigo_negocio?: string;
+          contact_name?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          document?: string | null;
+          email?: string | null;
+          id?: string;
+          legal_name?: string | null;
+          notes?: string | null;
+          person_type?: Database['public']['Enums']['supplier_person_type'];
+          phone?: string | null;
+          state?: string | null;
+          trade_name: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          website?: string | null;
+        };
+        Update: {
+          active?: boolean;
+          address?: string | null;
+          city?: string | null;
+          codigo_negocio?: string;
+          contact_name?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          document?: string | null;
+          email?: string | null;
+          id?: string;
+          legal_name?: string | null;
+          notes?: string | null;
+          person_type?: Database['public']['Enums']['supplier_person_type'];
+          phone?: string | null;
+          state?: string | null;
+          trade_name?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          website?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'suppliers_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'suppliers_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      supply_items: {
+        Row: {
+          active: boolean;
+          brand_reference: string | null;
+          category: string;
+          codigo_negocio: string;
+          created_at: string;
+          created_by: string | null;
+          default_unit: string;
+          description: string | null;
+          id: string;
+          item_type: Database['public']['Enums']['supply_item_type'];
+          name: string;
+          subcategory: string | null;
+          technical_specification: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          active?: boolean;
+          brand_reference?: string | null;
+          category: string;
+          codigo_negocio?: string;
+          created_at?: string;
+          created_by?: string | null;
+          default_unit: string;
+          description?: string | null;
+          id?: string;
+          item_type: Database['public']['Enums']['supply_item_type'];
+          name: string;
+          subcategory?: string | null;
+          technical_specification?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          active?: boolean;
+          brand_reference?: string | null;
+          category?: string;
+          codigo_negocio?: string;
+          created_at?: string;
+          created_by?: string | null;
+          default_unit?: string;
+          description?: string | null;
+          id?: string;
+          item_type?: Database['public']['Enums']['supply_item_type'];
+          name?: string;
+          subcategory?: string | null;
+          technical_specification?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'supply_items_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_items_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      supply_quote_items: {
+        Row: {
+          captured_at: string | null;
+          created_at: string;
+          delivery_days: number | null;
+          discount_amount: number;
+          id: string;
+          minimum_quantity: number | null;
+          notes: string | null;
+          offered_brand_model: string | null;
+          other_costs: number;
+          product_url: string | null;
+          quantity: number;
+          quote_id: string;
+          shipping_amount: number | null;
+          shipping_type: Database['public']['Enums']['supply_shipping_type'];
+          store_id: string | null;
+          store_need_id: string | null;
+          supply_item_id: string;
+          unit: string;
+          unit_price: number;
+          updated_at: string;
+        };
+        Insert: {
+          captured_at?: string | null;
+          created_at?: string;
+          delivery_days?: number | null;
+          discount_amount?: number;
+          id?: string;
+          minimum_quantity?: number | null;
+          notes?: string | null;
+          offered_brand_model?: string | null;
+          other_costs?: number;
+          product_url?: string | null;
+          quantity: number;
+          quote_id: string;
+          shipping_amount?: number | null;
+          shipping_type?: Database['public']['Enums']['supply_shipping_type'];
+          store_id?: string | null;
+          store_need_id?: string | null;
+          supply_item_id: string;
+          unit: string;
+          unit_price: number;
+          updated_at?: string;
+        };
+        Update: {
+          captured_at?: string | null;
+          created_at?: string;
+          delivery_days?: number | null;
+          discount_amount?: number;
+          id?: string;
+          minimum_quantity?: number | null;
+          notes?: string | null;
+          offered_brand_model?: string | null;
+          other_costs?: number;
+          product_url?: string | null;
+          quantity?: number;
+          quote_id?: string;
+          shipping_amount?: number | null;
+          shipping_type?: Database['public']['Enums']['supply_shipping_type'];
+          store_id?: string | null;
+          store_need_id?: string | null;
+          supply_item_id?: string;
+          unit?: string;
+          unit_price?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'supply_quote_items_quote_id_fkey';
+            columns: ['quote_id'];
+            isOneToOne: false;
+            referencedRelation: 'supply_quotes';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quote_items_store_id_fkey';
+            columns: ['store_id'];
+            isOneToOne: false;
+            referencedRelation: 'lojas';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quote_items_store_need_id_fkey';
+            columns: ['store_need_id'];
+            isOneToOne: false;
+            referencedRelation: 'store_needs';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quote_items_supply_item_id_fkey';
+            columns: ['supply_item_id'];
+            isOneToOne: false;
+            referencedRelation: 'supply_items';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      supply_quote_stores: {
+        Row: {
+          created_at: string;
+          id: string;
+          quote_id: string;
+          store_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          quote_id: string;
+          store_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          quote_id?: string;
+          store_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'supply_quote_stores_quote_id_fkey';
+            columns: ['quote_id'];
+            isOneToOne: false;
+            referencedRelation: 'supply_quotes';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quote_stores_store_id_fkey';
+            columns: ['store_id'];
+            isOneToOne: false;
+            referencedRelation: 'lojas';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      supply_quotes: {
+        Row: {
+          channel_snapshot: Database['public']['Enums']['supplier_channel_type'];
+          codigo_negocio: string;
+          contact_snapshot: string | null;
+          context_type: Database['public']['Enums']['supply_quote_context'];
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          notes: string | null;
+          origin_city_snapshot: string | null;
+          origin_state_snapshot: string | null;
+          quote_date: string;
+          status: Database['public']['Enums']['supply_quote_status'];
+          supplier_channel_id: string;
+          supplier_id: string;
+          supplier_name_snapshot: string;
+          updated_at: string;
+          updated_by: string | null;
+          valid_until: string | null;
+        };
+        Insert: {
+          channel_snapshot: Database['public']['Enums']['supplier_channel_type'];
+          codigo_negocio?: string;
+          contact_snapshot?: string | null;
+          context_type: Database['public']['Enums']['supply_quote_context'];
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          notes?: string | null;
+          origin_city_snapshot?: string | null;
+          origin_state_snapshot?: string | null;
+          quote_date: string;
+          status?: Database['public']['Enums']['supply_quote_status'];
+          supplier_channel_id: string;
+          supplier_id: string;
+          supplier_name_snapshot: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valid_until?: string | null;
+        };
+        Update: {
+          channel_snapshot?: Database['public']['Enums']['supplier_channel_type'];
+          codigo_negocio?: string;
+          contact_snapshot?: string | null;
+          context_type?: Database['public']['Enums']['supply_quote_context'];
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          notes?: string | null;
+          origin_city_snapshot?: string | null;
+          origin_state_snapshot?: string | null;
+          quote_date?: string;
+          status?: Database['public']['Enums']['supply_quote_status'];
+          supplier_channel_id?: string;
+          supplier_id?: string;
+          supplier_name_snapshot?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valid_until?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'supply_quotes_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quotes_supplier_channel_id_supplier_id_fkey';
+            columns: ['supplier_channel_id', 'supplier_id'];
+            isOneToOne: false;
+            referencedRelation: 'supplier_channels';
+            referencedColumns: ['id', 'supplier_id'];
+          },
+          {
+            foreignKeyName: 'supply_quotes_supplier_id_fkey';
+            columns: ['supplier_id'];
+            isOneToOne: false;
+            referencedRelation: 'suppliers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quotes_updated_by_fkey';
             columns: ['updated_by'];
             isOneToOne: false;
             referencedRelation: 'usuarios';
@@ -1033,6 +1485,34 @@ export type Database = {
         }[];
       };
       get_my_capabilities: { Args: never; Returns: string[] };
+      link_store_need_item: {
+        Args: { p_need_id: string; p_supply_item_id: string };
+        Returns: {
+          category: string;
+          created_at: string;
+          created_by: string | null;
+          description: string | null;
+          id: string;
+          notes: string | null;
+          origin: Database['public']['Enums']['need_origin'];
+          priority: Database['public']['Enums']['need_priority'];
+          quantity: number;
+          source_implementation_item_id: string | null;
+          status: Database['public']['Enums']['need_status'];
+          store_id: string;
+          supply_item_id: string | null;
+          title: string;
+          unit: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'store_needs';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       publish_checklist_version: {
         Args: { p_version_id: string };
         Returns: undefined;
@@ -1071,6 +1551,48 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      save_supplier: {
+        Args: {
+          p_active: boolean;
+          p_address: string;
+          p_channel_active: boolean;
+          p_channel_city: string;
+          p_channel_id: string;
+          p_channel_label: string;
+          p_channel_state: string;
+          p_channel_type: Database['public']['Enums']['supplier_channel_type'];
+          p_city: string;
+          p_contact_name: string;
+          p_document: string;
+          p_email: string;
+          p_legal_name: string;
+          p_notes: string;
+          p_person_type: Database['public']['Enums']['supplier_person_type'];
+          p_phone: string;
+          p_serves_nationally: boolean;
+          p_state: string;
+          p_supplier_id: string;
+          p_trade_name: string;
+          p_website: string;
+        };
+        Returns: string;
+      };
+      save_supply_quote: {
+        Args: {
+          p_contact: string;
+          p_context_type: Database['public']['Enums']['supply_quote_context'];
+          p_items: Json;
+          p_notes: string;
+          p_quote_date: string;
+          p_quote_id: string;
+          p_status: Database['public']['Enums']['supply_quote_status'];
+          p_store_ids: string[];
+          p_supplier_channel_id: string;
+          p_supplier_id: string;
+          p_valid_until: string;
+        };
+        Returns: string;
       };
       start_store_implementation: {
         Args: {
@@ -1129,6 +1651,12 @@ export type Database = {
       need_status: 'identified' | 'under_review' | 'resolved' | 'cancelled';
       permission_effect: 'grant' | 'deny';
       store_status: 'planning' | 'active' | 'inactive';
+      supplier_channel_type: 'local_city' | 'state_capital' | 'regional' | 'national' | 'ecommerce';
+      supplier_person_type: 'legal' | 'individual';
+      supply_item_type: 'product' | 'service';
+      supply_quote_context: 'store' | 'consolidated';
+      supply_quote_status: 'draft' | 'received' | 'expired' | 'cancelled';
+      supply_shipping_type: 'free' | 'informed' | 'pending';
       user_status: 'active' | 'inactive' | 'blocked';
     };
     CompositeTypes: {
@@ -1234,6 +1762,7 @@ export type Enums<
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     keyof DefaultSchema['CompositeTypes'] | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
@@ -1268,6 +1797,12 @@ export const Constants = {
       need_status: ['identified', 'under_review', 'resolved', 'cancelled'],
       permission_effect: ['grant', 'deny'],
       store_status: ['planning', 'active', 'inactive'],
+      supplier_channel_type: ['local_city', 'state_capital', 'regional', 'national', 'ecommerce'],
+      supplier_person_type: ['legal', 'individual'],
+      supply_item_type: ['product', 'service'],
+      supply_quote_context: ['store', 'consolidated'],
+      supply_quote_status: ['draft', 'received', 'expired', 'cancelled'],
+      supply_shipping_type: ['free', 'informed', 'pending'],
       user_status: ['active', 'inactive', 'blocked'],
     },
   },

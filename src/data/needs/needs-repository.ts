@@ -18,6 +18,7 @@ function mapNeed(row: NeedRow): StoreNeed {
     notes: row.notes,
     origin: row.origin,
     sourceImplementationItemId: row.source_implementation_item_id,
+    supplyItemId: row.supply_item_id,
     createdAt: row.created_at,
   };
 }

@@ -57,4 +57,12 @@ describe('AppShell', () => {
     expect(screen.getAllByRole('link', { name: 'Pendencias' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Checklist Mestre' }).length).toBeGreaterThan(0);
   });
+
+  it('mostra somente as opcoes de Suprimentos liberadas por capability', () => {
+    renderShell(['items.view', 'quotes.view']);
+    expect(screen.getAllByRole('link', { name: 'Itens e Necessidades' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Cotacoes' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Comparativo' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Fornecedores' })).not.toBeInTheDocument();
+  });
 });

@@ -9,6 +9,10 @@ import { StoreImplementationPage } from '../pages/store-implementation-page';
 import { StoreSummaryNeedsPage } from '../pages/store-summary-needs-page';
 import { StoreWorkspacePage } from '../pages/store-workspace-page';
 import { StoresPage } from '../pages/stores-page';
+import { SuppliersPage } from '../pages/suppliers-page';
+import { SupplyComparisonPage } from '../pages/supply-comparison-page';
+import { SupplyItemsPage } from '../pages/supply-items-page';
+import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
 import { RequireCapability, RequirePasswordChanged, RequireSession } from './guards';
 import { SessionProvider } from './session-provider';
@@ -84,6 +88,38 @@ export function App() {
               element={
                 <RequireCapability capability="checklists.view">
                   <ChecklistMasterPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/itens-necessidades"
+              element={
+                <RequireCapability capability="items.view">
+                  <SupplyItemsPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/fornecedores"
+              element={
+                <RequireCapability capability="suppliers.view">
+                  <SuppliersPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/cotacoes"
+              element={
+                <RequireCapability capability="quotes.view">
+                  <SupplyQuotesPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/comparativo"
+              element={
+                <RequireCapability capability="quotes.view">
+                  <SupplyComparisonPage />
                 </RequireCapability>
               }
             />

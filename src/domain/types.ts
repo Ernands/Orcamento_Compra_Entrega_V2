@@ -9,6 +9,13 @@ export type NeedStatus = 'identified' | 'under_review' | 'resolved' | 'cancelled
 export type NeedOrigin = 'manual' | 'implementation';
 export type AttachmentCategory =
   'project' | 'construction' | 'document' | 'photo' | 'contract' | 'quote' | 'receipt' | 'other';
+export type SupplyItemType = 'product' | 'service';
+export type SupplierPersonType = 'legal' | 'individual';
+export type SupplierChannelType =
+  'local_city' | 'state_capital' | 'regional' | 'national' | 'ecommerce';
+export type SupplyQuoteStatus = 'draft' | 'received' | 'expired' | 'cancelled';
+export type SupplyQuoteContext = 'store' | 'consolidated';
+export type SupplyShippingType = 'free' | 'informed' | 'pending';
 
 export type Capability =
   | 'stores.view'
@@ -29,7 +36,14 @@ export type Capability =
   | 'needs.edit'
   | 'attachments.view'
   | 'attachments.create'
-  | 'attachments.delete';
+  | 'attachments.delete'
+  | 'items.view'
+  | 'items.manage'
+  | 'suppliers.view'
+  | 'suppliers.manage'
+  | 'quotes.view'
+  | 'quotes.create'
+  | 'quotes.edit';
 
 export interface Profile {
   id: string;
@@ -170,6 +184,7 @@ export interface StoreNeed {
   notes: string | null;
   origin: NeedOrigin;
   sourceImplementationItemId: string | null;
+  supplyItemId: string | null;
   createdAt: string;
 }
 
@@ -194,6 +209,176 @@ export interface StoreAttachment {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+}
+
+export interface SupplyItem {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  category: string;
+  subcategory: string | null;
+  type: SupplyItemType;
+  defaultUnit: string;
+  brandReference: string | null;
+  technicalSpecification: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplyItemValues {
+  name: string;
+  description: string;
+  category: string;
+  subcategory: string;
+  type: SupplyItemType;
+  defaultUnit: string;
+  brandReference: string;
+  technicalSpecification: string;
+  active: boolean;
+}
+
+export interface SupplyNeed extends StoreNeed {
+  storeCode: string;
+  storeName: string;
+  storeCity: string;
+  storeState: string;
+}
+
+export interface SupplierChannel {
+  id: string;
+  supplierId: string;
+  type: SupplierChannelType;
+  label: string | null;
+  city: string | null;
+  state: string | null;
+  servesNationally: boolean;
+  active: boolean;
+}
+
+export interface Supplier {
+  id: string;
+  code: string;
+  tradeName: string;
+  legalName: string | null;
+  personType: SupplierPersonType;
+  document: string | null;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  city: string | null;
+  state: string | null;
+  address: string | null;
+  notes: string | null;
+  active: boolean;
+  channels: SupplierChannel[];
+  latestQuoteDate: string | null;
+}
+
+export interface SupplierValues {
+  id: string | null;
+  tradeName: string;
+  legalName: string;
+  personType: SupplierPersonType;
+  document: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  website: string;
+  city: string;
+  state: string;
+  address: string;
+  notes: string;
+  active: boolean;
+  channelId: string | null;
+  channelType: SupplierChannelType;
+  channelLabel: string;
+  channelCity: string;
+  channelState: string;
+  servesNationally: boolean;
+  channelActive: boolean;
+}
+
+export interface SupplyQuoteItemValues {
+  key: string;
+  supplyItemId: string;
+  storeNeedId: string;
+  storeId: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  discountAmount: string;
+  shippingType: SupplyShippingType;
+  shippingAmount: string;
+  otherCosts: string;
+  deliveryDays: string;
+  minimumQuantity: string;
+  offeredBrandModel: string;
+  notes: string;
+  productUrl: string;
+  capturedAt: string;
+}
+
+export interface SupplyQuoteValues {
+  id: string | null;
+  supplierId: string;
+  supplierChannelId: string;
+  quoteDate: string;
+  validUntil: string;
+  contact: string;
+  contextType: SupplyQuoteContext;
+  status: SupplyQuoteStatus;
+  notes: string;
+  storeIds: string[];
+  items: SupplyQuoteItemValues[];
+}
+
+export interface SupplyQuoteItem {
+  id: string;
+  quoteId: string;
+  supplyItemId: string;
+  itemCode: string;
+  itemName: string;
+  storeNeedId: string | null;
+  needTitle: string | null;
+  storeId: string | null;
+  storeCode: string | null;
+  storeName: string | null;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  discountAmount: string;
+  shippingType: SupplyShippingType;
+  shippingAmount: string | null;
+  otherCosts: string;
+  deliveryDays: number | null;
+  minimumQuantity: string | null;
+  offeredBrandModel: string | null;
+  notes: string | null;
+  productUrl: string | null;
+  capturedAt: string | null;
+}
+
+export interface SupplyQuote {
+  id: string;
+  code: string;
+  supplierId: string;
+  supplierName: string;
+  supplierChannelId: string;
+  channel: SupplierChannelType;
+  originCity: string | null;
+  originState: string | null;
+  quoteDate: string;
+  validUntil: string | null;
+  contact: string | null;
+  contextType: SupplyQuoteContext;
+  status: SupplyQuoteStatus;
+  notes: string | null;
+  createdAt: string;
+  stores: Pick<Store, 'id' | 'code' | 'name' | 'city' | 'state'>[];
+  items: SupplyQuoteItem[];
 }
 
 export interface AccessUser {
