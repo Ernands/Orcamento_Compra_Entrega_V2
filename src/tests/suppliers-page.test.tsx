@@ -54,6 +54,7 @@ describe('SuppliersPage', () => {
     const user = userEvent.setup();
     render(<SuppliersPage />);
     expect(await screen.findByText('Fornecedor Campinas')).toBeInTheDocument();
+    expect(listSuppliers).toHaveBeenLastCalledWith(true);
     await user.selectOptions(screen.getByLabelText('Filtrar canal'), 'ecommerce');
     expect(screen.queryByText('Fornecedor Campinas')).not.toBeInTheDocument();
   });
@@ -84,6 +85,7 @@ describe('SuppliersPage', () => {
     } as never);
     render(<SuppliersPage />);
     expect(await screen.findByText('Fornecedor Campinas')).toBeInTheDocument();
+    expect(listSuppliers).toHaveBeenLastCalledWith(false);
     expect(screen.queryByRole('button', { name: 'Novo fornecedor' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Editar Fornecedor Campinas' }),

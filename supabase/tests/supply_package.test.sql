@@ -83,7 +83,7 @@ select lives_ok(
     null,
     (select id from public.suppliers where trade_name = 'Fornecedor Sintetico'),
     (select id from public.supplier_channels where label = 'Unidade Campinas'),
-    current_date, current_date + 10, 'Contato Teste', 'store', 'received', 'Quote Loja 1',
+    current_date, current_date + 10, 'Contato Teste', 'store', 'draft', 'Quote Loja 1',
     array[(select id from public.lojas where codigo_negocio = 'LOJ-901')],
     jsonb_build_array(jsonb_build_object(
       'supply_item_id', (select id from public.supply_items where name = 'Cadeira de atendimento'),
@@ -118,7 +118,7 @@ select lives_ok(
     null,
     (select id from public.suppliers where trade_name = 'Fornecedor Sintetico'),
     (select id from public.supplier_channels where label = 'Unidade Campinas'),
-    current_date, current_date + 10, null, 'store', 'received', 'Quote Loja 2',
+    current_date, current_date + 10, null, 'store', 'draft', 'Quote Loja 2',
     array[(select id from public.lojas where codigo_negocio = 'LOJ-902')],
     jsonb_build_array(jsonb_build_object(
       'supply_item_id', (select id from public.supply_items where name = 'Cadeira de atendimento'),
@@ -135,7 +135,7 @@ select lives_ok(
     null,
     (select id from public.suppliers where trade_name = 'Fornecedor Sintetico'),
     (select id from public.supplier_channels where label = 'Unidade Campinas'),
-    current_date, current_date + 10, null, 'consolidated', 'received', 'Quote Multiloja',
+    current_date, current_date + 10, null, 'consolidated', 'draft', 'Quote Multiloja',
     array[
       (select id from public.lojas where codigo_negocio = 'LOJ-901'),
       (select id from public.lojas where codigo_negocio = 'LOJ-902')

@@ -8,16 +8,38 @@ import type {
   SupplyNeed,
   SupplyQuote,
   SupplyQuoteItem,
+  SupplyQuoteStatus,
   SupplyQuoteValues,
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
 import type { Database, Json } from '../supabase/database.types';
 
 type ItemRow = Database['public']['Tables']['supply_items']['Row'];
-type SupplierRow = Database['public']['Tables']['suppliers']['Row'];
+type SupplierTableRow = Database['public']['Tables']['suppliers']['Row'];
 type ChannelRow = Database['public']['Tables']['supplier_channels']['Row'];
 type QuoteRow = Database['public']['Tables']['supply_quotes']['Row'];
 type QuoteItemRow = Database['public']['Tables']['supply_quote_items']['Row'];
+type SupplierOperationalRow = Pick<
+  SupplierTableRow,
+  | 'id'
+  | 'codigo_negocio'
+  | 'trade_name'
+  | 'legal_name'
+  | 'person_type'
+  | 'contact_name'
+  | 'phone'
+  | 'email'
+  | 'website'
+  | 'city'
+  | 'state'
+  | 'address'
+  | 'notes'
+  | 'active'
+>;
+type SupplierListRow = SupplierOperationalRow & { document: string | null };
+
+const SUPPLIER_OPERATIONAL_COLUMNS =
+  'id,codigo_negocio,trade_name,legal_name,person_type,contact_name,phone,email,website,city,state,address,notes,active';
 
 function mapItem(row: ItemRow): SupplyItem {
   return {
@@ -139,15 +161,29 @@ export async function linkNeedToSupplyItem(needId: string, supplyItemId: string)
   if (error) throw error;
 }
 
-export async function listSuppliers(): Promise<Supplier[]> {
-  const [suppliersResult, channelsResult, quotesResult] = await Promise.all([
-    supabase.from('suppliers').select('*').order('trade_name'),
+async function loadSupplierRows(includeDocument: boolean): Promise<SupplierListRow[]> {
+  if (includeDocument) {
+    const { data, error } = await supabase.rpc('list_suppliers_for_management');
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select(SUPPLIER_OPERATIONAL_COLUMNS)
+    .order('trade_name');
+  if (error) throw error;
+  return data.map((row) => ({ ...row, document: null }));
+}
+
+export async function listSuppliers(includeDocument = false): Promise<Supplier[]> {
+  const [supplierRows, channelsResult, quotesResult] = await Promise.all([
+    loadSupplierRows(includeDocument),
     supabase.from('supplier_channels').select('*').order('created_at'),
     supabase.from('supply_quotes').select('supplier_id, quote_date').order('quote_date', {
       ascending: false,
     }),
   ]);
-  if (suppliersResult.error) throw suppliersResult.error;
   if (channelsResult.error) throw channelsResult.error;
   if (quotesResult.error) throw quotesResult.error;
 
@@ -162,7 +198,7 @@ export async function listSuppliers(): Promise<Supplier[]> {
     if (!latestQuotes.has(quote.supplier_id)) latestQuotes.set(quote.supplier_id, quote.quote_date);
   });
 
-  return suppliersResult.data.map((row: SupplierRow) => ({
+  return supplierRows.map((row) => ({
     id: row.id,
     code: row.codigo_negocio,
     tradeName: row.trade_name,
@@ -349,4 +385,15 @@ export async function saveSupplyQuote(values: SupplyQuoteValues): Promise<string
   } as never);
   if (error) throw error;
   return data;
+}
+
+export async function setSupplyQuoteStatus(
+  quoteId: string,
+  status: SupplyQuoteStatus,
+): Promise<void> {
+  const { error } = await supabase.rpc('set_supply_quote_status', {
+    p_quote_id: quoteId,
+    p_status: status,
+  });
+  if (error) throw error;
 }

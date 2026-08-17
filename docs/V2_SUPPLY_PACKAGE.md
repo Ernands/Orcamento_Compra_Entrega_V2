@@ -37,10 +37,16 @@ compra centralizada.
 `suppliers` guarda cadastro, contato, localidade, documento opcional e estado
 ativo/inativo. O documento nao e chave primaria.
 
-`supplier_channels` permite mais de um canal por fornecedor. Os canais disponiveis
-sao cidade da loja, capital do estado, regional, nacional e e-commerce. Cada canal
-pode registrar cidade, UF e cobertura nacional. O RPC `save_supplier` salva
-fornecedor e canal principal na mesma transacao.
+`supplier_channels` permite mais de um canal por fornecedor no modelo de dados. Os
+canais disponiveis sao cidade da loja, capital do estado, regional, nacional e
+e-commerce. Cada canal pode registrar cidade, UF e cobertura nacional. Nesta etapa,
+a interface administra somente o canal principal; o RPC `save_supplier` salva esse
+canal e o fornecedor na mesma transacao.
+
+A leitura operacional usa uma lista explicita de colunas que nao inclui
+`document`. O PostgreSQL tambem revoga o `SELECT` dessa coluna para
+`authenticated`. Somente `suppliers.manage` pode obter o documento completo pela
+RPC `list_suppliers_for_management`, usada exclusivamente na tela administrativa.
 
 ### Cotacoes
 
@@ -59,8 +65,15 @@ e so sao permitidas no contexto consolidado.
 
 O RPC `save_supply_quote` cria ou substitui atomicamente cabecalho, lojas e linhas.
 Ele valida capabilities, todas as lojas, item e fornecedor ativos, necessidade,
-quantidade, dinheiro, frete, prazo e validade. Apenas cotacoes `draft` podem ser
-editadas. Uma nova proposta deve gerar nova cotacao, preservando o historico.
+quantidade, dinheiro, frete, prazo e validade. Cotacoes novas iniciam em `draft` e
+somente o conteudo de cotacoes `draft` pode ser editado. Uma nova proposta deve
+gerar nova cotacao, preservando o historico.
+
+O RPC `set_supply_quote_status` altera somente o status. Sao permitidas as
+transicoes `draft -> received`, `draft -> cancelled`, `received -> cancelled` e
+`received -> expired`. Canceladas e expiradas sao terminais nesta etapa. Toda
+transicao valida `quotes.edit` em todas as lojas e gera `quote.status_changed` com
+apenas os status anterior e novo.
 
 ## Calculo
 
@@ -88,7 +101,14 @@ Alternativas com frete pendente nao recebem destaque de menor custo conhecido.
 
 O Comparativo pode filtrar por loja, item, necessidade e contexto. Cada alternativa
 mostra fornecedor, origem, marca/modelo, quantidade, preco unitario, subtotal,
-frete, total, prazo, validade e status.
+frete, total, prazo, validade e status. Por padrao, somente cotacoes `received` e
+ainda validas sao exibidas e participam dos destaques.
+
+O status efetivo e `expired` quando o status persistido ja e `expired` ou quando uma
+cotacao `received` possui `valid_until` anterior a data civil atual. A comparacao e
+feita diretamente entre strings ISO `YYYY-MM-DD`, sem conversao UTC. Essa regra nao
+altera o status persistido nem depende de job; o historico completo continua na
+tela de Cotacoes.
 
 Os destaques sao independentes:
 
@@ -145,10 +165,11 @@ auditadas.
 
 - `014_supply_domain`: tipos, tabelas, relacionamentos, constraints e indices;
 - `015_supply_capabilities_rls`: capabilities, perfis, grants e policies;
-- `016_supply_workflows_audit`: vinculo de necessidade, fornecedor, cotacao e auditoria.
+- `016_supply_workflows_audit`: vinculo de necessidade, fornecedor, cotacao e auditoria;
+- `017_supply_predeploy_hardening`: ciclo de status, validade efetiva e privacidade de fornecedor.
 
 Depois de homologadas, essas migrations deverao ser aplicadas ao Supabase DEV na
-ordem 014, 015 e 016. Esta implementacao nao executa `supabase db push`.
+ordem 014, 015, 016 e 017. Esta implementacao nao executa `supabase db push`.
 
 ## Validacao manual
 

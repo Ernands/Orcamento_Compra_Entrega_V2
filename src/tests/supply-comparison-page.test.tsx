@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -117,7 +117,7 @@ const quotes: SupplyQuote[] = [
     originCity: 'Campinas',
     originState: 'SP',
     quoteDate: '2026-08-17',
-    validUntil: '2026-08-25',
+    validUntil: '2099-12-31',
     contact: null,
     contextType: 'store',
     status: 'received',
@@ -136,7 +136,7 @@ const quotes: SupplyQuote[] = [
     originCity: null,
     originState: null,
     quoteDate: '2026-08-17',
-    validUntil: '2026-08-25',
+    validUntil: '2099-12-31',
     contact: null,
     contextType: 'store',
     status: 'received',
@@ -200,5 +200,56 @@ describe('SupplyComparisonPage', () => {
 
     expect(await screen.findByText('Fornecedor de Mesas')).toBeInTheDocument();
     expect(screen.getAllByText('Menor preco')).toHaveLength(2);
+  });
+
+  it('compara somente cotacoes recebidas e ainda validas', async () => {
+    const noValidity: SupplyQuote = {
+      ...quotes[1],
+      id: 'quote-no-validity',
+      code: 'COT-00010',
+      supplierName: 'Fornecedor sem validade',
+      validUntil: null,
+      items: [line('line-no-validity', 'quote-no-validity', 1, '12', '0', 2)],
+    };
+    const ineligible = [
+      { id: 'quote-draft', supplierName: 'Fornecedor Draft', status: 'draft' as const },
+      {
+        id: 'quote-cancelled',
+        supplierName: 'Fornecedor Cancelado',
+        status: 'cancelled' as const,
+      },
+      { id: 'quote-expired', supplierName: 'Fornecedor Expirado', status: 'expired' as const },
+      {
+        id: 'quote-validity-expired',
+        supplierName: 'Fornecedor Validade Vencida',
+        status: 'received' as const,
+        validUntil: '2000-01-01',
+      },
+    ].map((changes, index): SupplyQuote => ({
+      ...quotes[0],
+      ...changes,
+      code: `COT-0002${index}`,
+      validUntil: 'validUntil' in changes && changes.validUntil ? changes.validUntil : '2099-12-31',
+      items: [line(`line-invalid-${index}`, changes.id, 0, '1', '0', 1)],
+    }));
+    vi.mocked(listSupplyQuotes).mockResolvedValue([quotes[0], noValidity, ...ineligible]);
+
+    render(<SupplyComparisonPage />);
+
+    const validSupplier = await screen.findByText('Fornecedor Local');
+    const noValiditySupplier = screen.getByText('Fornecedor sem validade');
+    expect(validSupplier).toBeInTheDocument();
+    expect(noValiditySupplier).toBeInTheDocument();
+    expect(screen.queryByText('Fornecedor Draft')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fornecedor Cancelado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fornecedor Expirado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fornecedor Validade Vencida')).not.toBeInTheDocument();
+    expect(within(validSupplier.closest('article')!).getByText('Menor preco')).toBeInTheDocument();
+    expect(
+      within(noValiditySupplier.closest('article')!).getByText('Menor custo'),
+    ).toBeInTheDocument();
+    expect(
+      within(noValiditySupplier.closest('article')!).getByText('Menor prazo'),
+    ).toBeInTheDocument();
   });
 });

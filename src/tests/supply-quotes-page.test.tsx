@@ -10,8 +10,9 @@ import {
   listSupplyNeeds,
   listSupplyQuotes,
   saveSupplyQuote,
+  setSupplyQuoteStatus,
 } from '../data/supplies/supplies-repository';
-import type { Store, Supplier, SupplyItem, SupplyNeed } from '../domain/types';
+import type { Store, Supplier, SupplyItem, SupplyNeed, SupplyQuote } from '../domain/types';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
@@ -22,6 +23,7 @@ vi.mock('../data/supplies/supplies-repository', () => ({
   listSupplyNeeds: vi.fn(),
   listSupplyQuotes: vi.fn(),
   saveSupplyQuote: vi.fn(),
+  setSupplyQuoteStatus: vi.fn(),
 }));
 
 const store: Store = {
@@ -103,6 +105,26 @@ const supplier: Supplier = {
   ],
 };
 
+const draftQuote: SupplyQuote = {
+  id: 'quote-draft',
+  code: 'COT-00001',
+  supplierId: supplier.id,
+  supplierName: supplier.tradeName,
+  supplierChannelId: supplier.channels[0].id,
+  channel: 'local_city',
+  originCity: 'Campinas',
+  originState: 'SP',
+  quoteDate: '2026-08-17',
+  validUntil: '2099-12-31',
+  contact: null,
+  contextType: 'store',
+  status: 'draft',
+  notes: null,
+  createdAt: '2026-08-17T00:00:00Z',
+  stores: [store],
+  items: [],
+};
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -120,6 +142,7 @@ describe('SupplyQuotesPage', () => {
     vi.mocked(listSuppliers).mockResolvedValue([supplier]);
     vi.mocked(listStores).mockResolvedValue([store]);
     vi.mocked(saveSupplyQuote).mockResolvedValue('quote-1');
+    vi.mocked(setSupplyQuoteStatus).mockResolvedValue();
   });
 
   it('cria cotacao com multiplos itens, frete e totais', async () => {
@@ -179,5 +202,17 @@ describe('SupplyQuotesPage', () => {
     renderPage();
     expect(await screen.findByText('Nenhuma cotacao encontrada')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Nova cotacao' })).not.toBeInTheDocument();
+  });
+
+  it('altera status sem reenviar o conteudo da cotacao', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSupplyQuotes).mockResolvedValue([draftQuote]);
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Alterar status COT-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Marcar como recebida' }));
+
+    expect(setSupplyQuoteStatus).toHaveBeenCalledWith(draftQuote.id, 'received');
+    expect(saveSupplyQuote).not.toHaveBeenCalled();
   });
 });

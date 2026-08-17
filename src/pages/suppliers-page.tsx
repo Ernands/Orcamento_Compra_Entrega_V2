@@ -304,6 +304,7 @@ function formatDate(value: string | null) {
 
 export function SuppliersPage() {
   const { can } = useSession();
+  const canManage = can('suppliers.manage');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -317,13 +318,13 @@ export function SuppliersPage() {
     setLoading(true);
     setError(null);
     try {
-      setSuppliers(await listSuppliers());
+      setSuppliers(await listSuppliers(canManage));
     } catch {
       setError('Nao foi possivel carregar os fornecedores.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManage]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -373,7 +374,7 @@ export function SuppliersPage() {
             <strong>{suppliers.filter((supplier) => supplier.active).length}</strong>
             <span>ativos</span>
           </div>
-          {can('suppliers.manage') && (
+          {canManage && (
             <button
               className="button button--primary"
               onClick={() => {
@@ -468,7 +469,7 @@ export function SuppliersPage() {
               </span>
               <span>{formatDate(supplier.latestQuoteDate)}</span>
               <StatusBadge status={supplier.active ? 'active' : 'inactive'} />
-              {can('suppliers.manage') ? (
+              {canManage ? (
                 <IconButton
                   label={`Editar ${supplier.tradeName}`}
                   onClick={() => {

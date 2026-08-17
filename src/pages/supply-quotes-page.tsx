@@ -1,4 +1,16 @@
-import { ChevronDown, ChevronUp, Edit3, FilePlus2, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  Ban,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Edit3,
+  FilePlus2,
+  Plus,
+  RefreshCcw,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
@@ -17,6 +29,7 @@ import {
   listSupplyNeeds,
   listSupplyQuotes,
   saveSupplyQuote,
+  setSupplyQuoteStatus,
 } from '../data/supplies/supplies-repository';
 import {
   calculateQuoteLine,
@@ -25,6 +38,7 @@ import {
   moneyToCents,
 } from '../domain/supply-calculations';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
+import { getEffectiveSupplyQuoteStatus } from '../domain/supply-quote-status';
 import type {
   Store,
   Supplier,
@@ -32,6 +46,7 @@ import type {
   SupplyNeed,
   SupplyQuote,
   SupplyQuoteItemValues,
+  SupplyQuoteStatus,
   SupplyQuoteValues,
 } from '../domain/types';
 
@@ -378,15 +393,8 @@ function QuoteModal({
             </label>
             <label className="field">
               Status
-              <select
-                value={values.status}
-                onChange={(event) =>
-                  set('status', event.target.value as SupplyQuoteValues['status'])
-                }
-              >
+              <select value={values.status} disabled>
                 <option value="draft">Draft</option>
-                <option value="received">Recebida</option>
-                <option value="cancelled">Cancelada</option>
               </select>
             </label>
           </div>
@@ -735,6 +743,91 @@ function formatDate(value: string | null) {
     : 'Nao informada';
 }
 
+const QUOTE_STATUS_TRANSITIONS: Partial<Record<SupplyQuoteStatus, SupplyQuoteStatus[]>> = {
+  draft: ['received', 'cancelled'],
+  received: ['cancelled', 'expired'],
+};
+
+const QUOTE_STATUS_ACTIONS: Record<
+  Exclude<SupplyQuoteStatus, 'draft'>,
+  { label: string; icon: typeof CheckCircle2 }
+> = {
+  received: { label: 'Marcar como recebida', icon: CheckCircle2 },
+  cancelled: { label: 'Cancelar cotacao', icon: Ban },
+  expired: { label: 'Marcar como expirada', icon: Clock3 },
+};
+
+function QuoteStatusModal({
+  quote,
+  onClose,
+  onSaved,
+}: {
+  quote: SupplyQuote | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setError(null);
+  }, [quote]);
+
+  const changeStatus = async (status: SupplyQuoteStatus) => {
+    if (!quote) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await setSupplyQuoteStatus(quote.id, status);
+      await onSaved();
+      onClose();
+    } catch {
+      setError('Nao foi possivel alterar o status desta cotacao.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const transitions = quote ? QUOTE_STATUS_TRANSITIONS[quote.status] || [] : [];
+  return (
+    <Modal
+      open={Boolean(quote)}
+      title={quote ? `Alterar status ${quote.code}` : 'Alterar status'}
+      description="Os itens e valores historicos permanecerao inalterados."
+      onClose={onClose}
+    >
+      {quote && (
+        <div className="stack-form">
+          <p>
+            Status atual: <StatusBadge status={getEffectiveSupplyQuoteStatus(quote)} />
+          </p>
+          {error && <div className="form-error">{error}</div>}
+          <div className="form-actions">
+            <button type="button" className="button button--secondary" onClick={onClose}>
+              Fechar
+            </button>
+            {transitions.map((status) => {
+              const action = QUOTE_STATUS_ACTIONS[status as Exclude<SupplyQuoteStatus, 'draft'>];
+              const ActionIcon = action.icon;
+              return (
+                <button
+                  type="button"
+                  className={`button ${status === 'cancelled' ? 'button--danger' : 'button--primary'}`}
+                  disabled={saving}
+                  onClick={() => void changeStatus(status)}
+                  key={status}
+                >
+                  <ActionIcon size={18} />
+                  {action.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export function SupplyQuotesPage() {
   const { can } = useSession();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -750,6 +843,7 @@ export function SupplyQuotesPage() {
   const [storeId, setStoreId] = useState('');
   const [editing, setEditing] = useState<SupplyQuote | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [statusQuote, setStatusQuote] = useState<SupplyQuote | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
@@ -789,7 +883,7 @@ export function SupplyQuotesPage() {
             .join(' ')
             .toLocaleLowerCase('pt-BR')
             .includes(search)) &&
-        (!status || quote.status === status) &&
+        (!status || getEffectiveSupplyQuoteStatus(quote) === status) &&
         (!storeId || quote.stores.some((store) => store.id === storeId)),
     );
   }, [query, quotes, status, storeId]);
@@ -909,7 +1003,7 @@ export function SupplyQuotesPage() {
                     <strong>{formatBRL(totals.totalCents)}</strong>
                     {totals.shippingPending && <small>Frete pendente</small>}
                   </span>
-                  <StatusBadge status={quote.status} />
+                  <StatusBadge status={getEffectiveSupplyQuoteStatus(quote)} />
                   <div className="row-actions">
                     <IconButton
                       label={expanded ? `Recolher ${quote.code}` : `Detalhar ${quote.code}`}
@@ -926,6 +1020,14 @@ export function SupplyQuotesPage() {
                         }}
                       >
                         <Edit3 size={17} />
+                      </IconButton>
+                    )}
+                    {can('quotes.edit') && QUOTE_STATUS_TRANSITIONS[quote.status]?.length && (
+                      <IconButton
+                        label={`Alterar status ${quote.code}`}
+                        onClick={() => setStatusQuote(quote)}
+                      >
+                        <RefreshCcw size={17} />
                       </IconButton>
                     )}
                   </div>
@@ -987,6 +1089,7 @@ export function SupplyQuotesPage() {
         onClose={closeModal}
         onSaved={load}
       />
+      <QuoteStatusModal quote={statusQuote} onClose={() => setStatusQuote(null)} onSaved={load} />
     </section>
   );
 }

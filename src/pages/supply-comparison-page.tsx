@@ -9,6 +9,7 @@ import {
 import { calculateQuoteLine, formatBRL, moneyToCents } from '../domain/supply-calculations';
 import { getComparisonHighlights } from '../domain/supply-comparison';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
+import { isSupplyQuoteEligibleForComparison } from '../domain/supply-quote-status';
 import type { SupplyItem, SupplyNeed, SupplyQuote, SupplyQuoteItem } from '../domain/types';
 
 interface ComparisonRow {
@@ -79,7 +80,7 @@ export function SupplyComparisonPage() {
   const rows = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
     return quotes.flatMap((quote): ComparisonRow[] => {
-      if (quote.status === 'cancelled') return [];
+      if (!isSupplyQuoteEligibleForComparison(quote)) return [];
       if (context !== 'all' && quote.contextType !== context) return [];
       return quote.items
         .filter(

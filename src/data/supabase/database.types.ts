@@ -1513,6 +1513,26 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      list_suppliers_for_management: {
+        Args: never;
+        Returns: {
+          active: boolean;
+          address: string;
+          city: string;
+          codigo_negocio: string;
+          contact_name: string;
+          document: string;
+          email: string;
+          id: string;
+          legal_name: string;
+          notes: string;
+          person_type: Database['public']['Enums']['supplier_person_type'];
+          phone: string;
+          state: string;
+          trade_name: string;
+          website: string;
+        }[];
+      };
       publish_checklist_version: {
         Args: { p_version_id: string };
         Returns: undefined;
@@ -1593,6 +1613,13 @@ export type Database = {
           p_valid_until: string;
         };
         Returns: string;
+      };
+      set_supply_quote_status: {
+        Args: {
+          p_quote_id: string;
+          p_status: Database['public']['Enums']['supply_quote_status'];
+        };
+        Returns: Database['public']['Enums']['supply_quote_status'];
       };
       start_store_implementation: {
         Args: {
