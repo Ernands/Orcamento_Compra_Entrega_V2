@@ -41,6 +41,7 @@ export function AppShell() {
   const [signingOut, setSigningOut] = useState(false);
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
+  const canViewSupply = can('items.view') || can('suppliers.view') || can('quotes.view');
   const title = location.pathname.startsWith('/suprimentos/itens/')
     ? 'Detalhe do item'
     : location.pathname.startsWith('/lojas/')
@@ -83,10 +84,12 @@ export function AppShell() {
               <Building2 size={19} />
               Implantacao
             </NavLink>
-            <NavLink to="/dashboard/suprimentos" onClick={() => setMobileOpen(false)}>
-              <Boxes size={19} />
-              Suprimentos
-            </NavLink>
+            {canViewSupply && (
+              <NavLink to="/dashboard/suprimentos" onClick={() => setMobileOpen(false)}>
+                <Boxes size={19} />
+                Suprimentos
+              </NavLink>
+            )}
           </>
         )}
         <span className={`nav-section${can('dashboard.view') ? ' nav-section--spaced' : ''}`}>
@@ -110,10 +113,7 @@ export function AppShell() {
             Pendencias
           </NavLink>
         )}
-        {(can('items.view') ||
-          can('needs.view') ||
-          can('suppliers.view') ||
-          can('quotes.view')) && (
+        {canViewSupply && (
           <span className="nav-section nav-section--spaced">Suprimentos</span>
         )}
         {can('items.view') && (
@@ -122,7 +122,7 @@ export function AppShell() {
             Itens
           </NavLink>
         )}
-        {can('needs.view') && (
+        {canViewSupply && can('needs.view') && (
           <NavLink to="/suprimentos/necessidades" onClick={() => setMobileOpen(false)}>
             <ListTodo size={19} />
             Necessidades
