@@ -55,8 +55,10 @@ export function App() {
             <Route
               path="dashboard/suprimentos"
               element={
-                <RequireCapability capability="dashboard.view">
-                  <DashboardPage view="supply" />
+                <RequireCapability capability="items.view">
+                  <RequireCapability capability="dashboard.view">
+                    <DashboardPage view="supply" />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />
@@ -137,8 +139,10 @@ export function App() {
             <Route
               path="suprimentos/necessidades"
               element={
-                <RequireCapability capability="needs.view">
-                  <SupplyNeedsPage />
+                <RequireCapability capability="items.view">
+                  <RequireCapability capability="needs.view">
+                    <SupplyNeedsPage />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />
