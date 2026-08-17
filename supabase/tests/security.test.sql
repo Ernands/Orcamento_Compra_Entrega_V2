@@ -46,7 +46,18 @@ select ok(not has_schema_privilege('authenticated', 'private', 'USAGE'), 'Schema
 select ok(not exists(select 1 from pg_policies where schemaname = 'public' and (trim(qual) = 'true' or trim(with_check) = 'true')), 'Nao existem policies USING true ou WITH CHECK true');
 select ok(not exists(select 1 from pg_proc where prosecdef and pronamespace in ('app'::regnamespace, 'public'::regnamespace) and coalesce(array_to_string(proconfig, ','), '') not like '%search_path=%'), 'Toda funcao SECURITY DEFINER fixa search_path');
 select ok(pg_temp.storage_bucket_private(), 'Bucket e privado quando Storage esta disponivel');
-select ok(to_regclass('storage.objects') is null or exists(select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'store_attachments_objects_read'), 'Storage possui policy de leitura quando disponivel');
+select ok(
+  to_regclass('storage.objects') is null
+  or exists(
+    select 1
+    from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname = 'store_attachments_objects_read'
+      and qual like '%can_read_store_attachment_object%'
+  ),
+  'Storage exige metadata ativa na policy de leitura quando disponivel'
+);
 select ok(to_regclass('storage.objects') is null or exists(select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'store_attachments_objects_create'), 'Storage possui policy de upload quando disponivel');
 select ok(to_regclass('storage.objects') is null or exists(select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'store_attachments_objects_delete'), 'Storage possui policy de remocao quando disponivel');
 
