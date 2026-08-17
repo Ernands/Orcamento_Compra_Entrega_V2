@@ -4,6 +4,34 @@ import type { Database } from '../supabase/database.types';
 
 const BUCKET = 'store-attachments';
 
+export const ATTACHMENT_MAX_FILE_SIZE = 100 * 1024 * 1024;
+export const ATTACHMENT_ACCEPTED_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-m4v',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+] as const;
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  m4v: 'video/x-m4v',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
 type AttachmentRow = Database['public']['Tables']['store_attachments']['Row'];
 
 function mapAttachment(row: AttachmentRow): StoreAttachment {
@@ -38,16 +66,35 @@ function safeFileName(name: string): string {
     .slice(-120);
 }
 
+export function attachmentMimeType(file: File): string {
+  if (file.type) return file.type.toLowerCase();
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  return MIME_BY_EXTENSION[extension] || '';
+}
+
+export function isAcceptedAttachment(file: File): boolean {
+  return (
+    ATTACHMENT_ACCEPTED_TYPES.includes(
+      attachmentMimeType(file) as (typeof ATTACHMENT_ACCEPTED_TYPES)[number],
+    ) && file.size <= ATTACHMENT_MAX_FILE_SIZE
+  );
+}
+
 export async function uploadStoreAttachment(
   storeId: string,
   file: File,
   category: AttachmentCategory,
   description: string,
 ): Promise<void> {
+  const mimeType = attachmentMimeType(file);
+  if (!isAcceptedAttachment(file) || !mimeType) {
+    throw new Error('Tipo ou tamanho de arquivo nao permitido.');
+  }
+
   const attachmentId = crypto.randomUUID();
   const path = `lojas/${storeId}/loja/${attachmentId}/${safeFileName(file.name)}`;
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
+    contentType: mimeType,
     upsert: false,
   });
   if (uploadError) throw uploadError;
@@ -58,7 +105,7 @@ export async function uploadStoreAttachment(
     p_storage_path: path,
     p_category: category,
     p_description: description.trim(),
-    p_mime_type: file.type,
+    p_mime_type: mimeType,
     p_size_bytes: file.size,
   });
   if (error) {
@@ -67,8 +114,14 @@ export async function uploadStoreAttachment(
   }
 }
 
-export async function createAttachmentSignedUrl(path: string): Promise<string> {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
+export async function createAttachmentSignedUrl(
+  path: string,
+  expiresInSeconds = 15 * 60,
+): Promise<string> {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(
+    path,
+    expiresInSeconds,
+  );
   if (error) throw error;
   return data.signedUrl;
 }
