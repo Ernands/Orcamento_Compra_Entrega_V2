@@ -1,30 +1,23 @@
-import { Download, File, FilePlus2, Trash2 } from 'lucide-react';
+import { ExternalLink, Eye, File, FilePlus2, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSession } from '../app/session-provider';
 import { EmptyState, InlineLoading, Modal } from '../components/ui';
 import {
+  ATTACHMENT_MAX_FILE_SIZE,
   createAttachmentSignedUrl,
   deleteStoreAttachment,
+  isAcceptedAttachment,
   listStoreAttachments,
   uploadStoreAttachment,
 } from '../data/attachments/attachments-repository';
 import type { AttachmentCategory, StoreAttachment } from '../domain/types';
 import { useStoreWorkspace } from './store-workspace-page';
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
-const ACCEPTED_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-];
 const CATEGORY_LABELS: Record<AttachmentCategory, string> = {
   project: 'Projeto',
   construction: 'Obra',
   document: 'Documento',
-  photo: 'Foto',
+  photo: 'Foto / Video',
   contract: 'Contrato',
   quote: 'Orcamento',
   receipt: 'Nota / Comprovante',
@@ -36,17 +29,27 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function previewKind(attachment: StoreAttachment): 'image' | 'pdf' | 'video' | 'other' {
+  if (attachment.mimeType.startsWith('image/')) return 'image';
+  if (attachment.mimeType === 'application/pdf') return 'pdf';
+  if (attachment.mimeType.startsWith('video/')) return 'video';
+  return 'other';
+}
+
 export function StoreAttachmentsPage() {
   const { store } = useStoreWorkspace();
   const { can } = useSession();
   const inputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<StoreAttachment[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [category, setCategory] = useState<AttachmentCategory>('document');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [previewing, setPreviewing] = useState<StoreAttachment | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [deleting, setDeleting] = useState<StoreAttachment | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,49 +64,90 @@ export function StoreAttachmentsPage() {
       setLoading(false);
     }
   }, [store.id]);
+
   useEffect(() => {
     void load();
   }, [load]);
 
   const upload = async (event: FormEvent) => {
     event.preventDefault();
-    if (!file) {
-      setError('Selecione um arquivo.');
+    if (!files.length) {
+      setError('Selecione um ou mais arquivos.');
       return;
     }
-    if (!ACCEPTED_TYPES.includes(file.type) || file.size > MAX_FILE_SIZE) {
-      setError('Use PDF, imagem, DOCX ou XLSX com ate 15 MB.');
-      return;
-    }
-    setUploading(true);
-    setError(null);
-    try {
-      await uploadStoreAttachment(store.id, file, category, description);
-      setFile(null);
-      setDescription('');
-      if (inputRef.current) inputRef.current.value = '';
-      await load();
-    } catch {
-      setError('Nao foi possivel enviar o anexo.');
-    } finally {
-      setUploading(false);
-    }
-  };
-  const openAttachment = async (attachment: StoreAttachment) => {
-    setOpeningId(attachment.id);
-    setError(null);
-    try {
-      window.open(
-        await createAttachmentSignedUrl(attachment.storagePath),
-        '_blank',
-        'noopener,noreferrer',
+
+    const invalidFiles = files.filter((file) => !isAcceptedAttachment(file));
+    if (invalidFiles.length) {
+      setError(
+        `Arquivo nao permitido ou acima de 100 MB: ${invalidFiles
+          .slice(0, 3)
+          .map((file) => file.name)
+          .join(', ')}${invalidFiles.length > 3 ? '...' : ''}`,
       );
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress({ current: 0, total: files.length });
+    setError(null);
+
+    const failed: File[] = [];
+    let uploaded = 0;
+    for (let index = 0; index < files.length; index += 1) {
+      const currentFile = files[index];
+      setUploadProgress({ current: index + 1, total: files.length });
+      try {
+        await uploadStoreAttachment(store.id, currentFile, category, description);
+        uploaded += 1;
+      } catch {
+        failed.push(currentFile);
+      }
+    }
+
+    setFiles(failed);
+    if (inputRef.current) inputRef.current.value = '';
+    if (!failed.length) setDescription('');
+    await load();
+
+    if (failed.length) {
+      setError(
+        `${uploaded} arquivo(s) enviado(s). Nao foi possivel enviar: ${failed
+          .slice(0, 3)
+          .map((file) => file.name)
+          .join(', ')}${failed.length > 3 ? '...' : ''}`,
+      );
+    }
+
+    setUploading(false);
+    setUploadProgress({ current: 0, total: 0 });
+  };
+
+  const openAttachment = async (attachment: StoreAttachment) => {
+    setPreviewing(attachment);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    setError(null);
+    try {
+      setPreviewUrl(await createAttachmentSignedUrl(attachment.storagePath));
     } catch {
+      setPreviewing(null);
       setError('Nao foi possivel gerar o acesso temporario ao arquivo.');
     } finally {
-      setOpeningId(null);
+      setPreviewLoading(false);
     }
   };
+
+  const closePreview = () => {
+    setPreviewing(null);
+    setPreviewUrl(null);
+    setPreviewLoading(false);
+  };
+
+  const openPreviewInNewTab = () => {
+    if (!previewUrl) return;
+    window.open(previewUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const remove = async () => {
     if (!deleting) return;
     try {
@@ -116,27 +160,40 @@ export function StoreAttachmentsPage() {
     }
   };
 
+  const selectedSummary = files.length
+    ? `${files.length} arquivo${files.length > 1 ? 's' : ''} selecionado${files.length > 1 ? 's' : ''}`
+    : 'Selecionar arquivos';
+  const selectedNames = files.length
+    ? `${files
+        .slice(0, 2)
+        .map((selectedFile) => selectedFile.name)
+        .join(' · ')}${files.length > 2 ? ` · +${files.length - 2}` : ''}`
+    : 'PDF, imagens, videos, DOCX ou XLSX · maximo 100 MB por arquivo';
+  const activePreviewKind = previewing ? previewKind(previewing) : 'other';
+
   return (
     <section className="workspace-section">
       <header className="section-heading">
         <div>
           <h3>Anexos</h3>
-          <p>Documentos privados da loja, acessados por URL temporaria.</p>
+          <p>Arquivos privados da loja com visualizacao temporaria no proprio sistema.</p>
         </div>
       </header>
+
       {can('attachments.create') && (
         <form className="attachment-upload" onSubmit={upload}>
           <label className="file-drop">
             <FilePlus2 size={22} />
             <span>
-              <strong>{file?.name || 'Selecionar arquivo'}</strong>
-              <small>PDF, imagens, DOCX ou XLSX · maximo 15 MB</small>
+              <strong>{selectedSummary}</strong>
+              <small>{selectedNames}</small>
             </span>
             <input
               ref={inputRef}
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx"
+              onChange={(event) => setFiles(Array.from(event.target.files || []))}
             />
           </label>
           <label className="field">
@@ -158,20 +215,26 @@ export function StoreAttachmentsPage() {
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               maxLength={1000}
+              placeholder="Aplicada a todos os arquivos deste envio"
             />
           </label>
-          <button className="button button--primary" disabled={uploading}>
-            {uploading ? 'Enviando...' : 'Enviar anexo'}
+          <button className="button button--primary" disabled={uploading || !files.length}>
+            {uploading
+              ? `Enviando ${uploadProgress.current}/${uploadProgress.total}`
+              : files.length > 1
+                ? `Enviar ${files.length} anexos`
+                : 'Enviar anexo'}
           </button>
         </form>
       )}
+
       {error && <div className="form-error">{error}</div>}
       {loading ? (
         <InlineLoading label="Carregando anexos" />
       ) : !attachments.length ? (
         <EmptyState
           title="Nenhum anexo"
-          detail="Os documentos vinculados a esta loja aparecerao aqui."
+          detail="Os arquivos vinculados a esta loja aparecerao aqui."
         />
       ) : (
         <div className="attachment-list">
@@ -189,12 +252,11 @@ export function StoreAttachmentsPage() {
               <span>{new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span>
               <button
                 className="icon-button"
-                aria-label={`Abrir ${attachment.originalName}`}
-                title="Abrir por 60 segundos"
-                disabled={openingId === attachment.id}
+                aria-label={`Visualizar ${attachment.originalName}`}
+                title="Visualizar"
                 onClick={() => void openAttachment(attachment)}
               >
-                <Download size={18} />
+                <Eye size={18} />
               </button>
               {can('attachments.delete') && (
                 <button
@@ -209,10 +271,66 @@ export function StoreAttachmentsPage() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={Boolean(previewing)}
+        title={previewing?.originalName || 'Visualizar anexo'}
+        description={previewing ? `${CATEGORY_LABELS[previewing.category]} · ${formatSize(previewing.sizeBytes)}` : undefined}
+        onClose={closePreview}
+        style={{ width: 'min(94vw, 1100px)', maxWidth: '1100px' }}
+      >
+        {previewLoading ? (
+          <InlineLoading label="Preparando visualizacao" />
+        ) : previewUrl && previewing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {activePreviewKind === 'image' && (
+              <img
+                src={previewUrl}
+                alt={previewing.originalName}
+                style={{ width: '100%', maxHeight: '72vh', objectFit: 'contain' }}
+              />
+            )}
+            {activePreviewKind === 'pdf' && (
+              <iframe
+                src={previewUrl}
+                title={previewing.originalName}
+                style={{ width: '100%', height: '72vh', border: 0 }}
+              />
+            )}
+            {activePreviewKind === 'video' && (
+              <video
+                src={previewUrl}
+                controls
+                preload="metadata"
+                style={{ width: '100%', maxHeight: '72vh' }}
+              >
+                Seu navegador nao oferece suporte a reproducao deste video.
+              </video>
+            )}
+            {activePreviewKind === 'other' && (
+              <div className="empty-state" style={{ minHeight: 220 }}>
+                <File size={28} />
+                <strong>Visualizacao interna indisponivel para este formato</strong>
+                <span>DOCX e XLSX dependem de um visualizador externo do navegador.</span>
+              </div>
+            )}
+            <div className="form-actions">
+              <button className="button button--secondary" onClick={openPreviewInNewTab}>
+                <ExternalLink size={17} />
+                Abrir em nova aba
+              </button>
+              <button className="button button--primary" onClick={closePreview}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
       <Modal
         open={Boolean(deleting)}
         title="Remover anexo"
-        description="O documento deixara de ficar disponivel para a loja."
+        description="O arquivo deixara de ficar disponivel para a loja."
         onClose={() => setDeleting(null)}
       >
         <div className="stack-form">
