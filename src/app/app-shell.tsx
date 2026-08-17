@@ -1,6 +1,7 @@
 import {
   Building2,
   Boxes,
+  ChevronRight,
   ClipboardCheck,
   ChartNoAxesCombined,
   KeyRound,
@@ -15,7 +16,7 @@ import {
   Truck,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { IconButton } from '../components/ui';
 import { useSession } from './session-provider';
@@ -36,12 +37,45 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/comparativo': 'Comparativo',
 };
 
+const SECTION_STORAGE = {
+  implantation: 'implanta27.sidebar.implantation',
+  supply: 'implanta27.sidebar.supply',
+  administration: 'implanta27.sidebar.administration',
+} as const;
+
+function readSectionState(key: string): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function persistSectionState(key: string, value: boolean) {
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // O menu continua funcional mesmo quando o navegador bloqueia storage local.
+  }
+}
+
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [implantationOpen, setImplantationOpen] = useState(() =>
+    readSectionState(SECTION_STORAGE.implantation),
+  );
+  const [supplyOpen, setSupplyOpen] = useState(() => readSectionState(SECTION_STORAGE.supply));
+  const [administrationOpen, setAdministrationOpen] = useState(() =>
+    readSectionState(SECTION_STORAGE.administration),
+  );
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
   const canViewSupply = can('items.view') || can('suppliers.view') || can('quotes.view');
+  const canViewImplementationSection =
+    can('stores.view') || can('checklists.view') || can('implementation.view');
   const title = location.pathname.startsWith('/suprimentos/itens/')
     ? 'Detalhe do item'
     : location.pathname.startsWith('/lojas/')
@@ -51,6 +85,62 @@ export function AppShell() {
           ? 'Resumo e Necessidades'
           : 'Implantacao da loja'
       : routeTitles[location.pathname] || 'Implanta 27';
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/lojas') || location.pathname.startsWith('/implantacao/')) {
+      setImplantationOpen(true);
+      persistSectionState(SECTION_STORAGE.implantation, true);
+    }
+    if (location.pathname.startsWith('/suprimentos/')) {
+      setSupplyOpen(true);
+      persistSectionState(SECTION_STORAGE.supply, true);
+    }
+    if (location.pathname.startsWith('/acessos')) {
+      setAdministrationOpen(true);
+      persistSectionState(SECTION_STORAGE.administration, true);
+    }
+  }, [location.pathname]);
+
+  const toggleImplantation = () => {
+    setImplantationOpen((current) => {
+      const next = !current;
+      persistSectionState(SECTION_STORAGE.implantation, next);
+      return next;
+    });
+  };
+
+  const toggleSupply = () => {
+    setSupplyOpen((current) => {
+      const next = !current;
+      persistSectionState(SECTION_STORAGE.supply, next);
+      return next;
+    });
+  };
+
+  const toggleAdministration = () => {
+    setAdministrationOpen((current) => {
+      const next = !current;
+      persistSectionState(SECTION_STORAGE.administration, next);
+      return next;
+    });
+  };
+
+  const sectionButtonStyle = (spaced: boolean) => ({
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    border: 0,
+    background: 'transparent',
+    textAlign: 'left' as const,
+    cursor: 'pointer',
+    marginTop: spaced ? 25 : 0,
+  });
+
+  const sectionChevronStyle = (open: boolean) => ({
+    transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+    transition: 'transform 160ms ease',
+  });
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -92,67 +182,111 @@ export function AppShell() {
             )}
           </>
         )}
-        <span className={`nav-section${can('dashboard.view') ? ' nav-section--spaced' : ''}`}>
-          Implantacao
-        </span>
-        {can('stores.view') && (
-          <NavLink to="/lojas" onClick={() => setMobileOpen(false)}>
-            <Store size={19} />
-            Lojas
-          </NavLink>
-        )}
-        {can('checklists.view') && (
-          <NavLink to="/implantacao/checklist-mestre" onClick={() => setMobileOpen(false)}>
-            <ClipboardCheck size={19} />
-            Checklist Mestre
-          </NavLink>
-        )}
-        {can('implementation.view') && (
-          <NavLink to="/implantacao/pendencias" onClick={() => setMobileOpen(false)}>
-            <ListTodo size={19} />
-            Pendencias
-          </NavLink>
-        )}
-        {canViewSupply && (
-          <span className="nav-section nav-section--spaced">Suprimentos</span>
-        )}
-        {can('items.view') && (
-          <NavLink to="/suprimentos/itens" onClick={() => setMobileOpen(false)}>
-            <PackageSearch size={19} />
-            Itens
-          </NavLink>
-        )}
-        {canViewSupply && can('needs.view') && (
-          <NavLink to="/suprimentos/necessidades" onClick={() => setMobileOpen(false)}>
-            <ListTodo size={19} />
-            Necessidades
-          </NavLink>
-        )}
-        {can('suppliers.view') && (
-          <NavLink to="/suprimentos/fornecedores" onClick={() => setMobileOpen(false)}>
-            <Truck size={19} />
-            Fornecedores
-          </NavLink>
-        )}
-        {can('quotes.view') && (
+
+        {canViewImplementationSection && (
           <>
-            <NavLink to="/suprimentos/cotacoes" onClick={() => setMobileOpen(false)}>
-              <ReceiptText size={19} />
-              Cotacoes
-            </NavLink>
-            <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
-              <ChartNoAxesCombined size={19} />
-              Comparativo
-            </NavLink>
+            <button
+              type="button"
+              className="nav-section"
+              style={sectionButtonStyle(can('dashboard.view'))}
+              aria-expanded={implantationOpen}
+              onClick={toggleImplantation}
+            >
+              <span>Implantacao</span>
+              <ChevronRight size={15} style={sectionChevronStyle(implantationOpen)} />
+            </button>
+            {implantationOpen && (
+              <>
+                {can('stores.view') && (
+                  <NavLink to="/lojas" onClick={() => setMobileOpen(false)}>
+                    <Store size={19} />
+                    Lojas
+                  </NavLink>
+                )}
+                {can('checklists.view') && (
+                  <NavLink to="/implantacao/checklist-mestre" onClick={() => setMobileOpen(false)}>
+                    <ClipboardCheck size={19} />
+                    Checklist Mestre
+                  </NavLink>
+                )}
+                {can('implementation.view') && (
+                  <NavLink to="/implantacao/pendencias" onClick={() => setMobileOpen(false)}>
+                    <ListTodo size={19} />
+                    Pendencias
+                  </NavLink>
+                )}
+              </>
+            )}
           </>
         )}
+
+        {canViewSupply && (
+          <>
+            <button
+              type="button"
+              className="nav-section"
+              style={sectionButtonStyle(true)}
+              aria-expanded={supplyOpen}
+              onClick={toggleSupply}
+            >
+              <span>Suprimentos</span>
+              <ChevronRight size={15} style={sectionChevronStyle(supplyOpen)} />
+            </button>
+            {supplyOpen && (
+              <>
+                {can('items.view') && (
+                  <NavLink to="/suprimentos/itens" onClick={() => setMobileOpen(false)}>
+                    <PackageSearch size={19} />
+                    Itens
+                  </NavLink>
+                )}
+                {can('needs.view') && (
+                  <NavLink to="/suprimentos/necessidades" onClick={() => setMobileOpen(false)}>
+                    <ListTodo size={19} />
+                    Necessidades
+                  </NavLink>
+                )}
+                {can('suppliers.view') && (
+                  <NavLink to="/suprimentos/fornecedores" onClick={() => setMobileOpen(false)}>
+                    <Truck size={19} />
+                    Fornecedores
+                  </NavLink>
+                )}
+                {can('quotes.view') && (
+                  <>
+                    <NavLink to="/suprimentos/cotacoes" onClick={() => setMobileOpen(false)}>
+                      <ReceiptText size={19} />
+                      Cotacoes
+                    </NavLink>
+                    <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
+                      <ChartNoAxesCombined size={19} />
+                      Comparativo
+                    </NavLink>
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+
         {can('access.view') && (
           <>
-            <span className="nav-section nav-section--spaced">Administracao</span>
-            <NavLink to="/acessos" onClick={() => setMobileOpen(false)}>
-              <ShieldCheck size={19} />
-              Acessos
-            </NavLink>
+            <button
+              type="button"
+              className="nav-section"
+              style={sectionButtonStyle(true)}
+              aria-expanded={administrationOpen}
+              onClick={toggleAdministration}
+            >
+              <span>Administracao</span>
+              <ChevronRight size={15} style={sectionChevronStyle(administrationOpen)} />
+            </button>
+            {administrationOpen && (
+              <NavLink to="/acessos" onClick={() => setMobileOpen(false)}>
+                <ShieldCheck size={19} />
+                Acessos
+              </NavLink>
+            )}
           </>
         )}
       </nav>
