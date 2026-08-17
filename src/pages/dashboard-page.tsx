@@ -409,15 +409,21 @@ export function DashboardPage({ view }: { view: DashboardView }) {
     setLoading(true);
     setError(null);
     try {
-      if (view === 'implementation') setImplementation(await loadImplementationDashboard());
-      else if (view === 'supply') setSupply(await loadSupplyDashboard());
-      else {
+      if (view === 'implementation') {
+        setImplementation(await loadImplementationDashboard());
+      } else if (view === 'supply') {
+        if (!canViewSupply) throw new Error('Sem acesso a suprimentos.');
+        setSupply(await loadSupplyDashboard());
+      } else if (canViewSupply) {
         const [implementationData, supplyData] = await Promise.all([
           loadImplementationDashboard(),
-          canViewSupply ? loadSupplyDashboard() : Promise.resolve(null),
+          loadSupplyDashboard(),
         ]);
         setImplementation(implementationData);
         setSupply(supplyData);
+      } else {
+        setImplementation(await loadImplementationDashboard());
+        setSupply(null);
       }
     } catch {
       setError('Nao foi possivel carregar o dashboard com seu escopo de acesso.');
@@ -476,7 +482,7 @@ export function DashboardPage({ view }: { view: DashboardView }) {
           {view === 'implementation' && implementation && (
             <ImplementationView data={implementation} />
           )}
-          {view === 'supply' && supply && <SupplyView data={supply} />}
+          {view === 'supply' && canViewSupply && supply && <SupplyView data={supply} />}
         </>
       )}
     </section>
