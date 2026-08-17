@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSession } from '../app/session-provider';
 import { EmptyState, InlineLoading, Modal } from '../components/ui';
 import {
-  ATTACHMENT_MAX_FILE_SIZE,
   createAttachmentSignedUrl,
   deleteStoreAttachment,
   isAcceptedAttachment,
@@ -275,7 +274,11 @@ export function StoreAttachmentsPage() {
       <Modal
         open={Boolean(previewing)}
         title={previewing?.originalName || 'Visualizar anexo'}
-        description={previewing ? `${CATEGORY_LABELS[previewing.category]} · ${formatSize(previewing.sizeBytes)}` : undefined}
+        description={
+          previewing
+            ? `${CATEGORY_LABELS[previewing.category]} · ${formatSize(previewing.sizeBytes)}`
+            : undefined
+        }
         onClose={closePreview}
         style={{ width: 'min(94vw, 1100px)', maxWidth: '1100px' }}
       >
