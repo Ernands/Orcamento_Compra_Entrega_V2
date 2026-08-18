@@ -454,3 +454,8 @@ export async function setSupplyQuoteStatus(
   });
   if (error) throw error;
 }
+
+export async function deleteSupplyQuote(quoteId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_supply_quote', { p_quote_id: quoteId });
+  if (error) throw error;
+}

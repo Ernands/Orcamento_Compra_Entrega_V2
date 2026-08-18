@@ -49,7 +49,7 @@ export function StatusBadge({ status }: { status: string }) {
     inactive: 'Inativo',
     blocked: 'Bloqueado',
     planning: 'Planejamento',
-    draft: 'Draft',
+    draft: 'Rascunho',
     received: 'Recebida',
     expired: 'Expirada',
     published: 'Publicada',

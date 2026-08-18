@@ -1,10 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from '../app/session-provider';
+import { listSupplyQuoteAttachments } from '../data/attachments/quote-attachments-repository';
 import { listStores } from '../data/stores/stores-repository';
 import {
+  deleteSupplyQuote,
   listSuppliers,
   listSupplyItems,
   listSupplyNeeds,
@@ -12,12 +14,29 @@ import {
   saveSupplyQuote,
   setSupplyQuoteStatus,
 } from '../data/supplies/supplies-repository';
-import type { Store, Supplier, SupplyItem, SupplyNeed, SupplyQuote } from '../domain/types';
+import type {
+  Store,
+  Supplier,
+  SupplyItem,
+  SupplyNeed,
+  SupplyQuote,
+  SupplyQuoteAttachment,
+  SupplyQuoteItem,
+  SupplyQuoteStatus,
+} from '../domain/types';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
+vi.mock('../data/attachments/quote-attachments-repository', () => ({
+  createSupplyQuoteAttachmentSignedUrl: vi.fn(),
+  deleteSupplyQuoteAttachment: vi.fn(),
+  listSupplyQuoteAttachments: vi.fn(),
+  uploadSupplyQuoteAttachment: vi.fn(),
+  validateQuoteAttachment: vi.fn(),
+}));
 vi.mock('../data/stores/stores-repository', () => ({ listStores: vi.fn() }));
 vi.mock('../data/supplies/supplies-repository', () => ({
+  deleteSupplyQuote: vi.fn(),
   listSuppliers: vi.fn(),
   listSupplyItems: vi.fn(),
   listSupplyNeeds: vi.fn(),
@@ -109,6 +128,32 @@ const supplier: Supplier = {
   ],
 };
 
+const quoteItem: SupplyQuoteItem = {
+  id: 'quote-item-1',
+  quoteId: 'quote-draft',
+  supplyItemId: item.id,
+  itemCode: item.code,
+  itemName: item.name,
+  storeNeedId: need.id,
+  needTitle: need.title,
+  storeId: store.id,
+  storeCode: store.code,
+  storeName: store.name,
+  quantity: '3',
+  unit: 'un',
+  unitPrice: '10.00',
+  discountAmount: '0.00',
+  shippingType: 'free',
+  shippingAmount: '0.00',
+  otherCosts: '0.00',
+  deliveryDays: 5,
+  minimumQuantity: null,
+  offeredBrandModel: null,
+  notes: null,
+  productUrl: 'https://fornecedor.example/cadeira',
+  capturedAt: null,
+};
+
 const draftQuote: SupplyQuote = {
   id: 'quote-draft',
   code: 'COT-00001',
@@ -126,8 +171,29 @@ const draftQuote: SupplyQuote = {
   notes: null,
   createdAt: '2026-08-17T00:00:00Z',
   stores: [store],
-  items: [],
+  items: [quoteItem],
 };
+
+const attachment: SupplyQuoteAttachment = {
+  id: 'attachment-1',
+  quoteId: draftQuote.id,
+  originalName: 'proposta.pdf',
+  storagePath: `cotacoes/${draftQuote.id}/attachment-1/proposta.pdf`,
+  mimeType: 'application/pdf',
+  sizeBytes: 1000,
+  description: null,
+  createdAt: '2026-08-17T00:00:00Z',
+};
+
+function quoteWithStatus(status: SupplyQuoteStatus): SupplyQuote {
+  return {
+    ...draftQuote,
+    id: `quote-${status}`,
+    code: `COT-${status}`,
+    status,
+    items: [{ ...quoteItem, id: `item-${status}`, quoteId: `quote-${status}` }],
+  };
+}
 
 function renderPage() {
   return render(
@@ -141,11 +207,13 @@ describe('SupplyQuotesPage', () => {
   beforeEach(() => {
     vi.mocked(useSession).mockReturnValue({ can: () => true } as never);
     vi.mocked(listSupplyQuotes).mockResolvedValue([]);
+    vi.mocked(listSupplyQuoteAttachments).mockResolvedValue([]);
     vi.mocked(listSupplyItems).mockResolvedValue([item]);
     vi.mocked(listSupplyNeeds).mockResolvedValue([need]);
     vi.mocked(listSuppliers).mockResolvedValue([supplier]);
     vi.mocked(listStores).mockResolvedValue([store]);
     vi.mocked(saveSupplyQuote).mockResolvedValue('quote-1');
+    vi.mocked(deleteSupplyQuote).mockResolvedValue();
     vi.mocked(setSupplyQuoteStatus).mockResolvedValue();
   });
 
@@ -218,5 +286,93 @@ describe('SupplyQuotesPage', () => {
 
     expect(setSupplyQuoteStatus).toHaveBeenCalledWith(draftQuote.id, 'received');
     expect(saveSupplyQuote).not.toHaveBeenCalled();
+  });
+
+  it('exclui somente cotacao em Rascunho apos confirmacao', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSupplyQuotes).mockResolvedValue([draftQuote, quoteWithStatus('received')]);
+    renderPage();
+
+    expect(
+      await screen.findByRole('button', { name: `Excluir ${draftQuote.code}` }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir COT-received' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: `Excluir ${draftQuote.code}` }));
+    await user.click(screen.getByRole('button', { name: 'Excluir rascunho' }));
+
+    expect(deleteSupplyQuote).toHaveBeenCalledWith(draftQuote.id);
+  });
+
+  it.each<SupplyQuoteStatus>(['draft', 'received', 'expired', 'cancelled'])(
+    'edita o conteudo em status %s sem alterar o status',
+    async (status) => {
+      const user = userEvent.setup();
+      const quote = quoteWithStatus(status);
+      vi.mocked(listSupplyQuotes).mockResolvedValue([quote]);
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: `Editar ${quote.code}` }));
+      expect(screen.getByLabelText('Status')).toHaveValue(
+        { draft: 'Rascunho', received: 'Recebida', expired: 'Expirada', cancelled: 'Cancelada' }[
+          status
+        ],
+      );
+      await user.clear(screen.getByLabelText('Observacoes gerais'));
+      await user.type(screen.getByLabelText('Observacoes gerais'), `Edicao ${status}`);
+      await user.click(screen.getByRole('button', { name: 'Salvar cotacao' }));
+
+      expect(saveSupplyQuote).toHaveBeenCalledWith(
+        expect.objectContaining({ id: quote.id, status, notes: `Edicao ${status}` }),
+      );
+      expect(setSupplyQuoteStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it('exibe produto somente para URL web segura e expande todos os detalhes', async () => {
+    const user = userEvent.setup();
+    const unsafeItem = {
+      ...quoteItem,
+      id: 'quote-item-unsafe',
+      itemName: 'Item sem URL segura',
+      productUrl: 'javascript:alert(1)',
+    };
+    vi.mocked(listSupplyQuotes).mockResolvedValue([
+      { ...draftQuote, items: [quoteItem, unsafeItem] },
+    ]);
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Ver todos os detalhes' }));
+    const productLinks = screen.getAllByRole('link', { name: 'Ver produto' });
+    expect(productLinks).toHaveLength(1);
+    expect(productLinks[0]).toHaveAttribute('href', quoteItem.productUrl);
+    expect(productLinks[0]).toHaveAttribute('target', '_blank');
+    expect(productLinks[0]).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByText(/Item sem URL segura/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recolher todos os detalhes' })).toBeInTheDocument();
+  });
+
+  it('mostra contagem de anexos e resume apenas as cotacoes filtradas', async () => {
+    const user = userEvent.setup();
+    const receivedQuote = {
+      ...quoteWithStatus('received'),
+      supplierName: 'Outro fornecedor',
+    };
+    vi.mocked(listSupplyQuotes).mockResolvedValue([draftQuote, receivedQuote]);
+    vi.mocked(listSupplyQuoteAttachments).mockResolvedValue([attachment]);
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Anexos COT-00001 (1)' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Buscar cotacoes'), 'Fornecedor Um');
+    await user.selectOptions(screen.getByLabelText('Filtrar status'), 'draft');
+    await user.selectOptions(screen.getByLabelText('Filtrar loja'), store.id);
+    await user.click(screen.getByRole('button', { name: 'Ver resumo' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Resumo das cotacoes' });
+    expect(
+      within(dialog).getByText('Fornecedor Um · Rascunho · LOJ-001 - Loja Um'),
+    ).toBeInTheDocument();
+    const totalQuotes = within(dialog).getByText('Total de cotacoes').closest('article');
+    expect(totalQuotes).not.toBeNull();
+    expect(within(totalQuotes as HTMLElement).getByText('1')).toBeInTheDocument();
   });
 });

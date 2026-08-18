@@ -1009,6 +1009,70 @@ export type Database = {
           },
         ];
       };
+      supply_quote_attachments: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          deleted_at: string | null;
+          deleted_by: string | null;
+          description: string | null;
+          id: string;
+          mime_type: string;
+          original_name: string;
+          quote_id: string;
+          size_bytes: number;
+          storage_path: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          deleted_at?: string | null;
+          deleted_by?: string | null;
+          description?: string | null;
+          id?: string;
+          mime_type: string;
+          original_name: string;
+          quote_id: string;
+          size_bytes: number;
+          storage_path: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          deleted_at?: string | null;
+          deleted_by?: string | null;
+          description?: string | null;
+          id?: string;
+          mime_type?: string;
+          original_name?: string;
+          quote_id?: string;
+          size_bytes?: number;
+          storage_path?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'supply_quote_attachments_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quote_attachments_deleted_by_fkey';
+            columns: ['deleted_by'];
+            isOneToOne: false;
+            referencedRelation: 'usuarios';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'supply_quote_attachments_quote_id_fkey';
+            columns: ['quote_id'];
+            isOneToOne: false;
+            referencedRelation: 'supply_quotes';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       supply_quote_items: {
         Row: {
           captured_at: string | null;
@@ -1486,6 +1550,11 @@ export type Database = {
         Args: { p_attachment_id: string };
         Returns: string;
       };
+      delete_supply_quote: { Args: { p_quote_id: string }; Returns: undefined };
+      delete_supply_quote_attachment: {
+        Args: { p_attachment_id: string };
+        Returns: string;
+      };
       get_auth_context_for_service: {
         Args: { p_auth_user_id: string };
         Returns: {
@@ -1580,6 +1649,35 @@ export type Database = {
         SetofOptions: {
           from: '*';
           to: 'store_attachments';
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      register_supply_quote_attachment: {
+        Args: {
+          p_description: string;
+          p_mime_type: string;
+          p_original_name: string;
+          p_quote_id: string;
+          p_size_bytes: number;
+          p_storage_path: string;
+        };
+        Returns: {
+          created_at: string;
+          created_by: string | null;
+          deleted_at: string | null;
+          deleted_by: string | null;
+          description: string | null;
+          id: string;
+          mime_type: string;
+          original_name: string;
+          quote_id: string;
+          size_bytes: number;
+          storage_path: string;
+        };
+        SetofOptions: {
+          from: '*';
+          to: 'supply_quote_attachments';
           isOneToOne: true;
           isSetofReturn: false;
         };

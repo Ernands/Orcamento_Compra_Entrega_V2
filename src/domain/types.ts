@@ -408,6 +408,17 @@ export interface SupplyQuote {
   items: SupplyQuoteItem[];
 }
 
+export interface SupplyQuoteAttachment {
+  id: string;
+  quoteId: string;
+  originalName: string;
+  storagePath: string;
+  mimeType: string;
+  sizeBytes: number;
+  description: string | null;
+  createdAt: string;
+}
+
 export interface ImplementationDashboardStore {
   id: string;
   code: string;

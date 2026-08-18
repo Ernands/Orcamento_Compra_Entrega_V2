@@ -1,11 +1,15 @@
 import {
   Ban,
+  ChartNoAxesCombined,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ChevronsUpDown,
   Clock3,
   Edit3,
+  ExternalLink,
   FilePlus2,
+  Paperclip,
   Plus,
   RefreshCcw,
   Search,
@@ -14,6 +18,8 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { QuoteAttachmentsModal, QuoteAttachmentsPanel } from '../components/quote-attachments';
+import { QuoteSummaryModal } from '../components/quote-summary-modal';
 import {
   EmptyState,
   ErrorState,
@@ -22,9 +28,10 @@ import {
   Modal,
   StatusBadge,
 } from '../components/ui';
-import { deleteSupplyQuote } from '../data/supplies/quote-delete-repository';
 import { listStores } from '../data/stores/stores-repository';
+import { listSupplyQuoteAttachments } from '../data/attachments/quote-attachments-repository';
 import {
+  deleteSupplyQuote,
   listSuppliers,
   listSupplyItems,
   listSupplyNeeds,
@@ -39,13 +46,17 @@ import {
   moneyToCents,
 } from '../domain/supply-calculations';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
-import { getEffectiveSupplyQuoteStatus } from '../domain/supply-quote-status';
+import {
+  getEffectiveSupplyQuoteStatus,
+  SUPPLY_QUOTE_STATUS_LABELS,
+} from '../domain/supply-quote-status';
 import type {
   Store,
   Supplier,
   SupplyItem,
   SupplyNeed,
   SupplyQuote,
+  SupplyQuoteAttachment,
   SupplyQuoteItemValues,
   SupplyQuoteStatus,
   SupplyQuoteValues,
@@ -150,6 +161,8 @@ function QuoteModal({
   stores,
   onClose,
   onSaved,
+  canEdit,
+  onAttachmentsChanged,
 }: {
   open: boolean;
   quote: SupplyQuote | null;
@@ -160,6 +173,8 @@ function QuoteModal({
   stores: Store[];
   onClose: () => void;
   onSaved: () => Promise<void>;
+  canEdit: boolean;
+  onAttachmentsChanged: () => Promise<void>;
 }) {
   const [values, setValues] = useState<SupplyQuoteValues>(emptyQuote());
   const [saving, setSaving] = useState(false);
@@ -421,9 +436,14 @@ function QuoteModal({
             </label>
             <label className="field">
               Status
-              <select value={values.status} disabled>
-                <option value="draft">Draft</option>
-              </select>
+              <input
+                value={
+                  quote
+                    ? SUPPLY_QUOTE_STATUS_LABELS[getEffectiveSupplyQuoteStatus(quote)]
+                    : SUPPLY_QUOTE_STATUS_LABELS.draft
+                }
+                readOnly
+              />
             </label>
           </div>
         </div>
@@ -779,6 +799,20 @@ function QuoteModal({
             onChange={(event) => set('notes', event.target.value)}
           />
         </label>
+        <div className="quote-form-section">
+          <h3>Anexos da cotacao</h3>
+          {quote ? (
+            <QuoteAttachmentsPanel
+              quote={quote}
+              canEdit={canEdit}
+              onChanged={onAttachmentsChanged}
+            />
+          ) : (
+            <p className="form-help">
+              Salve a cotacao pela primeira vez para disponibilizar o envio de anexos.
+            </p>
+          )}
+        </div>
         {error && <div className="form-error">{error}</div>}
         <div className="form-actions">
           <button type="button" className="button button--secondary" onClick={onClose}>
@@ -885,77 +919,6 @@ function QuoteStatusModal({
   );
 }
 
-function QuoteDeleteModal({
-  quote,
-  onClose,
-  onDeleted,
-}: {
-  quote: SupplyQuote | null;
-  onClose: () => void;
-  onDeleted: () => Promise<void>;
-}) {
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setError(null);
-    setDeleting(false);
-  }, [quote]);
-
-  const remove = async () => {
-    if (!quote) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await deleteSupplyQuote(quote.id);
-      await onDeleted();
-      onClose();
-    } catch {
-      setError('Nao foi possivel excluir a cotacao. Apenas cotacoes em Draft podem ser excluidas.');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={Boolean(quote)}
-      title={quote ? `Excluir ${quote.code}` : 'Excluir cotacao'}
-      description="Exclusao definitiva permitida somente enquanto a cotacao estiver em Draft."
-      onClose={onClose}
-    >
-      {quote && (
-        <div className="stack-form">
-          <p className="modal-copy">
-            A cotacao de <strong>{quote.supplierName}</strong>, seus itens e vinculos com lojas serao
-            removidos. A exclusao ficara registrada na auditoria.
-          </p>
-          {error && <div className="form-error">{error}</div>}
-          <div className="form-actions">
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={onClose}
-              disabled={deleting}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="button button--danger"
-              onClick={() => void remove()}
-              disabled={deleting}
-            >
-              <Trash2 size={18} />
-              {deleting ? 'Excluindo...' : 'Excluir cotacao'}
-            </button>
-          </div>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
 export function SupplyQuotesPage() {
   const { can } = useSession();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -964,6 +927,7 @@ export function SupplyQuotesPage() {
   const [needs, setNeeds] = useState<SupplyNeed[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [attachments, setAttachments] = useState<SupplyQuoteAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -971,27 +935,38 @@ export function SupplyQuotesPage() {
   const [storeId, setStoreId] = useState('');
   const [editing, setEditing] = useState<SupplyQuote | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [attachmentsQuote, setAttachmentsQuote] = useState<SupplyQuote | null>(null);
   const [statusQuote, setStatusQuote] = useState<SupplyQuote | null>(null);
-  const [deletingQuote, setDeletingQuote] = useState<SupplyQuote | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
-
+  const [deleteQuote, setDeleteQuote] = useState<SupplyQuote | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [loadedQuotes, loadedItems, loadedNeeds, loadedSuppliers, loadedStores] =
-        await Promise.all([
-          listSupplyQuotes(),
-          listSupplyItems(),
-          listSupplyNeeds(),
-          listSuppliers(),
-          listStores(),
-        ]);
+      const [
+        loadedQuotes,
+        loadedItems,
+        loadedNeeds,
+        loadedSuppliers,
+        loadedStores,
+        loadedAttachments,
+      ] = await Promise.all([
+        listSupplyQuotes(),
+        listSupplyItems(),
+        listSupplyNeeds(),
+        listSuppliers(),
+        listStores(),
+        listSupplyQuoteAttachments(),
+      ]);
       setQuotes(loadedQuotes);
       setItems(loadedItems);
       setNeeds(loadedNeeds);
       setSuppliers(loadedSuppliers);
       setStores(loadedStores);
+      setAttachments(loadedAttachments);
     } catch {
       setError('Nao foi possivel carregar as cotacoes.');
     } finally {
@@ -1021,9 +996,28 @@ export function SupplyQuotesPage() {
     );
   }, [query, quotes, status, storeId]);
 
-  const allFilteredExpanded =
+  const attachmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    attachments.forEach((attachment) =>
+      counts.set(attachment.quoteId, (counts.get(attachment.quoteId) || 0) + 1),
+    );
+    return counts;
+  }, [attachments]);
+  const allDetailsVisible =
     filtered.length > 0 && filtered.every((quote) => expandedIds.has(quote.id));
-
+  const summaryFilters = useMemo(
+    () => ({
+      search: query.trim(),
+      status: status ? SUPPLY_QUOTE_STATUS_LABELS[status as SupplyQuoteStatus] : '',
+      store: storeId
+        ? (() => {
+            const store = stores.find((entry) => entry.id === storeId);
+            return store ? `${store.code} - ${store.name}` : '';
+          })()
+        : '',
+    }),
+    [query, status, storeId, stores],
+  );
   const toggleQuoteDetails = (quoteId: string) => {
     setExpandedIds((current) => {
       const next = new Set(current);
@@ -1032,16 +1026,28 @@ export function SupplyQuotesPage() {
       return next;
     });
   };
-
   const toggleAllDetails = () => {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (allFilteredExpanded) filtered.forEach((quote) => next.delete(quote.id));
-      else filtered.forEach((quote) => next.add(quote.id));
-      return next;
-    });
+    setExpandedIds(allDetailsVisible ? new Set() : new Set(filtered.map((quote) => quote.id)));
   };
-
+  const removeDraftQuote = async () => {
+    if (!deleteQuote) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteSupplyQuote(deleteQuote.id);
+      setDeleteQuote(null);
+      await load();
+    } catch (deleteFailure) {
+      const message = deleteFailure instanceof Error ? deleteFailure.message : '';
+      setDeleteError(
+        message.includes('remove quote attachments')
+          ? 'Remova os anexos ativos antes de excluir a cotacao.'
+          : 'Nao foi possivel excluir a cotacao em rascunho.',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
   const closeModal = () => {
     setModalOpen(false);
     setEditing(null);
@@ -1065,6 +1071,10 @@ export function SupplyQuotesPage() {
             <strong>{quotes.length}</strong>
             <span>cotacoes</span>
           </div>
+          <button className="button button--secondary" onClick={() => setSummaryOpen(true)}>
+            <ChartNoAxesCombined size={18} />
+            Ver resumo
+          </button>
           {can('quotes.create') && (
             <button
               className="button button--primary"
@@ -1077,6 +1087,14 @@ export function SupplyQuotesPage() {
               Nova cotacao
             </button>
           )}
+          <button
+            className="button button--secondary"
+            disabled={!filtered.length}
+            onClick={toggleAllDetails}
+          >
+            <ChevronsUpDown size={18} />
+            {allDetailsVisible ? 'Recolher todos os detalhes' : 'Ver todos os detalhes'}
+          </button>
         </div>
       </header>
 
@@ -1096,7 +1114,7 @@ export function SupplyQuotesPage() {
           onChange={(event) => setStatus(event.target.value)}
         >
           <option value="">Todos status</option>
-          <option value="draft">Draft</option>
+          <option value="draft">Rascunho</option>
           <option value="received">Recebida</option>
           <option value="expired">Expirada</option>
           <option value="cancelled">Cancelada</option>
@@ -1114,19 +1132,6 @@ export function SupplyQuotesPage() {
           ))}
         </select>
       </div>
-
-      {!loading && !error && filtered.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            className="button button--secondary button--small"
-            onClick={toggleAllDetails}
-          >
-            {allFilteredExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
-            {allFilteredExpanded ? 'Recolher todos os detalhes' : 'Ver todos os detalhes'}
-          </button>
-        </div>
-      )}
 
       {loading ? (
         <InlineLoading label="Carregando cotacoes" />
@@ -1181,31 +1186,46 @@ export function SupplyQuotesPage() {
                     >
                       {expanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                     </IconButton>
-                    {can('quotes.edit') && quote.status === 'draft' && (
-                      <>
-                        <IconButton
-                          label={`Editar ${quote.code}`}
-                          onClick={() => {
-                            setEditing(quote);
-                            setModalOpen(true);
-                          }}
-                        >
-                          <Edit3 size={17} />
-                        </IconButton>
-                        <IconButton
-                          label={`Excluir ${quote.code}`}
-                          onClick={() => setDeletingQuote(quote)}
-                        >
-                          <Trash2 size={17} />
-                        </IconButton>
-                      </>
+                    {can('quotes.edit') && (
+                      <IconButton
+                        label={`Editar ${quote.code}`}
+                        onClick={() => {
+                          setEditing(quote);
+                          setModalOpen(true);
+                        }}
+                      >
+                        <Edit3 size={17} />
+                      </IconButton>
                     )}
+                    <button
+                      type="button"
+                      className="icon-button quote-attachment-action"
+                      aria-label={`Anexos ${quote.code} (${attachmentCounts.get(quote.id) || 0})`}
+                      title="Anexos da cotacao"
+                      onClick={() => setAttachmentsQuote(quote)}
+                    >
+                      <Paperclip size={17} />
+                      <span className="quote-attachment-action__count">
+                        {attachmentCounts.get(quote.id) || 0}
+                      </span>
+                    </button>
                     {can('quotes.edit') && QUOTE_STATUS_TRANSITIONS[quote.status]?.length && (
                       <IconButton
                         label={`Alterar status ${quote.code}`}
                         onClick={() => setStatusQuote(quote)}
                       >
                         <RefreshCcw size={17} />
+                      </IconButton>
+                    )}
+                    {can('quotes.edit') && quote.status === 'draft' && (
+                      <IconButton
+                        label={`Excluir ${quote.code}`}
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeleteQuote(quote);
+                        }}
+                      >
+                        <Trash2 size={17} />
                       </IconButton>
                     )}
                   </div>
@@ -1225,6 +1245,17 @@ export function SupplyQuotesPage() {
                               {item.storeCode || 'Consolidado'}
                               {item.needTitle ? ` - ${item.needTitle}` : ''}
                             </small>
+                            {item.productUrl && /^https?:\/\//i.test(item.productUrl) && (
+                              <a
+                                className="quote-product-link"
+                                href={item.productUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink size={14} />
+                                Ver produto
+                              </a>
+                            )}
                           </span>
                           <span>
                             {item.quantity} {item.unit}
@@ -1268,13 +1299,55 @@ export function SupplyQuotesPage() {
         stores={stores}
         onClose={closeModal}
         onSaved={load}
+        canEdit={can('quotes.edit')}
+        onAttachmentsChanged={load}
+      />
+      <QuoteAttachmentsModal
+        quote={attachmentsQuote}
+        open={Boolean(attachmentsQuote)}
+        canEdit={can('quotes.edit')}
+        onClose={() => setAttachmentsQuote(null)}
+        onChanged={load}
+      />
+      <QuoteSummaryModal
+        open={summaryOpen}
+        quotes={filtered}
+        filters={summaryFilters}
+        onClose={() => setSummaryOpen(false)}
       />
       <QuoteStatusModal quote={statusQuote} onClose={() => setStatusQuote(null)} onSaved={load} />
-      <QuoteDeleteModal
-        quote={deletingQuote}
-        onClose={() => setDeletingQuote(null)}
-        onDeleted={load}
-      />
+      <Modal
+        open={Boolean(deleteQuote)}
+        title={deleteQuote ? `Excluir ${deleteQuote.code}` : 'Excluir cotacao'}
+        description="Esta acao fica disponivel somente enquanto a cotacao esta em rascunho."
+        onClose={() => !deleting && setDeleteQuote(null)}
+      >
+        <div className="stack-form">
+          <p className="modal-copy">
+            A cotacao e seus itens historicos serao removidos. Esta acao nao pode ser desfeita.
+          </p>
+          {deleteError && <div className="form-error">{deleteError}</div>}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="button button--secondary"
+              disabled={deleting}
+              onClick={() => setDeleteQuote(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="button button--danger"
+              disabled={deleting}
+              onClick={() => void removeDraftQuote()}
+            >
+              <Trash2 size={17} />
+              {deleting ? 'Excluindo...' : 'Excluir rascunho'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }
