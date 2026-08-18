@@ -22,6 +22,7 @@ import {
   Modal,
   StatusBadge,
 } from '../components/ui';
+import { deleteSupplyQuote } from '../data/supplies/quote-delete-repository';
 import { listStores } from '../data/stores/stores-repository';
 import {
   listSuppliers,
@@ -163,6 +164,7 @@ function QuoteModal({
   const [values, setValues] = useState<SupplyQuoteValues>(emptyQuote());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const next = quoteValues(quote);
@@ -182,8 +184,10 @@ function QuoteModal({
     setValues(next);
     setError(null);
   }, [initialNeedId, needs, open, quote]);
+
   const set = <K extends keyof SupplyQuoteValues>(key: K, value: SupplyQuoteValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
+
   const setLine = <K extends keyof SupplyQuoteItemValues>(
     index: number,
     key: K,
@@ -195,6 +199,7 @@ function QuoteModal({
         lineIndex === index ? { ...line, [key]: value } : line,
       ),
     }));
+
   const selectedSupplier = suppliers.find((supplier) => supplier.id === values.supplierId);
   const channels = selectedSupplier?.channels.filter((channel) => channel.active) || [];
   const visibleNeeds = needs.filter(
@@ -208,6 +213,7 @@ function QuoteModal({
       return null;
     }
   }, [values.items]);
+  const allStoresSelected = stores.length > 0 && values.storeIds.length === stores.length;
 
   const selectSupplier = (supplierId: string) => {
     const supplier = suppliers.find((entry) => entry.id === supplierId);
@@ -218,6 +224,7 @@ function QuoteModal({
       contact: supplier?.contactName || supplier?.email || supplier?.phone || '',
     }));
   };
+
   const selectNeed = (index: number, needId: string) => {
     const need = needs.find((entry) => entry.id === needId);
     if (!need) {
@@ -245,11 +252,13 @@ function QuoteModal({
       ),
     }));
   };
+
   const selectItem = (index: number, itemId: string) => {
     const item = items.find((entry) => entry.id === itemId);
     setLine(index, 'supplyItemId', itemId);
     if (item) setLine(index, 'unit', item.defaultUnit);
   };
+
   const changeContext = (contextType: SupplyQuoteValues['contextType']) => {
     setValues((current) => ({
       ...current,
@@ -260,6 +269,7 @@ function QuoteModal({
       ),
     }));
   };
+
   const toggleStore = (storeId: string) => {
     setValues((current) => {
       const selected = current.storeIds.includes(storeId)
@@ -274,6 +284,23 @@ function QuoteModal({
       };
     });
   };
+
+  const toggleAllStores = () => {
+    setValues((current) => {
+      const selected =
+        stores.length > 0 && current.storeIds.length === stores.length
+          ? []
+          : stores.map((store) => store.id);
+      return {
+        ...current,
+        storeIds: selected,
+        items: current.items.map((line) =>
+          selected.includes(line.storeId) ? line : { ...line, storeId: '' },
+        ),
+      };
+    });
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (
@@ -306,6 +333,7 @@ function QuoteModal({
       setError('Revise item, loja, quantidade, preco, desconto e frete das linhas.');
       return;
     }
+
     setSaving(true);
     setError(null);
     try {
@@ -399,6 +427,7 @@ function QuoteModal({
             </label>
           </div>
         </div>
+
         <div className="quote-form-section">
           <h3>Contexto</h3>
           <div className="segmented" role="group" aria-label="Contexto da cotacao">
@@ -417,6 +446,7 @@ function QuoteModal({
               Consolidada
             </button>
           </div>
+
           {values.contextType === 'store' ? (
             <label className="field quote-store-select">
               Loja
@@ -442,25 +472,49 @@ function QuoteModal({
               </select>
             </label>
           ) : (
-            <div className="store-check-grid">
-              {stores.map((store) => (
-                <label key={store.id}>
-                  <input
-                    type="checkbox"
-                    checked={values.storeIds.includes(store.id)}
-                    onChange={() => toggleStore(store.id)}
-                  />
-                  <span>
-                    <strong>{store.code}</strong>
-                    <small>
-                      {store.city}/{store.state}
-                    </small>
-                  </span>
-                </label>
-              ))}
+            <div className="stack-form" style={{ gap: 12 }}>
+              <label
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  width: 'fit-content',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={allStoresSelected}
+                  onChange={toggleAllStores}
+                  disabled={!stores.length}
+                />
+                <span>Selecionar todas as lojas</span>
+                <small style={{ color: 'var(--muted)', fontWeight: 500 }}>
+                  {values.storeIds.length}/{stores.length} selecionadas
+                </small>
+              </label>
+              <div className="store-check-grid">
+                {stores.map((store) => (
+                  <label key={store.id}>
+                    <input
+                      type="checkbox"
+                      checked={values.storeIds.includes(store.id)}
+                      onChange={() => toggleStore(store.id)}
+                    />
+                    <span>
+                      <strong>{store.code}</strong>
+                      <small>
+                        {store.city}/{store.state}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
         </div>
+
         <div className="quote-form-section">
           <div className="quote-form-section__heading">
             <h3>Itens cotados</h3>
@@ -697,6 +751,7 @@ function QuoteModal({
             })}
           </div>
         </div>
+
         <div className="quote-total-strip">
           <span>
             Itens<strong>{totals ? formatBRL(totals.itemsCents) : '-'}</strong>
@@ -715,6 +770,7 @@ function QuoteModal({
           </span>
           {totals?.shippingPending && <small>Ha frete a consultar</small>}
         </div>
+
         <label className="field">
           Observacoes gerais
           <textarea
@@ -768,6 +824,7 @@ function QuoteStatusModal({
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     setError(null);
   }, [quote]);
@@ -828,6 +885,77 @@ function QuoteStatusModal({
   );
 }
 
+function QuoteDeleteModal({
+  quote,
+  onClose,
+  onDeleted,
+}: {
+  quote: SupplyQuote | null;
+  onClose: () => void;
+  onDeleted: () => Promise<void>;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+    setDeleting(false);
+  }, [quote]);
+
+  const remove = async () => {
+    if (!quote) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteSupplyQuote(quote.id);
+      await onDeleted();
+      onClose();
+    } catch {
+      setError('Nao foi possivel excluir a cotacao. Apenas cotacoes em Draft podem ser excluidas.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={Boolean(quote)}
+      title={quote ? `Excluir ${quote.code}` : 'Excluir cotacao'}
+      description="Exclusao definitiva permitida somente enquanto a cotacao estiver em Draft."
+      onClose={onClose}
+    >
+      {quote && (
+        <div className="stack-form">
+          <p className="modal-copy">
+            A cotacao de <strong>{quote.supplierName}</strong>, seus itens e vinculos com lojas serao
+            removidos. A exclusao ficara registrada na auditoria.
+          </p>
+          {error && <div className="form-error">{error}</div>}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={onClose}
+              disabled={deleting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="button button--danger"
+              onClick={() => void remove()}
+              disabled={deleting}
+            >
+              <Trash2 size={18} />
+              {deleting ? 'Excluindo...' : 'Excluir cotacao'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export function SupplyQuotesPage() {
   const { can } = useSession();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -844,7 +972,9 @@ export function SupplyQuotesPage() {
   const [editing, setEditing] = useState<SupplyQuote | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [statusQuote, setStatusQuote] = useState<SupplyQuote | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deletingQuote, setDeletingQuote] = useState<SupplyQuote | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -868,12 +998,15 @@ export function SupplyQuotesPage() {
       setLoading(false);
     }
   }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
   useEffect(() => {
     if (!loading && searchParams.get('need') && can('quotes.create')) setModalOpen(true);
   }, [can, loading, searchParams]);
+
   const filtered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
     return quotes.filter(
@@ -887,6 +1020,28 @@ export function SupplyQuotesPage() {
         (!storeId || quote.stores.some((store) => store.id === storeId)),
     );
   }, [query, quotes, status, storeId]);
+
+  const allFilteredExpanded =
+    filtered.length > 0 && filtered.every((quote) => expandedIds.has(quote.id));
+
+  const toggleQuoteDetails = (quoteId: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(quoteId)) next.delete(quoteId);
+      else next.add(quoteId);
+      return next;
+    });
+  };
+
+  const toggleAllDetails = () => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (allFilteredExpanded) filtered.forEach((quote) => next.delete(quote.id));
+      else filtered.forEach((quote) => next.add(quote.id));
+      return next;
+    });
+  };
+
   const closeModal = () => {
     setModalOpen(false);
     setEditing(null);
@@ -924,6 +1079,7 @@ export function SupplyQuotesPage() {
           )}
         </div>
       </header>
+
       <div className="supply-filter-grid supply-filter-grid--compact">
         <label className="search-field">
           <Search size={18} />
@@ -958,6 +1114,20 @@ export function SupplyQuotesPage() {
           ))}
         </select>
       </div>
+
+      {!loading && !error && filtered.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="button button--secondary button--small"
+            onClick={toggleAllDetails}
+          >
+            {allFilteredExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+            {allFilteredExpanded ? 'Recolher todos os detalhes' : 'Ver todos os detalhes'}
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <InlineLoading label="Carregando cotacoes" />
       ) : error ? (
@@ -976,7 +1146,7 @@ export function SupplyQuotesPage() {
           </div>
           {filtered.map((quote) => {
             const totals = calculateQuoteTotals(quote.items);
-            const expanded = expandedId === quote.id;
+            const expanded = expandedIds.has(quote.id);
             return (
               <div className="quote-list__group" key={quote.id}>
                 <article className="quote-row">
@@ -1007,20 +1177,28 @@ export function SupplyQuotesPage() {
                   <div className="row-actions">
                     <IconButton
                       label={expanded ? `Recolher ${quote.code}` : `Detalhar ${quote.code}`}
-                      onClick={() => setExpandedId(expanded ? null : quote.id)}
+                      onClick={() => toggleQuoteDetails(quote.id)}
                     >
                       {expanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                     </IconButton>
                     {can('quotes.edit') && quote.status === 'draft' && (
-                      <IconButton
-                        label={`Editar ${quote.code}`}
-                        onClick={() => {
-                          setEditing(quote);
-                          setModalOpen(true);
-                        }}
-                      >
-                        <Edit3 size={17} />
-                      </IconButton>
+                      <>
+                        <IconButton
+                          label={`Editar ${quote.code}`}
+                          onClick={() => {
+                            setEditing(quote);
+                            setModalOpen(true);
+                          }}
+                        >
+                          <Edit3 size={17} />
+                        </IconButton>
+                        <IconButton
+                          label={`Excluir ${quote.code}`}
+                          onClick={() => setDeletingQuote(quote)}
+                        >
+                          <Trash2 size={17} />
+                        </IconButton>
+                      </>
                     )}
                     {can('quotes.edit') && QUOTE_STATUS_TRANSITIONS[quote.status]?.length && (
                       <IconButton
@@ -1032,6 +1210,7 @@ export function SupplyQuotesPage() {
                     )}
                   </div>
                 </article>
+
                 {expanded && (
                   <div className="quote-detail-lines">
                     {quote.items.map((item) => {
@@ -1078,6 +1257,7 @@ export function SupplyQuotesPage() {
           detail="Crie uma cotacao ou ajuste os filtros."
         />
       )}
+
       <QuoteModal
         open={modalOpen}
         quote={editing}
@@ -1090,6 +1270,11 @@ export function SupplyQuotesPage() {
         onSaved={load}
       />
       <QuoteStatusModal quote={statusQuote} onClose={() => setStatusQuote(null)} onSaved={load} />
+      <QuoteDeleteModal
+        quote={deletingQuote}
+        onClose={() => setDeletingQuote(null)}
+        onDeleted={load}
+      />
     </section>
   );
 }
