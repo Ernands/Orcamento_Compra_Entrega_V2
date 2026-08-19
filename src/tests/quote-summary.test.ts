@@ -191,7 +191,8 @@ describe('resumo e exportacao de cotacoes', () => {
     );
     expect(workbook.getWorksheet('Cotacoes')?.getCell('B2').value).toBe('Rascunho');
     expect(workbook.getWorksheet('Cotacoes')?.getCell('J2').value).toBe(25);
-    expect(workbook.getWorksheet('Totais por loja')?.getCell('D1').value).toBe('Frete');
+    expect(workbook.getWorksheet('Totais por loja')?.getCell('B1').value).toBe('UF');
+    expect(workbook.getWorksheet('Totais por loja')?.getCell('E1').value).toBe('Frete');
   });
 
   it('gera um PDF valido sem API externa', async () => {
