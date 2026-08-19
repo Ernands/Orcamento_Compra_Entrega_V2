@@ -59,7 +59,7 @@ describe('StoreAttachmentsPage', () => {
     expect(await screen.findByText('projeto.pdf')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enviar anexo' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remover projeto.pdf/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Abrir projeto.pdf' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Visualizar projeto.pdf' })).toBeInTheDocument();
   });
 
   it('exibe erro de carregamento sem inventar dados locais', async () => {

@@ -67,8 +67,8 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Fornecedores' })).not.toBeInTheDocument();
   });
 
-  it('mostra as tres visoes do dashboard somente com dashboard.view', () => {
-    renderShell(['dashboard.view']);
+  it('mostra as tres visoes do dashboard com acesso a suprimentos', () => {
+    renderShell(['dashboard.view', 'items.view']);
     expect(screen.getAllByRole('link', { name: 'Visao Geral' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Implantacao' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Suprimentos' }).length).toBeGreaterThan(0);

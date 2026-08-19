@@ -8,6 +8,12 @@ import {
 import type { ImplementationDashboard, SupplyDashboard } from '../domain/types';
 import { DashboardPage } from '../pages/dashboard-page';
 
+vi.mock('../app/session-provider', () => ({
+  useSession: () => ({
+    can: (capability: string) => capability === 'items.view',
+  }),
+}));
+
 vi.mock('../data/dashboard/dashboard-repository', () => ({
   loadImplementationDashboard: vi.fn(),
   loadSupplyDashboard: vi.fn(),
