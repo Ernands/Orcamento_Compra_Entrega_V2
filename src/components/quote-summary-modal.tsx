@@ -1,4 +1,12 @@
-import { Boxes, Building2, FileSpreadsheet, FileText, ReceiptText, Store } from 'lucide-react';
+import {
+  Boxes,
+  Building2,
+  FileSpreadsheet,
+  FileText,
+  ReceiptText,
+  Store,
+  Truck,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   downloadQuoteSummaryExcel,
@@ -9,6 +17,7 @@ import { formatBRL } from '../domain/supply-calculations';
 import { buildQuoteSummary } from '../domain/supply-quote-summary';
 import type { SupplyQuote } from '../domain/types';
 import { EmptyState, Modal } from './ui';
+import './quote-summary-enhancements.css';
 
 export function QuoteSummaryModal({
   open,
@@ -76,7 +85,7 @@ export function QuoteSummaryModal({
       </div>
       {error && <div className="form-error">{error}</div>}
 
-      <div className="quote-summary-kpis">
+      <div className="quote-summary-kpis quote-summary-kpis--with-freight">
         <article>
           <ReceiptText size={20} />
           <span>Total de cotacoes</span>
@@ -91,6 +100,11 @@ export function QuoteSummaryModal({
           <ReceiptText size={20} />
           <span>Total valor unitario</span>
           <strong>{formatBRL(summary.totalUnitPriceCents)}</strong>
+        </article>
+        <article className="quote-summary-kpis__freight">
+          <Truck size={20} />
+          <span>Total de frete</span>
+          <strong>{formatBRL(summary.totalShippingCents)}</strong>
         </article>
         <article className="quote-summary-kpis__primary">
           <ReceiptText size={20} />
@@ -116,25 +130,40 @@ export function QuoteSummaryModal({
         <header>
           <div>
             <h3>Totais por loja</h3>
-            <p>Valores consolidados sem rateio artificial entre lojas.</p>
+            <p>
+              Todas as lojas que constam nas cotacoes, inclusive consolidadas. Valores sem rateio
+              artificial entre lojas.
+            </p>
           </div>
         </header>
         {summary.totalsByStore.length ? (
           <div className="quote-store-summary__table">
-            <div className="quote-store-summary__header">
+            <div className="quote-store-summary__header quote-store-summary__header--with-freight">
               <span>Loja</span>
               <span>Qtd. cotacoes</span>
               <span>Qtd. itens</span>
+              <span>Frete</span>
               <span>Valor total</span>
             </div>
             {summary.totalsByStore.map((row) => (
-              <div className="quote-store-summary__row" key={row.key}>
+              <div
+                className="quote-store-summary__row quote-store-summary__row--with-freight"
+                key={row.key}
+              >
                 <strong>{row.label}</strong>
                 <span>{row.quoteCount}</span>
                 <span>{row.itemCount}</span>
+                <span>{formatBRL(row.shippingCents)}</span>
                 <strong>{formatBRL(row.totalCents)}</strong>
               </div>
             ))}
+            <div className="quote-store-summary__row quote-store-summary__row--with-freight quote-store-summary__total">
+              <strong>Total geral</strong>
+              <strong>{summary.totalQuotes}</strong>
+              <strong>{summary.totalItems}</strong>
+              <strong>{formatBRL(summary.totalShippingCents)}</strong>
+              <strong>{formatBRL(summary.totalValueCents)}</strong>
+            </div>
           </div>
         ) : (
           <EmptyState

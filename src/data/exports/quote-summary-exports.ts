@@ -88,12 +88,14 @@ export async function createQuoteSummaryWorkbook(
   summarySheet.addRow(['Total de cotacoes', input.summary.totalQuotes]);
   summarySheet.addRow(['Total de itens', input.summary.totalItems]);
   summarySheet.addRow(['Total valor unitario', centsToNumber(input.summary.totalUnitPriceCents)]);
+  summarySheet.addRow(['Total de frete', centsToNumber(input.summary.totalShippingCents)]);
   summarySheet.addRow(['Valor total das cotacoes', centsToNumber(input.summary.totalValueCents)]);
   summarySheet.addRow(['Cotacoes por loja', input.summary.storeQuotes]);
   summarySheet.addRow(['Cotacoes consolidadas', input.summary.consolidatedQuotes]);
   summarySheet.getCell('B8').numFmt = MONEY_FORMAT;
   summarySheet.getCell('B9').numFmt = MONEY_FORMAT;
-  summarySheet.getRow(9).fill = {
+  summarySheet.getCell('B10').numFmt = MONEY_FORMAT;
+  summarySheet.getRow(10).fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: LIGHT_FILL },
@@ -180,6 +182,7 @@ export async function createQuoteSummaryWorkbook(
     { header: 'Loja', key: 'store', width: 38 },
     { header: 'Quantidade de cotacoes', key: 'quoteCount', width: 24 },
     { header: 'Quantidade de itens', key: 'itemCount', width: 22 },
+    { header: 'Frete', key: 'shipping', width: 18, style: { numFmt: MONEY_FORMAT } },
     { header: 'Valor total', key: 'total', width: 20, style: { numFmt: MONEY_FORMAT } },
   ];
   styleHeader(storesSheet.getRow(1));
@@ -188,10 +191,11 @@ export async function createQuoteSummaryWorkbook(
       store: row.label,
       quoteCount: row.quoteCount,
       itemCount: row.itemCount,
+      shipping: centsToNumber(row.shippingCents),
       total: centsToNumber(row.totalCents),
     });
   });
-  storesSheet.autoFilter = `A1:D${Math.max(1, storesSheet.rowCount)}`;
+  storesSheet.autoFilter = `A1:E${Math.max(1, storesSheet.rowCount)}`;
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer;
@@ -228,6 +232,13 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
         }),
       ],
       [
+        'Total de frete',
+        centsToNumber(input.summary.totalShippingCents).toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }),
+      ],
+      [
         'Valor total das cotacoes',
         centsToNumber(input.summary.totalValueCents).toLocaleString('pt-BR', {
           style: 'currency',
@@ -242,13 +253,17 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
   });
 
   autoTable(document, {
-    startY: 102,
+    startY: 108,
     theme: 'striped',
-    head: [['Loja', 'Cotacoes', 'Itens', 'Valor total']],
+    head: [['Loja', 'Cotacoes', 'Itens', 'Frete', 'Valor total']],
     body: input.summary.totalsByStore.map((row) => [
       row.label,
       String(row.quoteCount),
       String(row.itemCount),
+      centsToNumber(row.shippingCents).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }),
       centsToNumber(row.totalCents).toLocaleString('pt-BR', {
         style: 'currency',
         currency: 'BRL',
@@ -257,10 +272,11 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
     headStyles: { fillColor: [31, 111, 92] },
     styles: { fontSize: 8, cellPadding: 2 },
     columnStyles: {
-      0: { cellWidth: 82 },
+      0: { cellWidth: 70 },
       1: { halign: 'right' },
       2: { halign: 'right' },
       3: { halign: 'right' },
+      4: { halign: 'right' },
     },
     margin: { top: 16, bottom: 14 },
     didDrawPage: (data) => {
