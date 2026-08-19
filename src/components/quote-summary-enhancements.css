@@ -1,0 +1,159 @@
+/* Melhorias visuais da listagem e do resumo de cotacoes. */
+
+.modal.quote-summary-modal {
+  width: min(96vw, 1220px);
+}
+
+.quote-summary-kpis.quote-summary-kpis--with-freight {
+  grid-template-columns: repeat(5, minmax(145px, 1fr));
+}
+
+.quote-summary-kpis .quote-summary-kpis__freight {
+  background: #f1f8f5;
+  border-color: #b9d6cb;
+}
+
+.quote-summary-kpis .quote-summary-kpis__freight svg,
+.quote-summary-kpis .quote-summary-kpis__freight strong {
+  color: var(--brand);
+}
+
+.quote-store-summary__header.quote-store-summary__header--with-freight,
+.quote-store-summary__row.quote-store-summary__row--with-freight {
+  min-width: 760px;
+  grid-template-columns: minmax(240px, 1.6fr) repeat(4, minmax(105px, 0.7fr));
+}
+
+.quote-store-summary__row--with-freight > :not(:first-child),
+.quote-store-summary__header--with-freight > :not(:first-child) {
+  text-align: right;
+}
+
+.quote-store-summary__total {
+  color: #135b49;
+  background: #edf6f1;
+  border-top: 1px solid #bfd8cd;
+}
+
+.quote-store-summary__total strong {
+  font-weight: 850;
+}
+
+@media (min-width: 901px) {
+  .quote-list {
+    display: grid;
+    gap: 10px;
+    border-top: 0;
+  }
+
+  .quote-list__header {
+    padding: 9px 12px;
+    background: #f0f3f1;
+    border: 1px solid var(--line);
+    border-radius: 6px 6px 0 0;
+  }
+
+  .quote-list__header,
+  .quote-row {
+    grid-template-columns:
+      minmax(110px, 0.72fr)
+      minmax(150px, 1.05fr)
+      minmax(150px, 1.15fr)
+      minmax(112px, 0.78fr)
+      44px
+      minmax(105px, 0.72fr)
+      82px
+      150px;
+    gap: 10px;
+  }
+
+  .quote-list__group {
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    box-shadow: 0 1px 2px rgba(26, 46, 39, 0.035);
+  }
+
+  .quote-row {
+    min-height: 86px;
+    padding: 13px 12px;
+    border-bottom: 0;
+  }
+
+  .quote-row:hover {
+    background: #fbfcfb;
+  }
+
+  /* A lista completa continua nos dados da cotacao, mas nao alonga a linha. */
+  .quote-row > span:nth-child(3) {
+    display: -webkit-box !important;
+    overflow: hidden;
+    color: #4f5b56;
+    line-height: 1.42;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .quote-row > span:nth-child(4) {
+    line-height: 1.35;
+  }
+
+  .quote-row > span:nth-child(6) > strong {
+    font-size: 0.86rem;
+  }
+
+  .quote-row .row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-content: center;
+    row-gap: 1px;
+  }
+
+  .quote-row .row-actions .icon-button,
+  .quote-row .quote-attachment-action {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+
+  .quote-detail-lines {
+    padding: 0 12px 12px;
+    background: #fff;
+  }
+
+  .quote-detail-lines > div {
+    min-height: 58px;
+    padding: 9px 12px;
+    background: #f8faf8;
+    border: 1px solid #e2e7e3;
+    border-bottom: 0;
+  }
+
+  .quote-detail-lines > div:first-child {
+    border-radius: 6px 6px 0 0;
+  }
+
+  .quote-detail-lines > div:last-child {
+    border-bottom: 1px solid #e2e7e3;
+    border-radius: 0 0 6px 6px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .quote-summary-kpis.quote-summary-kpis--with-freight {
+    grid-template-columns: repeat(3, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .quote-summary-kpis.quote-summary-kpis--with-freight {
+    grid-template-columns: repeat(2, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .quote-summary-kpis.quote-summary-kpis--with-freight {
+    grid-template-columns: 1fr;
+  }
+}
