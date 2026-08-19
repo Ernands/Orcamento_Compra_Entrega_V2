@@ -290,40 +290,40 @@
 /* Identificacao visual rapida das cotacoes pelo status. */
 .quote-list__group:has(.status-badge--received),
 .quote-list__group:has(.status-badge--received) .quote-row {
-  background: #eef8f2;
-  border-color: #b9ddc7;
+  background: #dff1e6;
+  border-color: #93c8a7;
 }
 
 .quote-list__group:has(.status-badge--cancelled),
 .quote-list__group:has(.status-badge--cancelled) .quote-row {
-  background: #fff1f1;
-  border-color: #efc1c1;
+  background: #fde2e2;
+  border-color: #e39a9a;
 }
 
 .quote-list__group:has(.status-badge--expired),
 .quote-list__group:has(.status-badge--expired) .quote-row {
-  background: #fff8df;
-  border-color: #ead58d;
+  background: #f8e7ab;
+  border-color: #d9bd61;
 }
 
 .quote-list__group:has(.status-badge--draft),
 .quote-list__group:has(.status-badge--draft) .quote-row {
-  background: #eef6ff;
-  border-color: #bfd6ef;
+  background: #dfeeff;
+  border-color: #98bfe7;
 }
 
 .quote-list__group:has(.status-badge--received) .quote-row:hover {
-  background: #e6f4ec;
+  background: #d4eadc;
 }
 
 .quote-list__group:has(.status-badge--cancelled) .quote-row:hover {
-  background: #ffe8e8;
+  background: #fbd6d6;
 }
 
 .quote-list__group:has(.status-badge--expired) .quote-row:hover {
-  background: #fff3c9;
+  background: #f5df96;
 }
 
 .quote-list__group:has(.status-badge--draft) .quote-row:hover {
-  background: #e4f1ff;
+  background: #d4e7fb;
 }
