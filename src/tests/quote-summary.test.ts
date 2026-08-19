@@ -28,6 +28,7 @@ function quoteItem(
   unitPrice: string,
   quantity: string,
   store: typeof storeOne | null,
+  shippingAmount = '0.00',
 ): SupplyQuoteItem {
   return {
     id,
@@ -44,8 +45,8 @@ function quoteItem(
     unit: 'un',
     unitPrice,
     discountAmount: '0.00',
-    shippingType: 'free',
-    shippingAmount: '0.00',
+    shippingType: shippingAmount === '0.00' ? 'free' : 'informed',
+    shippingAmount,
     otherCosts: '0.00',
     deliveryDays: 5,
     minimumQuantity: null,
@@ -73,7 +74,7 @@ const storeQuote: SupplyQuote = {
   notes: null,
   createdAt: '2026-08-18T12:00:00Z',
   stores: [storeOne],
-  items: [quoteItem('1', 'quote-store', '10.00', '2', storeOne)],
+  items: [quoteItem('1', 'quote-store', '10.00', '2', storeOne, '5.00')],
 };
 
 const consolidatedQuote: SupplyQuote = {
@@ -84,7 +85,7 @@ const consolidatedQuote: SupplyQuote = {
   status: 'received',
   stores: [storeOne, storeTwo],
   items: [
-    quoteItem('2', 'quote-consolidated', '30.00', '1', storeTwo),
+    quoteItem('2', 'quote-consolidated', '30.00', '1', storeTwo, '7.00'),
     quoteItem('3', 'quote-consolidated', '40.00', '1', null),
   ],
 };
@@ -92,24 +93,39 @@ const consolidatedQuote: SupplyQuote = {
 const quotes = [storeQuote, consolidatedQuote];
 
 describe('resumo e exportacao de cotacoes', () => {
-  it('calcula indicadores e separa itens consolidados sem duplicar valores', () => {
+  it('calcula frete e inclui todas as lojas das cotacoes consolidadas sem ratear valores', () => {
     const summary = buildQuoteSummary(quotes);
 
     expect(summary).toMatchObject({
       totalQuotes: 2,
       totalItems: 3,
       totalUnitPriceCents: 8000n,
-      totalValueCents: 9000n,
+      totalShippingCents: 1200n,
+      totalValueCents: 10200n,
       storeQuotes: 1,
       consolidatedQuotes: 1,
     });
     expect(summary.totalsByStore).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: storeOne.id, quoteCount: 1, totalCents: 2000n }),
-        expect.objectContaining({ key: storeTwo.id, quoteCount: 1, totalCents: 3000n }),
+        expect.objectContaining({
+          key: storeOne.id,
+          quoteCount: 2,
+          itemCount: 1,
+          shippingCents: 500n,
+          totalCents: 2500n,
+        }),
+        expect.objectContaining({
+          key: storeTwo.id,
+          quoteCount: 1,
+          itemCount: 1,
+          shippingCents: 700n,
+          totalCents: 3700n,
+        }),
         expect.objectContaining({
           key: 'consolidated-undistributed',
           quoteCount: 1,
+          itemCount: 1,
+          shippingCents: 0n,
           totalCents: 4000n,
         }),
       ]),
@@ -119,7 +135,7 @@ describe('resumo e exportacao de cotacoes', () => {
     );
   });
 
-  it('gera XLSX real com abas operacionais e valores numericos', async () => {
+  it('gera XLSX real com abas operacionais, frete e valores numericos', async () => {
     const summary = buildQuoteSummary(quotes);
     const buffer = await createQuoteSummaryWorkbook({
       quotes,
@@ -136,12 +152,14 @@ describe('resumo e exportacao de cotacoes', () => {
       'Itens',
       'Totais por loja',
     ]);
-    expect(workbook.getWorksheet('Resumo')?.getCell('B9').value).toBe(90);
+    expect(workbook.getWorksheet('Resumo')?.getCell('B9').value).toBe(12);
+    expect(workbook.getWorksheet('Resumo')?.getCell('B10').value).toBe(102);
     expect(workbook.getWorksheet('Resumo')?.getCell('B3').value).toContain(
       'Pesquisa: Item | Status: Rascunho | Loja: LOJ-001',
     );
     expect(workbook.getWorksheet('Cotacoes')?.getCell('B2').value).toBe('Rascunho');
-    expect(workbook.getWorksheet('Cotacoes')?.getCell('J2').value).toBe(20);
+    expect(workbook.getWorksheet('Cotacoes')?.getCell('J2').value).toBe(25);
+    expect(workbook.getWorksheet('Totais por loja')?.getCell('D1').value).toBe('Frete');
   });
 
   it('gera um PDF valido sem API externa', async () => {
@@ -153,6 +171,7 @@ describe('resumo e exportacao de cotacoes', () => {
         label: `LOJ-${String(index + 1).padStart(3, '0')} - Loja ${index + 1}`,
         quoteCount: 1,
         itemCount: 1,
+        shippingCents: BigInt(index + 1) * 100n,
         totalCents: BigInt((index + 1) * 10000),
       })),
     };
