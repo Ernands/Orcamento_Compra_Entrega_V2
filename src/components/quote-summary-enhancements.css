@@ -286,3 +286,44 @@
     width: 100%;
   }
 }
+
+/* Identificacao visual rapida das cotacoes pelo status. */
+.quote-list__group:has(.status-badge--received),
+.quote-list__group:has(.status-badge--received) .quote-row {
+  background: #eef8f2;
+  border-color: #b9ddc7;
+}
+
+.quote-list__group:has(.status-badge--cancelled),
+.quote-list__group:has(.status-badge--cancelled) .quote-row {
+  background: #fff1f1;
+  border-color: #efc1c1;
+}
+
+.quote-list__group:has(.status-badge--expired),
+.quote-list__group:has(.status-badge--expired) .quote-row {
+  background: #fff8df;
+  border-color: #ead58d;
+}
+
+.quote-list__group:has(.status-badge--draft),
+.quote-list__group:has(.status-badge--draft) .quote-row {
+  background: #eef6ff;
+  border-color: #bfd6ef;
+}
+
+.quote-list__group:has(.status-badge--received) .quote-row:hover {
+  background: #e6f4ec;
+}
+
+.quote-list__group:has(.status-badge--cancelled) .quote-row:hover {
+  background: #ffe8e8;
+}
+
+.quote-list__group:has(.status-badge--expired) .quote-row:hover {
+  background: #fff3c9;
+}
+
+.quote-list__group:has(.status-badge--draft) .quote-row:hover {
+  background: #e4f1ff;
+}
