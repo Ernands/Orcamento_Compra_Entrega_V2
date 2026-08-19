@@ -109,6 +109,7 @@ describe('resumo e exportacao de cotacoes', () => {
       expect.arrayContaining([
         expect.objectContaining({
           key: storeOne.id,
+          state: 'SP',
           quoteCount: 2,
           itemCount: 1,
           shippingCents: 500n,
@@ -116,6 +117,7 @@ describe('resumo e exportacao de cotacoes', () => {
         }),
         expect.objectContaining({
           key: storeTwo.id,
+          state: 'SP',
           quoteCount: 1,
           itemCount: 1,
           shippingCents: 700n,
@@ -123,10 +125,40 @@ describe('resumo e exportacao de cotacoes', () => {
         }),
         expect.objectContaining({
           key: 'consolidated-undistributed',
+          state: null,
           quoteCount: 1,
           itemCount: 1,
           shippingCents: 0n,
           totalCents: 4000n,
+        }),
+      ]),
+    );
+    expect(summary.totalsByStore.reduce((total, row) => total + row.totalCents, 0n)).toBe(
+      summary.totalValueCents,
+    );
+  });
+
+  it('rateia somente o valor nao distribuido e zera o consolidado sem alterar o total', () => {
+    const summary = buildQuoteSummary(quotes, { allocateConsolidated: true });
+
+    expect(summary.totalsByStore).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: storeOne.id,
+          totalCents: 4500n,
+          shippingCents: 500n,
+        }),
+        expect.objectContaining({
+          key: storeTwo.id,
+          totalCents: 5700n,
+          shippingCents: 700n,
+        }),
+        expect.objectContaining({
+          key: 'consolidated-undistributed',
+          quoteCount: 0,
+          itemCount: 0,
+          shippingCents: 0n,
+          totalCents: 0n,
         }),
       ]),
     );
@@ -159,7 +191,8 @@ describe('resumo e exportacao de cotacoes', () => {
     );
     expect(workbook.getWorksheet('Cotacoes')?.getCell('B2').value).toBe('Rascunho');
     expect(workbook.getWorksheet('Cotacoes')?.getCell('J2').value).toBe(25);
-    expect(workbook.getWorksheet('Totais por loja')?.getCell('D1').value).toBe('Frete');
+    expect(workbook.getWorksheet('Totais por loja')?.getCell('B1').value).toBe('UF');
+    expect(workbook.getWorksheet('Totais por loja')?.getCell('E1').value).toBe('Frete');
   });
 
   it('gera um PDF valido sem API externa', async () => {
@@ -169,6 +202,7 @@ describe('resumo e exportacao de cotacoes', () => {
       totalsByStore: Array.from({ length: 80 }, (_, index) => ({
         key: `store-${index}`,
         label: `LOJ-${String(index + 1).padStart(3, '0')} - Loja ${index + 1}`,
+        state: 'SP',
         quoteCount: 1,
         itemCount: 1,
         shippingCents: BigInt(index + 1) * 100n,

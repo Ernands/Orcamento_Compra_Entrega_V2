@@ -10,6 +10,8 @@ export interface QuoteSummaryFilters {
   search: string;
   status: string;
   store: string;
+  states?: string[];
+  allocationMode?: 'original' | 'allocated';
 }
 
 export interface QuoteSummaryExportInput {
@@ -43,11 +45,20 @@ function formatDateTime(value: Date): string {
 }
 
 function filtersAsText(filters: QuoteSummaryFilters): string {
-  return [
+  const parts = [
     `Pesquisa: ${filters.search || 'Todas'}`,
     `Status: ${filters.status || 'Todos'}`,
     `Loja: ${filters.store || 'Todas'}`,
-  ].join(' | ');
+  ];
+
+  if (filters.states) {
+    parts.push(`UFs: ${filters.states.length ? filters.states.join(', ') : 'Todas'}`);
+  }
+  if (filters.allocationMode) {
+    parts.push(`Valores: ${filters.allocationMode === 'allocated' ? 'Rateados' : 'Originais'}`);
+  }
+
+  return parts.join(' | ');
 }
 
 function styleHeader(row: {
@@ -180,6 +191,7 @@ export async function createQuoteSummaryWorkbook(
   });
   storesSheet.columns = [
     { header: 'Loja', key: 'store', width: 38 },
+    { header: 'UF', key: 'state', width: 9 },
     { header: 'Quantidade de cotacoes', key: 'quoteCount', width: 24 },
     { header: 'Quantidade de itens', key: 'itemCount', width: 22 },
     { header: 'Frete', key: 'shipping', width: 18, style: { numFmt: MONEY_FORMAT } },
@@ -189,13 +201,14 @@ export async function createQuoteSummaryWorkbook(
   input.summary.totalsByStore.forEach((row) => {
     storesSheet.addRow({
       store: row.label,
+      state: row.state || '',
       quoteCount: row.quoteCount,
       itemCount: row.itemCount,
       shipping: centsToNumber(row.shippingCents),
       total: centsToNumber(row.totalCents),
     });
   });
-  storesSheet.autoFilter = `A1:E${Math.max(1, storesSheet.rowCount)}`;
+  storesSheet.autoFilter = `A1:F${Math.max(1, storesSheet.rowCount)}`;
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer;
@@ -255,9 +268,10 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
   autoTable(document, {
     startY: 108,
     theme: 'striped',
-    head: [['Loja', 'Cotacoes', 'Itens', 'Frete', 'Valor total']],
+    head: [['Loja', 'UF', 'Cotacoes', 'Itens', 'Frete', 'Valor total']],
     body: input.summary.totalsByStore.map((row) => [
       row.label,
+      row.state || '',
       String(row.quoteCount),
       String(row.itemCount),
       centsToNumber(row.shippingCents).toLocaleString('pt-BR', {
@@ -270,13 +284,14 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
       }),
     ]),
     headStyles: { fillColor: [31, 111, 92] },
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 7.5, cellPadding: 2 },
     columnStyles: {
-      0: { cellWidth: 70 },
-      1: { halign: 'right' },
+      0: { cellWidth: 58 },
+      1: { cellWidth: 10 },
       2: { halign: 'right' },
       3: { halign: 'right' },
       4: { halign: 'right' },
+      5: { halign: 'right' },
     },
     margin: { top: 16, bottom: 14 },
     didDrawPage: (data) => {
