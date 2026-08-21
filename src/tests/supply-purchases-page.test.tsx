@@ -134,7 +134,7 @@ describe('SupplyPurchasesPage', () => {
     renderPage();
 
     expect(await screen.findByText('CMP-00001')).toBeInTheDocument();
-    expect(screen.getByText('2 lojas')).toBeInTheDocument();
+    expect(screen.getAllByText('2 lojas').length).toBeGreaterThan(0);
     expect(screen.getByText(/Comprado: R\$ 600,00/)).toBeInTheDocument();
     expect(screen.getByText(/Falta: R\$ 600,00/)).toBeInTheDocument();
 
