@@ -46,6 +46,7 @@ import {
   moneyToCents,
 } from '../domain/supply-calculations';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
+import { selectLowestPriceQuotesByItem } from '../domain/supply-quote-lowest-price';
 import {
   getEffectiveSupplyQuoteStatus,
   SUPPLY_QUOTE_STATUS_LABELS,
@@ -933,6 +934,7 @@ export function SupplyQuotesPage() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [storeId, setStoreId] = useState('');
+  const [priceFilter, setPriceFilter] = useState<'all' | 'lowest'>('all');
   const [editing, setEditing] = useState<SupplyQuote | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -982,7 +984,7 @@ export function SupplyQuotesPage() {
     if (!loading && searchParams.get('need') && can('quotes.create')) setModalOpen(true);
   }, [can, loading, searchParams]);
 
-  const filtered = useMemo(() => {
+  const baseFiltered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
     return quotes.filter(
       (quote) =>
@@ -995,6 +997,18 @@ export function SupplyQuotesPage() {
         (!storeId || quote.stores.some((store) => store.id === storeId)),
     );
   }, [query, quotes, status, storeId]);
+
+  const lowestPriceSelection = useMemo(
+    () => selectLowestPriceQuotesByItem(baseFiltered),
+    [baseFiltered],
+  );
+  const filtered = useMemo(
+    () =>
+      priceFilter === 'lowest'
+        ? baseFiltered.filter((quote) => lowestPriceSelection.quoteIds.has(quote.id))
+        : baseFiltered,
+    [baseFiltered, lowestPriceSelection, priceFilter],
+  );
 
   const attachmentCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1131,7 +1145,22 @@ export function SupplyQuotesPage() {
             </option>
           ))}
         </select>
+        <select
+          aria-label="Filtrar preco"
+          value={priceFilter}
+          onChange={(event) => setPriceFilter(event.target.value as 'all' | 'lowest')}
+        >
+          <option value="all">Todas cotacoes</option>
+          <option value="lowest">Menor preco por item</option>
+        </select>
       </div>
+
+      {priceFilter === 'lowest' && !loading && !error && (
+        <p className="form-help">
+          {lowestPriceSelection.distinctItemCount} itens distintos · {filtered.length} cotacoes com
+          menor preco unitario. Em empate, vence o menor custo total e depois a cotacao mais recente.
+        </p>
+      )}
 
       {loading ? (
         <InlineLoading label="Carregando cotacoes" />
@@ -1152,6 +1181,7 @@ export function SupplyQuotesPage() {
           {filtered.map((quote) => {
             const totals = calculateQuoteTotals(quote.items);
             const expanded = expandedIds.has(quote.id);
+            const winningItems = lowestPriceSelection.winningItemCountByQuote.get(quote.id) || 0;
             return (
               <div className="quote-list__group" key={quote.id}>
                 <article className="quote-row">
@@ -1160,6 +1190,11 @@ export function SupplyQuotesPage() {
                     <strong>
                       {quote.contextType === 'consolidated' ? 'Consolidada' : 'Por loja'}
                     </strong>
+                    {priceFilter === 'lowest' && (
+                      <small>
+                        Menor preco em {winningItems} {winningItems === 1 ? 'item' : 'itens'}
+                      </small>
+                    )}
                   </div>
                   <div>
                     <strong>{quote.supplierName}</strong>
