@@ -3,7 +3,6 @@ import {
   File,
   FilePlus2,
   Image as ImageIcon,
-  Paperclip,
   Play,
   RefreshCcw,
   Trash2,
