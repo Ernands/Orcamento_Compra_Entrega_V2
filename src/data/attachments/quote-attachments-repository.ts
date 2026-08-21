@@ -1,9 +1,33 @@
 import type { SupplyQuoteAttachment } from '../../domain/types';
 import { supabase } from '../supabase/client';
-import type { Database } from '../supabase/database.types';
 
 const BUCKET = 'quote-attachments';
 export const MAX_QUOTE_ATTACHMENT_SIZE = 100 * 1024 * 1024;
+
+export type QuoteDocumentType =
+  | 'quote'
+  | 'invoice'
+  | 'receipt'
+  | 'payment_proof'
+  | 'boleto'
+  | 'purchase_order'
+  | 'reimbursement'
+  | 'photo'
+  | 'other';
+
+export const QUOTE_DOCUMENT_LABELS: Record<QuoteDocumentType, string> = {
+  quote: 'Cotacao / proposta',
+  invoice: 'Nota fiscal',
+  receipt: 'Recibo',
+  payment_proof: 'Comprovante de pagamento',
+  boleto: 'Boleto',
+  purchase_order: 'Pedido / ordem de compra',
+  reimbursement: 'Documento de reembolso',
+  photo: 'Foto / evidencia',
+  other: 'Outro',
+};
+
+export type QuoteAttachment = SupplyQuoteAttachment & { documentType: QuoteDocumentType };
 
 export const QUOTE_ATTACHMENT_MIME_TYPES = [
   'application/pdf',
@@ -32,9 +56,19 @@ const MIME_BY_EXTENSION: Record<string, (typeof QUOTE_ATTACHMENT_MIME_TYPES)[num
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
-type AttachmentRow = Database['public']['Tables']['supply_quote_attachments']['Row'];
+type AttachmentRow = {
+  id: string;
+  quote_id: string;
+  original_name: string;
+  storage_path: string;
+  mime_type: string;
+  size_bytes: number;
+  description: string | null;
+  document_type?: QuoteDocumentType;
+  created_at: string;
+};
 
-function mapAttachment(row: AttachmentRow): SupplyQuoteAttachment {
+function mapAttachment(row: AttachmentRow): QuoteAttachment {
   return {
     id: row.id,
     quoteId: row.quote_id,
@@ -43,6 +77,7 @@ function mapAttachment(row: AttachmentRow): SupplyQuoteAttachment {
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
     description: row.description,
+    documentType: row.document_type || 'quote',
     createdAt: row.created_at,
   };
 }
@@ -70,9 +105,7 @@ function safeFileName(name: string): string {
   );
 }
 
-export async function listSupplyQuoteAttachments(
-  quoteId?: string,
-): Promise<SupplyQuoteAttachment[]> {
+export async function listSupplyQuoteAttachments(quoteId?: string): Promise<QuoteAttachment[]> {
   let query = supabase
     .from('supply_quote_attachments')
     .select('*')
@@ -80,13 +113,14 @@ export async function listSupplyQuoteAttachments(
   if (quoteId) query = query.eq('quote_id', quoteId);
   const { data, error } = await query;
   if (error) throw error;
-  return data.map(mapAttachment);
+  return (data as unknown as AttachmentRow[]).map(mapAttachment);
 }
 
 export async function uploadSupplyQuoteAttachment(
   quoteId: string,
   file: File,
   description: string,
+  documentType: QuoteDocumentType = 'quote',
 ): Promise<void> {
   const validationError = validateQuoteAttachment(file);
   if (validationError) throw new Error(validationError);
@@ -101,14 +135,15 @@ export async function uploadSupplyQuoteAttachment(
   });
   if (uploadError) throw uploadError;
 
-  const { error } = await supabase.rpc('register_supply_quote_attachment', {
+  const { error } = await supabase.rpc('register_supply_quote_attachment_v2' as never, {
     p_quote_id: quoteId,
     p_original_name: file.name,
     p_storage_path: path,
     p_mime_type: mimeType,
     p_size_bytes: file.size,
     p_description: description.trim(),
-  });
+    p_document_type: documentType,
+  } as never);
   if (error) {
     await supabase.storage.from(BUCKET).remove([path]);
     throw error;

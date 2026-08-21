@@ -4,10 +4,12 @@ import { fetchAllPages } from '../data/supabase/pagination';
 describe('fetchAllPages', () => {
   it('busca todas as paginas quando o resultado ultrapassa o limite de uma consulta', async () => {
     const source = Array.from({ length: 1205 }, (_, index) => ({ id: index + 1 }));
-    const fetchPage = vi.fn(async (from: number, to: number) => ({
-      data: source.slice(from, to + 1),
-      error: null,
-    }));
+    const fetchPage = vi.fn((from: number, to: number) =>
+      Promise.resolve({
+        data: source.slice(from, to + 1),
+        error: null,
+      }),
+    );
 
     const result = await fetchAllPages(fetchPage, 500);
 

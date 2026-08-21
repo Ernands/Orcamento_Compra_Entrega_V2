@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCcw,
   Search,
+  ShoppingCart,
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -30,13 +31,19 @@ import {
 } from '../components/ui';
 import { listStores } from '../data/stores/stores-repository';
 import { listSupplyQuoteAttachments } from '../data/attachments/quote-attachments-repository';
+import { approveSupplyQuoteForPurchase, type PaymentMethod } from '../data/purchases/purchases-repository';
+import {
+  EMPTY_QUOTE_PAYMENT_TERMS,
+  getQuotePaymentTerms,
+  saveSupplyQuoteWithPaymentTerms,
+  type QuotePaymentTerms,
+} from '../data/purchases/quote-payment-terms-repository';
 import {
   deleteSupplyQuote,
   listSuppliers,
   listSupplyItems,
   listSupplyNeeds,
   listSupplyQuotes,
-  saveSupplyQuote,
   setSupplyQuoteStatus,
 } from '../data/supplies/supplies-repository';
 import {
@@ -62,6 +69,17 @@ import type {
   SupplyQuoteStatus,
   SupplyQuoteValues,
 } from '../domain/types';
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  pix: 'PIX',
+  boleto: 'Boleto',
+  bank_transfer: 'Transferencia bancaria',
+  credit_card: 'Cartao de credito',
+  debit_card: 'Cartao de debito',
+  cash: 'Dinheiro',
+  invoiced: 'Faturado',
+  other: 'Outro',
+};
 
 let lineSequence = 0;
 function emptyLine(): SupplyQuoteItemValues {
@@ -178,6 +196,7 @@ function QuoteModal({
   onAttachmentsChanged: () => Promise<void>;
 }) {
   const [values, setValues] = useState<SupplyQuoteValues>(emptyQuote());
+  const [paymentTerms, setPaymentTerms] = useState<QuotePaymentTerms>(EMPTY_QUOTE_PAYMENT_TERMS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -198,6 +217,12 @@ function QuoteModal({
       };
     }
     setValues(next);
+    setPaymentTerms(EMPTY_QUOTE_PAYMENT_TERMS);
+    if (quote) {
+      void getQuotePaymentTerms(quote.id)
+        .then(setPaymentTerms)
+        .catch(() => setError('Nao foi possivel carregar as condicoes de pagamento.'));
+    }
     setError(null);
   }, [initialNeedId, needs, open, quote]);
 
@@ -345,19 +370,25 @@ function QuoteModal({
         const calculation = calculateQuoteLine(line);
         if (calculation.totalCents < 0n) throw new Error();
       });
+      if (paymentTerms.entryAmount) moneyToCents(paymentTerms.entryAmount);
+      if (paymentTerms.installmentCount && Number(paymentTerms.installmentCount) < 1) throw new Error();
     } catch {
-      setError('Revise item, loja, quantidade, preco, desconto e frete das linhas.');
+      setError('Revise item, loja, quantidade, preco, desconto, frete e condicoes de pagamento.');
       return;
     }
 
     setSaving(true);
     setError(null);
     try {
-      await saveSupplyQuote(values);
+      await saveSupplyQuoteWithPaymentTerms(values, paymentTerms);
       await onSaved();
       onClose();
-    } catch {
-      setError('Nao foi possivel salvar a cotacao. Verifique escopo, itens ativos e necessidades.');
+    } catch (failure) {
+      setError(
+        failure instanceof Error && failure.message
+          ? failure.message
+          : 'Nao foi possivel salvar a cotacao. Verifique escopo, itens ativos e necessidades.',
+      );
     } finally {
       setSaving(false);
     }
@@ -368,7 +399,7 @@ function QuoteModal({
       className="quote-modal"
       open={open}
       title={quote ? `Editar ${quote.code}` : 'Nova cotacao'}
-      description="Fornecedor, contexto e itens historicos da proposta."
+      description="Fornecedor, contexto, pagamento e itens historicos da proposta."
       onClose={onClose}
     >
       <form className="stack-form" onSubmit={submit}>
@@ -792,6 +823,63 @@ function QuoteModal({
           {totals?.shippingPending && <small>Ha frete a consultar</small>}
         </div>
 
+        <div className="quote-form-section">
+          <h3>Condicoes de pagamento</h3>
+          <div className="form-grid form-grid--three">
+            <label className="field">
+              Forma de pagamento
+              <select
+                value={paymentTerms.paymentMethod}
+                onChange={(event) =>
+                  setPaymentTerms((current) => ({
+                    ...current,
+                    paymentMethod: event.target.value as QuotePaymentTerms['paymentMethod'],
+                  }))
+                }
+              >
+                <option value="">Nao informada</option>
+                {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                  <option value={value} key={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Valor de entrada
+              <input
+                inputMode="decimal"
+                value={paymentTerms.entryAmount}
+                onChange={(event) =>
+                  setPaymentTerms((current) => ({ ...current, entryAmount: event.target.value }))
+                }
+                placeholder="0,00"
+              />
+            </label>
+            <label className="field">
+              Quantidade de parcelas
+              <input
+                inputMode="numeric"
+                value={paymentTerms.installmentCount}
+                onChange={(event) =>
+                  setPaymentTerms((current) => ({
+                    ...current,
+                    installmentCount: event.target.value.replace(/\D/g, ''),
+                  }))
+                }
+              />
+            </label>
+            <label className="field form-grid__wide">
+              Observacoes das condicoes
+              <input
+                value={paymentTerms.paymentNotes}
+                onChange={(event) =>
+                  setPaymentTerms((current) => ({ ...current, paymentNotes: event.target.value }))
+                }
+                placeholder="Ex.: desconto no PIX, faturado em 30 dias..."
+              />
+            </label>
+          </div>
+        </div>
+
         <label className="field">
           Observacoes gerais
           <textarea
@@ -852,10 +940,12 @@ function QuoteStatusModal({
   quote,
   onClose,
   onSaved,
+  canApprovePurchase,
 }: {
   quote: SupplyQuote | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  canApprovePurchase: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -879,12 +969,40 @@ function QuoteStatusModal({
     }
   };
 
+  const approvePurchase = async () => {
+    if (!quote) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await approveSupplyQuoteForPurchase(quote.id);
+      await onSaved();
+      onClose();
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : '';
+      setError(
+        message.includes('already approved')
+          ? 'Esta cotacao ja possui uma compra ativa.'
+          : message.includes('expired')
+            ? 'A cotacao esta expirada e nao pode ser aprovada para compra.'
+            : 'Nao foi possivel aprovar esta cotacao para compra.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const transitions = quote ? QUOTE_STATUS_TRANSITIONS[quote.status] || [] : [];
+  const purchaseEligible =
+    Boolean(quote) &&
+    quote?.status === 'received' &&
+    getEffectiveSupplyQuoteStatus(quote) === 'received' &&
+    canApprovePurchase;
+
   return (
     <Modal
       open={Boolean(quote)}
       title={quote ? `Alterar status ${quote.code}` : 'Alterar status'}
-      description="Os itens e valores historicos permanecerao inalterados."
+      description="Os itens e valores historicos permanecerao inalterados. Aprovar compra cria um snapshot separado CMP."
       onClose={onClose}
     >
       {quote && (
@@ -913,6 +1031,17 @@ function QuoteStatusModal({
                 </button>
               );
             })}
+            {purchaseEligible && (
+              <button
+                type="button"
+                className="button button--primary"
+                disabled={saving}
+                onClick={() => void approvePurchase()}
+              >
+                <ShoppingCart size={18} />
+                Aprovar compra
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -983,6 +1112,18 @@ export function SupplyQuotesPage() {
   useEffect(() => {
     if (!loading && searchParams.get('need') && can('quotes.create')) setModalOpen(true);
   }, [can, loading, searchParams]);
+
+  useEffect(() => {
+    const quoteId = searchParams.get('quote');
+    if (loading || !quoteId) return;
+    const target = quotes.find((quote) => quote.id === quoteId);
+    if (!target) return;
+    setQuery(target.code);
+    setExpandedIds(new Set([target.id]));
+    const next = new URLSearchParams(searchParams);
+    next.delete('quote');
+    setSearchParams(next, { replace: true });
+  }, [loading, quotes, searchParams, setSearchParams]);
 
   const baseFiltered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
@@ -1203,7 +1344,14 @@ export function SupplyQuotesPage() {
                       {quote.originCity ? ` - ${quote.originCity}/${quote.originState}` : ''}
                     </small>
                   </div>
-                  <span>{quote.stores.map((store) => store.code).join(', ')}</span>
+                  {quote.stores.length > 3 ? (
+                    <span title={quote.stores.map((store) => `${store.code} - ${store.city}/${store.state}`).join('\n')}>
+                      <strong>{quote.stores.length} lojas</strong>
+                      <small>Passe para ver a relacao</small>
+                    </span>
+                  ) : (
+                    <span>{quote.stores.map((store) => store.code).join(', ')}</span>
+                  )}
                   <span>
                     {formatDate(quote.quoteDate)}
                     <small>Validade: {formatDate(quote.validUntil)}</small>
@@ -1350,7 +1498,12 @@ export function SupplyQuotesPage() {
         filters={summaryFilters}
         onClose={() => setSummaryOpen(false)}
       />
-      <QuoteStatusModal quote={statusQuote} onClose={() => setStatusQuote(null)} onSaved={load} />
+      <QuoteStatusModal
+        quote={statusQuote}
+        onClose={() => setStatusQuote(null)}
+        onSaved={load}
+        canApprovePurchase={can('purchases.approve' as never)}
+      />
       <Modal
         open={Boolean(deleteQuote)}
         title={deleteQuote ? `Excluir ${deleteQuote.code}` : 'Excluir cotacao'}

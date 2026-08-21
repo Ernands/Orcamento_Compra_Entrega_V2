@@ -12,6 +12,7 @@ import {
   PackageSearch,
   ReceiptText,
   ShieldCheck,
+  ShoppingCart,
   Store,
   Truck,
   X,
@@ -34,6 +35,7 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/necessidades': 'Necessidades',
   '/suprimentos/fornecedores': 'Fornecedores',
   '/suprimentos/cotacoes': 'Cotacoes',
+  '/suprimentos/compras': 'Compras',
   '/suprimentos/comparativo': 'Comparativo',
 };
 
@@ -73,7 +75,8 @@ export function AppShell() {
   );
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
-  const canViewSupply = can('items.view') || can('suppliers.view') || can('quotes.view');
+  const canViewSupply =
+    can('items.view') || can('suppliers.view') || can('quotes.view') || can('purchases.view' as never);
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
   const title = location.pathname.startsWith('/suprimentos/itens/')
@@ -253,16 +256,22 @@ export function AppShell() {
                   </NavLink>
                 )}
                 {can('quotes.view') && (
-                  <>
-                    <NavLink to="/suprimentos/cotacoes" onClick={() => setMobileOpen(false)}>
-                      <ReceiptText size={19} />
-                      Cotacoes
-                    </NavLink>
-                    <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
-                      <ChartNoAxesCombined size={19} />
-                      Comparativo
-                    </NavLink>
-                  </>
+                  <NavLink to="/suprimentos/cotacoes" onClick={() => setMobileOpen(false)}>
+                    <ReceiptText size={19} />
+                    Cotacoes
+                  </NavLink>
+                )}
+                {can('purchases.view' as never) && (
+                  <NavLink to="/suprimentos/compras" onClick={() => setMobileOpen(false)}>
+                    <ShoppingCart size={19} />
+                    Compras
+                  </NavLink>
+                )}
+                {can('quotes.view') && (
+                  <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
+                    <ChartNoAxesCombined size={19} />
+                    Comparativo
+                  </NavLink>
                 )}
               </>
             )}
