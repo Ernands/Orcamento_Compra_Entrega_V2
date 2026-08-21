@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   Paperclip,
   Play,
+  RefreshCcw,
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -12,10 +13,13 @@ import {
   createSupplyQuoteAttachmentSignedUrl,
   deleteSupplyQuoteAttachment,
   listSupplyQuoteAttachments,
+  QUOTE_DOCUMENT_LABELS,
   uploadSupplyQuoteAttachment,
   validateQuoteAttachment,
+  type QuoteAttachment,
+  type QuoteDocumentType,
 } from '../data/attachments/quote-attachments-repository';
-import type { SupplyQuote, SupplyQuoteAttachment } from '../domain/types';
+import type { SupplyQuote } from '../domain/types';
 import { EmptyState, InlineLoading, Modal } from './ui';
 
 type QuoteReference = Pick<SupplyQuote, 'id' | 'code'>;
@@ -49,18 +53,20 @@ export function QuoteAttachmentsPanel({
   onChanged?: () => Promise<void> | void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [attachments, setAttachments] = useState<SupplyQuoteAttachment[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [description, setDescription] = useState('');
+  const [documentType, setDocumentType] = useState<QuoteDocumentType>('quote');
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState<{ current: number; total: number } | null>(null);
+  const [uploading, setUploading] = useState<{ current: number; total: number; name: string } | null>(null);
+  const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
-    attachment: SupplyQuoteAttachment;
+    attachment: QuoteAttachment;
     url: string;
   } | null>(null);
-  const [deleting, setDeleting] = useState<SupplyQuoteAttachment | null>(null);
+  const [deleting, setDeleting] = useState<QuoteAttachment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,51 +82,53 @@ export function QuoteAttachmentsPanel({
 
   useEffect(() => {
     setPreview(null);
-    setFiles([]);
+    setRetryFiles([]);
+    setSuccess(null);
     void load();
   }, [load]);
 
-  const selectFiles = (selected: File[]) => {
-    const validationError = selected.map(validateQuoteAttachment).find(Boolean);
+  const uploadFiles = async (files: File[]) => {
+    if (!files.length || uploading) return;
+    const validationError = files.map(validateQuoteAttachment).find(Boolean);
     if (validationError) {
-      setFiles([]);
+      setRetryFiles([]);
       setError(validationError);
       if (inputRef.current) inputRef.current.value = '';
       return;
     }
-    setFiles(selected);
-    setError(null);
-  };
 
-  const upload = async () => {
-    if (!files.length) {
-      setError('Selecione ao menos um arquivo.');
-      return;
-    }
     setError(null);
-    setUploading({ current: 0, total: files.length });
-    try {
-      for (let index = 0; index < files.length; index += 1) {
-        setUploading({ current: index + 1, total: files.length });
-        await uploadSupplyQuoteAttachment(quote.id, files[index], description);
+    setSuccess(null);
+    setRetryFiles([]);
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      setUploading({ current: index + 1, total: files.length, name: file.name });
+      try {
+        await uploadSupplyQuoteAttachment(quote.id, file, description, documentType);
+      } catch (uploadError) {
+        setRetryFiles(files.slice(index));
+        setError(
+          uploadError instanceof Error
+            ? `${file.name}: ${uploadError.message}`
+            : `${file.name}: falha no envio.`,
+        );
+        setUploading(null);
+        if (inputRef.current) inputRef.current.value = '';
+        await load();
+        await onChanged?.();
+        return;
       }
-      setFiles([]);
-      setDescription('');
-      if (inputRef.current) inputRef.current.value = '';
-      await load();
-      await onChanged?.();
-    } catch (uploadError) {
-      setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : 'Nao foi possivel enviar todos os anexos.',
-      );
-    } finally {
-      setUploading(null);
     }
+
+    setUploading(null);
+    setDescription('');
+    if (inputRef.current) inputRef.current.value = '';
+    await load();
+    await onChanged?.();
+    setSuccess(`${files.length} arquivo(s) salvo(s) com sucesso.`);
   };
 
-  const openAttachment = async (attachment: SupplyQuoteAttachment) => {
+  const openAttachment = async (attachment: QuoteAttachment) => {
     setOpeningId(attachment.id);
     setError(null);
     try {
@@ -155,45 +163,71 @@ export function QuoteAttachmentsPanel({
     <section className="quote-attachments-panel" aria-label={`Anexos da ${quote.code}`}>
       {canEdit && (
         <div className="quote-attachment-upload">
-          <label className="file-drop">
-            <FilePlus2 size={21} />
-            <span>
-              <strong>
-                {files.length ? `${files.length} arquivo(s) selecionado(s)` : 'Selecionar arquivos'}
-              </strong>
-              <small>PDF, imagens, videos, DOCX ou XLSX · ate 100 MB cada</small>
-            </span>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx"
-              onChange={(event) => selectFiles(Array.from(event.target.files || []))}
-            />
-          </label>
-          <label className="field">
-            Descricao dos arquivos
-            <input
-              value={description}
-              maxLength={1000}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="button button--primary"
-            disabled={!files.length || Boolean(uploading)}
-            onClick={() => void upload()}
-          >
-            <Paperclip size={17} />
-            {uploading
-              ? `Enviando ${uploading.current} de ${uploading.total}`
-              : `Enviar${files.length > 1 ? ` ${files.length} arquivos` : ''}`}
-          </button>
+          <div className="form-grid form-grid--three">
+            <label className="field">
+              Tipo do documento
+              <select
+                value={documentType}
+                onChange={(event) => setDocumentType(event.target.value as QuoteDocumentType)}
+                disabled={Boolean(uploading)}
+              >
+                {Object.entries(QUOTE_DOCUMENT_LABELS).map(([value, label]) => (
+                  <option value={value} key={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Descricao dos arquivos
+              <input
+                value={description}
+                maxLength={1000}
+                disabled={Boolean(uploading)}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </label>
+            <label className="file-drop">
+              <FilePlus2 size={21} />
+              <span>
+                <strong>
+                  {uploading
+                    ? `Enviando ${uploading.current} de ${uploading.total}`
+                    : 'Selecionar e enviar arquivos'}
+                </strong>
+                <small>
+                  {uploading ? uploading.name : 'PDF, imagens, videos, DOCX ou XLSX · ate 100 MB cada'}
+                </small>
+              </span>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                disabled={Boolean(uploading)}
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files || []);
+                  void uploadFiles(files);
+                }}
+              />
+            </label>
+          </div>
+          <p className="form-help">
+            O envio inicia automaticamente. O arquivo so esta vinculado quando aparecer abaixo com <strong>Salvo ✓</strong>.
+          </p>
+          {retryFiles.length > 0 && !uploading && (
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => void uploadFiles(retryFiles)}
+            >
+              <RefreshCcw size={16} />
+              Tentar novamente ({retryFiles.length})
+            </button>
+          )}
         </div>
       )}
 
       {error && <div className="form-error">{error}</div>}
+      {success && <div className="form-success">{success}</div>}
       {loading ? (
         <InlineLoading label="Carregando anexos" />
       ) : attachments.length ? (
@@ -205,7 +239,9 @@ export function QuoteAttachmentsPanel({
               </span>
               <div>
                 <strong>{attachment.originalName}</strong>
-                <span>{attachment.description || 'Sem descricao.'}</span>
+                <span>
+                  {QUOTE_DOCUMENT_LABELS[attachment.documentType]} · {attachment.description || 'Sem descricao.'} · Salvo ✓
+                </span>
               </div>
               <span>{formatSize(attachment.sizeBytes)}</span>
               <span>{new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span>
@@ -311,7 +347,7 @@ export function QuoteAttachmentsModal({
       className="quote-attachments-modal"
       open={open && Boolean(quote)}
       title={quote ? `Anexos da ${quote.code}` : 'Anexos da cotacao'}
-      description="Arquivos privados com acesso temporario."
+      description="Arquivos privados com acesso temporario. Se houver envio em andamento, aguarde a confirmacao Salvo antes de fechar."
       onClose={onClose}
     >
       {quote && <QuoteAttachmentsPanel quote={quote} canEdit={canEdit} onChanged={onChanged} />}
