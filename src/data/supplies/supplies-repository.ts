@@ -14,11 +14,13 @@ import type {
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
 import type { Database, Json } from '../supabase/database.types';
+import { fetchAllPages } from '../supabase/pagination';
 
 type ItemRow = Database['public']['Tables']['supply_items']['Row'];
 type SupplierTableRow = Database['public']['Tables']['suppliers']['Row'];
 type ChannelRow = Database['public']['Tables']['supplier_channels']['Row'];
 type QuoteRow = Database['public']['Tables']['supply_quotes']['Row'];
+type QuoteStoreRow = Database['public']['Tables']['supply_quote_stores']['Row'];
 type QuoteItemRow = Database['public']['Tables']['supply_quote_items']['Row'];
 type SupplierOperationalRow = Pick<
   SupplierTableRow,
@@ -340,28 +342,31 @@ function mapQuoteItem(
 }
 
 export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
-  const [
-    quotesResult,
-    quoteStoresResult,
-    quoteItemsResult,
-    itemsResult,
-    needsResult,
-    storesResult,
-  ] = await Promise.all([
-    supabase.from('supply_quotes').select('*').order('quote_date', { ascending: false }),
-    supabase.from('supply_quote_stores').select('*'),
-    supabase.from('supply_quote_items').select('*').order('created_at'),
-    supabase.from('supply_items').select('*'),
-    supabase.from('store_needs').select('id, title'),
-    supabase.from('lojas').select('id, codigo_negocio, nome, cidade, uf'),
-  ]);
+  const [quotesResult, quoteStoreRows, quoteItemRows, itemsResult, needsResult, storesResult] =
+    await Promise.all([
+      supabase.from('supply_quotes').select('*').order('quote_date', { ascending: false }),
+      fetchAllPages<QuoteStoreRow>((from, to) =>
+        supabase
+          .from('supply_quote_stores')
+          .select('*')
+          .order('quote_id')
+          .order('store_id')
+          .range(from, to),
+      ),
+      fetchAllPages<QuoteItemRow>((from, to) =>
+        supabase
+          .from('supply_quote_items')
+          .select('*')
+          .order('created_at')
+          .order('id')
+          .range(from, to),
+      ),
+      supabase.from('supply_items').select('*'),
+      supabase.from('store_needs').select('id, title'),
+      supabase.from('lojas').select('id, codigo_negocio, nome, cidade, uf'),
+    ]);
   const error =
-    quotesResult.error ||
-    quoteStoresResult.error ||
-    quoteItemsResult.error ||
-    itemsResult.error ||
-    needsResult.error ||
-    storesResult.error;
+    quotesResult.error || itemsResult.error || needsResult.error || storesResult.error;
   if (error) throw error;
 
   const items = new Map(itemsResult.data.map((row) => [row.id, mapItem(row)]));
@@ -373,7 +378,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
     ]),
   );
   const quoteStores = new Map<string, SupplyQuote['stores']>();
-  quoteStoresResult.data.forEach((row) => {
+  quoteStoreRows.forEach((row) => {
     const store = stores.get(row.store_id);
     if (!store) return;
     const current = quoteStores.get(row.quote_id) || [];
@@ -381,7 +386,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
     quoteStores.set(row.quote_id, current);
   });
   const quoteItems = new Map<string, SupplyQuoteItem[]>();
-  quoteItemsResult.data.forEach((row) => {
+  quoteItemRows.forEach((row) => {
     const current = quoteItems.get(row.quote_id) || [];
     current.push(mapQuoteItem(row, items, needs, stores));
     quoteItems.set(row.quote_id, current);
