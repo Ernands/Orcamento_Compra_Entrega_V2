@@ -79,5 +79,5 @@ export async function saveSupplyQuoteWithPaymentTerms(
     p_payment_notes: terms.paymentNotes,
   } as never);
   if (error) throw error;
-  return data as unknown as string;
+  return data;
 }
