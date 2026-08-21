@@ -15,6 +15,7 @@ import { SupplyComparisonPage } from '../pages/supply-comparison-page';
 import { SupplyItemsPage } from '../pages/supply-items-page';
 import { SupplyItemDetailPage } from '../pages/supply-item-detail-page';
 import { SupplyNeedsPage } from '../pages/supply-needs-page';
+import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
 import { RequireCapability, RequirePasswordChanged, RequireSession } from './guards';
@@ -163,6 +164,14 @@ export function App() {
               element={
                 <RequireCapability capability="quotes.view">
                   <SupplyQuotesPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/compras"
+              element={
+                <RequireCapability capability={'purchases.view' as never}>
+                  <SupplyPurchasesPage />
                 </RequireCapability>
               }
             />
