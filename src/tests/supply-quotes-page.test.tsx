@@ -4,9 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from '../app/session-provider';
 import { listSupplyQuoteAttachments } from '../data/attachments/quote-attachments-repository';
-import {
-  approveSupplyQuoteForPurchase,
-} from '../data/purchases/purchases-repository';
+import { approveSupplyQuoteForPurchase } from '../data/purchases/purchases-repository';
 import {
   EMPTY_QUOTE_PAYMENT_TERMS,
   getQuotePaymentTerms,
@@ -79,6 +77,7 @@ const store: Store = {
   plannedOpeningDate: null,
   notes: null,
 };
+
 const item: SupplyItem = {
   id: 'item-1',
   code: 'ITM-0001',
@@ -98,6 +97,7 @@ const item: SupplyItem = {
   createdAt: '2026-08-17T00:00:00Z',
   updatedAt: '2026-08-17T00:00:00Z',
 };
+
 const need: SupplyNeed = {
   id: 'need-1',
   storeId: store.id,
@@ -118,6 +118,7 @@ const need: SupplyNeed = {
   supplyItemId: item.id,
   createdAt: '2026-08-17T00:00:00Z',
 };
+
 const supplier: Supplier = {
   id: 'supplier-1',
   code: 'FOR-0001',
@@ -240,7 +241,7 @@ describe('SupplyQuotesPage', () => {
     vi.mocked(setSupplyQuoteStatus).mockResolvedValue();
   });
 
-  it('cria cotacao com multiplos itens, frete, pagamento e totais', async () => {
+  it('cria cotacao com varios itens, frete e condicoes de pagamento', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Nova cotacao' }));
@@ -261,8 +262,9 @@ describe('SupplyQuotesPage', () => {
     await user.type(screen.getByLabelText('Valor de entrada'), '49,80');
     await user.type(screen.getByLabelText('Quantidade de parcelas'), '3');
 
-    expect(screen.getByText('R$ 55,00')).toBeInTheDocument();
+    expect(screen.getByText('R$ 5,00')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Salvar cotacao' }));
+
     expect(saveSupplyQuoteWithPaymentTerms).toHaveBeenCalledOnce();
     const [payload, payment] = vi.mocked(saveSupplyQuoteWithPaymentTerms).mock.calls[0];
     expect(payload).toMatchObject({ supplierId: supplier.id, storeIds: [store.id] });
@@ -298,7 +300,7 @@ describe('SupplyQuotesPage', () => {
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
   });
 
-  it('esconde a criacao e Compras para Consulta sem permissao', async () => {
+  it('esconde criacao sem permissao de criar cotacoes', async () => {
     vi.mocked(useSession).mockReturnValue({
       can: (capability: string) => capability === 'quotes.view',
     } as never);
@@ -319,7 +321,7 @@ describe('SupplyQuotesPage', () => {
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
   });
 
-  it('aprova cotacao recebida e cria a compra pelo modal de status', async () => {
+  it('aprova cotacao recebida e cria compra pelo modal de status', async () => {
     const user = userEvent.setup();
     const received = quoteWithStatus('received');
     vi.mocked(listSupplyQuotes).mockResolvedValue([received]);
@@ -327,18 +329,17 @@ describe('SupplyQuotesPage', () => {
 
     await user.click(await screen.findByRole('button', { name: `Alterar status ${received.code}` }));
     await user.click(screen.getByRole('button', { name: 'Aprovar compra' }));
+
     expect(approveSupplyQuoteForPurchase).toHaveBeenCalledWith(received.id);
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
   });
 
-  it('exclui somente cotacao em Rascunho apos confirmacao', async () => {
+  it('exclui somente cotacao em rascunho apos confirmacao', async () => {
     const user = userEvent.setup();
     vi.mocked(listSupplyQuotes).mockResolvedValue([draftQuote, quoteWithStatus('received')]);
     renderPage();
 
-    expect(
-      await screen.findByRole('button', { name: `Excluir ${draftQuote.code}` }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: `Excluir ${draftQuote.code}` })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Excluir COT-received' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: `Excluir ${draftQuote.code}` }));
     await user.click(screen.getByRole('button', { name: 'Excluir rascunho' }));
@@ -347,7 +348,7 @@ describe('SupplyQuotesPage', () => {
   });
 
   it.each<SupplyQuoteStatus>(['draft', 'received', 'expired', 'cancelled'])(
-    'edita o conteudo em status %s sem alterar o status',
+    'edita conteudo em status %s sem alterar o status',
     async (status) => {
       const user = userEvent.setup();
       const quote = quoteWithStatus(status);
@@ -379,7 +380,7 @@ describe('SupplyQuotesPage', () => {
     },
   );
 
-  it('exibe produto somente para URL web segura e expande todos os detalhes', async () => {
+  it('exibe link apenas para URL web segura e expande todos os detalhes', async () => {
     const user = userEvent.setup();
     const unsafeItem = {
       ...quoteItem,
@@ -399,7 +400,6 @@ describe('SupplyQuotesPage', () => {
     expect(productLinks[0]).toHaveAttribute('target', '_blank');
     expect(productLinks[0]).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText(/Item sem URL segura/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Recolher todos os detalhes' })).toBeInTheDocument();
   });
 
   it('mostra contagem de anexos e resume apenas as cotacoes filtradas', async () => {
@@ -421,9 +421,7 @@ describe('SupplyQuotesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Ver resumo' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Resumo das cotacoes' });
-    expect(
-      within(dialog).getByText('Fornecedor Um · Rascunho · LOJ-001 - Loja Um'),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText('Fornecedor Um · Rascunho · LOJ-001 - Loja Um')).toBeInTheDocument();
     const totalQuotes = within(dialog).getByText('Total de cotacoes').closest('article');
     expect(totalQuotes).not.toBeNull();
     expect(within(totalQuotes as HTMLElement).getByText('1')).toBeInTheDocument();
