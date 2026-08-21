@@ -8,20 +8,24 @@ import {
   listSupplyQuoteAttachments,
   uploadSupplyQuoteAttachment,
   validateQuoteAttachment,
+  type QuoteAttachment,
 } from '../data/attachments/quote-attachments-repository';
-import type { SupplyQuoteAttachment } from '../domain/types';
 
-vi.mock('../data/attachments/quote-attachments-repository', () => ({
-  createSupplyQuoteAttachmentSignedUrl: vi.fn(),
-  deleteSupplyQuoteAttachment: vi.fn(),
-  listSupplyQuoteAttachments: vi.fn(),
-  uploadSupplyQuoteAttachment: vi.fn(),
-  validateQuoteAttachment: vi.fn(),
-}));
+vi.mock('../data/attachments/quote-attachments-repository', async () => {
+  const actual = await vi.importActual('../data/attachments/quote-attachments-repository');
+  return {
+    ...actual,
+    createSupplyQuoteAttachmentSignedUrl: vi.fn(),
+    deleteSupplyQuoteAttachment: vi.fn(),
+    listSupplyQuoteAttachments: vi.fn(),
+    uploadSupplyQuoteAttachment: vi.fn(),
+    validateQuoteAttachment: vi.fn(),
+  };
+});
 
 const quote = { id: 'quote-1', code: 'COT-00001' };
 
-function attachment(id: string, originalName: string, mimeType: string): SupplyQuoteAttachment {
+function attachment(id: string, originalName: string, mimeType: string): QuoteAttachment {
   return {
     id,
     quoteId: quote.id,
@@ -30,6 +34,7 @@ function attachment(id: string, originalName: string, mimeType: string): SupplyQ
     mimeType,
     sizeBytes: 2048,
     description: `Descricao ${originalName}`,
+    documentType: 'quote',
     createdAt: '2026-08-18T12:00:00Z',
   };
 }
@@ -62,40 +67,53 @@ describe('QuoteAttachmentsPanel', () => {
     windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue(null);
   });
 
-  it('envia varios arquivos de uma vez e atualiza a listagem', async () => {
+  it('envia automaticamente varios arquivos e confirma quando foram salvos', async () => {
     const user = userEvent.setup();
     const onChanged = vi.fn();
+    vi.mocked(listSupplyQuoteAttachments)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { ...pdfAttachment, originalName: 'cotacao.pdf', documentType: 'invoice' },
+        { ...imageAttachment, originalName: 'produto.jpg', documentType: 'invoice' },
+      ]);
     render(<QuoteAttachmentsPanel quote={quote} canEdit onChanged={onChanged} />);
     await screen.findByText('Nenhum anexo');
 
+    await user.selectOptions(screen.getByLabelText('Tipo do documento'), 'invoice');
+    await user.type(screen.getByLabelText('Descricao dos arquivos'), 'Documentos recebidos');
     const files = [
       new File(['pdf'], 'cotacao.pdf', { type: 'application/pdf' }),
       new File(['foto'], 'produto.jpg', { type: 'image/jpeg' }),
-      new File(['video'], 'produto.mp4', { type: 'video/mp4' }),
     ];
-    await user.upload(screen.getByLabelText(/Selecionar arquivos/), files);
-    await user.type(screen.getByLabelText('Descricao dos arquivos'), 'Documentos recebidos');
-    await user.click(screen.getByRole('button', { name: 'Enviar 3 arquivos' }));
+    await user.upload(screen.getByLabelText(/Selecionar e enviar arquivos/), files);
 
     expect(uploadSupplyQuoteAttachment).toHaveBeenNthCalledWith(
       1,
       quote.id,
       files[0],
       'Documentos recebidos',
+      'invoice',
     );
     expect(uploadSupplyQuoteAttachment).toHaveBeenNthCalledWith(
       2,
       quote.id,
       files[1],
       'Documentos recebidos',
+      'invoice',
     );
-    expect(uploadSupplyQuoteAttachment).toHaveBeenNthCalledWith(
-      3,
-      quote.id,
-      files[2],
-      'Documentos recebidos',
-    );
+    expect(await screen.findByText(/2 arquivo\(s\) salvo\(s\) com sucesso/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Salvo ✓/)).toHaveLength(2);
     expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it('mantem arquivos com falha para tentar novamente', async () => {
+    const user = userEvent.setup();
+    vi.mocked(uploadSupplyQuoteAttachment).mockRejectedValueOnce(new Error('falha de rede'));
+    render(<QuoteAttachmentsPanel quote={quote} canEdit />);
+    await screen.findByText('Nenhum anexo');
+    const file = new File(['pdf'], 'cotacao.pdf', { type: 'application/pdf' });
+    await user.upload(screen.getByLabelText(/Selecionar e enviar arquivos/), file);
+    expect(await screen.findByRole('button', { name: /Tentar novamente/ })).toBeInTheDocument();
   });
 
   it('previsualiza imagem, PDF e video por URL assinada', async () => {
@@ -132,13 +150,12 @@ describe('QuoteAttachmentsPanel', () => {
     );
   });
 
-  it('abre DOCX em nova aba com isolamento de contexto', async () => {
+  it('abre DOCX e XLSX em nova aba', async () => {
     const user = userEvent.setup();
     vi.mocked(listSupplyQuoteAttachments).mockResolvedValue([docAttachment, spreadsheetAttachment]);
     render(<QuoteAttachmentsPanel quote={quote} canEdit={false} />);
     const row = (await screen.findByText('condicoes.docx')).closest('article');
     await user.click(within(row as HTMLElement).getByRole('button', { name: 'Abrir' }));
-
     expect(windowOpenSpy).toHaveBeenCalledWith(
       expect.stringContaining('doc-1'),
       '_blank',
@@ -163,7 +180,7 @@ describe('QuoteAttachmentsPanel', () => {
     expect(deleteSupplyQuoteAttachment).toHaveBeenCalledWith(pdfAttachment.id);
 
     rerender(<QuoteAttachmentsPanel quote={quote} canEdit={false} />);
-    expect(screen.queryByText('Selecionar arquivos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Selecionar e enviar arquivos')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remover proposta.pdf' })).not.toBeInTheDocument();
   });
 });
