@@ -102,7 +102,7 @@ describe('QuoteAttachmentsPanel', () => {
       'invoice',
     );
     expect(await screen.findByText(/2 arquivo\(s\) salvo\(s\) com sucesso/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Salvo ✓/)).toHaveLength(2);
+    expect(screen.getAllByText(/· Salvo ✓$/)).toHaveLength(2);
     expect(onChanged).toHaveBeenCalledOnce();
   });
 
