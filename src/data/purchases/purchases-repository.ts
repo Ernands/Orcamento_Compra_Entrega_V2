@@ -305,7 +305,7 @@ export async function approveSupplyQuoteForPurchase(quoteId: string): Promise<st
     p_quote_id: quoteId,
   } as never);
   if (error) throw error;
-  return data as unknown as string;
+  return data;
 }
 
 export async function savePurchaseItem(values: {
@@ -356,7 +356,7 @@ export async function savePurchasePayment(values: {
     p_notes: values.notes,
   } as never);
   if (error) throw error;
-  return data as unknown as string;
+  return data;
 }
 
 export async function setPurchaseReimbursementStatus(
