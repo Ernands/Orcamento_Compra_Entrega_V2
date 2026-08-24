@@ -1,0 +1,43 @@
+name: Apply pending adjustments
+
+on:
+  push:
+    branches:
+      - feat/ajustes-cotacoes-comparativo-ui
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[pending-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply prepared patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in .pending/*.patch; do
+            echo "Applying ${patch}"
+            git apply --whitespace=nowarn "${patch}"
+          done
+
+      - name: Remove temporary patch machinery
+        shell: bash
+        run: |
+          rm -rf .pending
+          rm -f .github/workflows/apply-pending-adjustments.yml
+
+      - name: Commit applied package
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Aplica melhorias acumuladas de cotacoes e comparativo [pending-applied]"
+          git push origin HEAD:feat/ajustes-cotacoes-comparativo-ui
