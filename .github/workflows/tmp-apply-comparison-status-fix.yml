@@ -1,0 +1,183 @@
+name: Temporary comparison status fix
+
+on:
+  push:
+    branches: [feat/comparacao-status-cotacoes]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[comparison-status-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/comparacao-status-cotacoes
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply source and test changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('src/pages/supply-quotes-page.tsx')
+          text = page.read_text()
+          old = ".filter((quote) => getEffectiveSupplyQuoteStatus(quote) === 'received')"
+          new = """.filter((quote) =>
+            ['draft', 'received', 'expired'].includes(getEffectiveSupplyQuoteStatus(quote)),
+          )"""
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected exactly one comparison status filter, found {text.count(old)}')
+          page.write_text(text.replace(old, new))
+
+          test = Path('src/tests/supply-quotes-page.test.tsx')
+          text = test.read_text()
+          start_marker = "  it('mostra no detalhe expandido os destaques da comparacao entre cotacoes recebidas', async () => {"
+          end_marker = "  it('mostra contagem de anexos e resume apenas as cotacoes filtradas', async () => {"
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Could not locate comparison highlight test block')
+          replacement = """  it('mostra destaques entre cotacoes em rascunho, recebidas e expiradas e ignora canceladas', async () => {
+    const user = userEvent.setup();
+    const draftComparison: SupplyQuote = {
+      ...quoteWithStatus('draft'),
+      id: 'quote-comparison-draft',
+      code: 'COT-COMP-DRAFT',
+      supplierName: 'Fornecedor Rascunho',
+      items: [
+        {
+          ...quoteItem,
+          id: 'quote-item-comparison-draft',
+          quoteId: 'quote-comparison-draft',
+          unitPrice: '9.00',
+          shippingType: 'informed',
+          shippingAmount: '100.00',
+          deliveryDays: 8,
+        },
+      ],
+    };
+    const receivedComparison: SupplyQuote = {
+      ...quoteWithStatus('received'),
+      id: 'quote-comparison-received',
+      code: 'COT-COMP-RECEIVED',
+      supplierName: 'Fornecedor Recebido',
+      items: [
+        {
+          ...quoteItem,
+          id: 'quote-item-comparison-received',
+          quoteId: 'quote-comparison-received',
+          unitPrice: '10.00',
+          shippingType: 'free',
+          shippingAmount: '0.00',
+          deliveryDays: 6,
+        },
+      ],
+    };
+    const expiredComparison: SupplyQuote = {
+      ...quoteWithStatus('expired'),
+      id: 'quote-comparison-expired',
+      code: 'COT-COMP-EXPIRED',
+      supplierName: 'Fornecedor Expirado',
+      items: [
+        {
+          ...quoteItem,
+          id: 'quote-item-comparison-expired',
+          quoteId: 'quote-comparison-expired',
+          unitPrice: '11.00',
+          shippingType: 'free',
+          shippingAmount: '0.00',
+          deliveryDays: 2,
+        },
+      ],
+    };
+    const cancelledComparison: SupplyQuote = {
+      ...quoteWithStatus('cancelled'),
+      id: 'quote-comparison-cancelled',
+      code: 'COT-COMP-CANCELLED',
+      supplierName: 'Fornecedor Cancelado',
+      items: [
+        {
+          ...quoteItem,
+          id: 'quote-item-comparison-cancelled',
+          quoteId: 'quote-comparison-cancelled',
+          unitPrice: '1.00',
+          shippingType: 'free',
+          shippingAmount: '0.00',
+          deliveryDays: 1,
+        },
+      ],
+    };
+    vi.mocked(listSupplyQuotes).mockResolvedValue([
+      draftComparison,
+      receivedComparison,
+      expiredComparison,
+      cancelledComparison,
+    ]);
+    renderPage();
+
+    const draftGroup = (await screen.findByText('COT-COMP-DRAFT')).closest('.quote-list__group');
+    expect(draftGroup).not.toBeNull();
+    await user.click(
+      within(draftGroup as HTMLElement).getByRole('button', { name: 'Detalhar COT-COMP-DRAFT' }),
+    );
+    expect(within(draftGroup as HTMLElement).getByText('Menor preco')).toBeInTheDocument();
+    expect(within(draftGroup as HTMLElement).queryByText('Menor custo')).not.toBeInTheDocument();
+    expect(within(draftGroup as HTMLElement).queryByText('Menor prazo')).not.toBeInTheDocument();
+
+    const receivedGroup = screen.getByText('COT-COMP-RECEIVED').closest('.quote-list__group');
+    expect(receivedGroup).not.toBeNull();
+    await user.click(
+      within(receivedGroup as HTMLElement).getByRole('button', {
+        name: 'Detalhar COT-COMP-RECEIVED',
+      }),
+    );
+    expect(within(receivedGroup as HTMLElement).queryByText('Menor preco')).not.toBeInTheDocument();
+    expect(within(receivedGroup as HTMLElement).getByText('Menor custo')).toBeInTheDocument();
+    expect(within(receivedGroup as HTMLElement).queryByText('Menor prazo')).not.toBeInTheDocument();
+
+    const expiredGroup = screen.getByText('COT-COMP-EXPIRED').closest('.quote-list__group');
+    expect(expiredGroup).not.toBeNull();
+    await user.click(
+      within(expiredGroup as HTMLElement).getByRole('button', {
+        name: 'Detalhar COT-COMP-EXPIRED',
+      }),
+    );
+    expect(within(expiredGroup as HTMLElement).queryByText('Menor preco')).not.toBeInTheDocument();
+    expect(within(expiredGroup as HTMLElement).queryByText('Menor custo')).not.toBeInTheDocument();
+    expect(within(expiredGroup as HTMLElement).getByText('Menor prazo')).toBeInTheDocument();
+
+    const cancelledGroup = screen.getByText('COT-COMP-CANCELLED').closest('.quote-list__group');
+    expect(cancelledGroup).not.toBeNull();
+    await user.click(
+      within(cancelledGroup as HTMLElement).getByRole('button', {
+        name: 'Detalhar COT-COMP-CANCELLED',
+      }),
+    );
+    expect(within(cancelledGroup as HTMLElement).queryByText('Menor preco')).not.toBeInTheDocument();
+    expect(within(cancelledGroup as HTMLElement).queryByText('Menor custo')).not.toBeInTheDocument();
+    expect(within(cancelledGroup as HTMLElement).queryByText('Menor prazo')).not.toBeInTheDocument();
+  });
+
+"""
+          test.write_text(text[:start] + replacement + text[end:])
+          PY
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Commit validated change
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/supply-quotes-page.tsx src/tests/supply-quotes-page.test.tsx
+          git commit -m "fix: comparar cotacoes por status [comparison-status-fix]"
+          git push origin HEAD:feat/comparacao-status-cotacoes
