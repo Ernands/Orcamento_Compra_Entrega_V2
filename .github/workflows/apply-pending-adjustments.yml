@@ -63,8 +63,8 @@ jobs:
                               old_lines.append(hline[1:])
                               new_lines.append(hline[1:])
                           elif hline.strip() == '':
-                              old_lines.append(hline)
-                              new_lines.append(hline)
+                              i += 1
+                              continue
                           else:
                               raise RuntimeError(
                                   f'{patch_path}: unexpected hunk line for {current_path}: {hline!r}'
