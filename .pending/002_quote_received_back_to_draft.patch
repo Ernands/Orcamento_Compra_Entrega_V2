@@ -1,0 +1,102 @@
+diff --git a/src/data/supplies/supplies-repository.ts b/src/data/supplies/supplies-repository.ts
+--- a/src/data/supplies/supplies-repository.ts
++++ b/src/data/supplies/supplies-repository.ts
+@@
+ export async function setSupplyQuoteStatus(
+   quoteId: string,
+   status: SupplyQuoteStatus,
+ ): Promise<void> {
+   const { error } = await supabase.rpc('set_supply_quote_status', {
+     p_quote_id: quoteId,
+     p_status: status,
+   });
+-  if (error) throw error;
++  if (error) throw new Error(error.message);
+ }
+
+diff --git a/src/pages/supply-quotes-page.tsx b/src/pages/supply-quotes-page.tsx
+--- a/src/pages/supply-quotes-page.tsx
++++ b/src/pages/supply-quotes-page.tsx
+@@
+ const QUOTE_STATUS_TRANSITIONS: Partial<Record<SupplyQuoteStatus, SupplyQuoteStatus[]>> = {
+   draft: ['received', 'cancelled'],
+-  received: ['cancelled', 'expired'],
++  received: ['draft', 'cancelled', 'expired'],
+ };
+ 
+-const QUOTE_STATUS_ACTIONS: Record<
+-  Exclude<SupplyQuoteStatus, 'draft'>,
+-  { label: string; icon: typeof CheckCircle2 }
+-> = {
++const QUOTE_STATUS_ACTIONS: Record<SupplyQuoteStatus, { label: string; icon: typeof CheckCircle2 }> = {
++  draft: { label: 'Voltar para rascunho', icon: Edit3 },
+   received: { label: 'Marcar como recebida', icon: CheckCircle2 },
+   cancelled: { label: 'Cancelar cotacao', icon: Ban },
+   expired: { label: 'Marcar como expirada', icon: Clock3 },
+ };
+@@
+-    } catch {
+-      setError('Nao foi possivel alterar o status desta cotacao.');
++    } catch (failure) {
++      const message = failure instanceof Error ? failure.message : '';
++      setError(
++        message.includes('active purchase')
++          ? 'Esta cotacao possui uma compra ativa. Devolva a compra para cotacao antes de voltar ao rascunho.'
++          : message.includes('permission denied')
++            ? 'Seu usuario nao possui permissao para alterar o status desta cotacao.'
++            : message.includes('invalid quote status transition')
++              ? 'Esta alteracao de status nao e permitida no estado atual da cotacao.'
++              : 'Nao foi possivel alterar o status desta cotacao.',
++      );
+     } finally {
+       setSaving(false);
+     }
+@@
+             {transitions.map((status) => {
+-              const action = QUOTE_STATUS_ACTIONS[status as Exclude<SupplyQuoteStatus, 'draft'>];
++              const action = QUOTE_STATUS_ACTIONS[status];
+               const ActionIcon = action.icon;
+               return (
+
+diff --git a/src/tests/supply-quotes-page.test.tsx b/src/tests/supply-quotes-page.test.tsx
+--- a/src/tests/supply-quotes-page.test.tsx
++++ b/src/tests/supply-quotes-page.test.tsx
+@@
+   it('altera status sem reenviar o conteudo da cotacao', async () => {
+     const user = userEvent.setup();
+     vi.mocked(listSupplyQuotes).mockResolvedValue([draftQuote]);
+     renderPage();
+@@
+     expect(setSupplyQuoteStatus).toHaveBeenCalledWith(draftQuote.id, 'received');
+     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
+   });
++
++  it('permite voltar cotacao recebida para rascunho', async () => {
++    const user = userEvent.setup();
++    const received = quoteWithStatus('received');
++    vi.mocked(listSupplyQuotes).mockResolvedValue([received]);
++    renderPage();
++
++    await user.click(await screen.findByRole('button', { name: `Alterar status ${received.code}` }));
++    await user.click(screen.getByRole('button', { name: 'Voltar para rascunho' }));
++
++    expect(setSupplyQuoteStatus).toHaveBeenCalledWith(received.id, 'draft');
++    expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
++  });
++
++  it('orienta devolver a compra quando houver CMP ativa ao voltar para rascunho', async () => {
++    const user = userEvent.setup();
++    const received = quoteWithStatus('received');
++    vi.mocked(listSupplyQuotes).mockResolvedValue([received]);
++    vi.mocked(setSupplyQuoteStatus).mockRejectedValue(new Error('quote has active purchase'));
++    renderPage();
++
++    await user.click(await screen.findByRole('button', { name: `Alterar status ${received.code}` }));
++    await user.click(screen.getByRole('button', { name: 'Voltar para rascunho' }));
++
++    expect(
++      await screen.findByText(
++        'Esta cotacao possui uma compra ativa. Devolva a compra para cotacao antes de voltar ao rascunho.',
++      ),
++    ).toBeInTheDocument();
++  });
