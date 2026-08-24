@@ -1,0 +1,198 @@
+/* Ajustes de interface consolidados em 2026-08-23. */
+
+/* Cotações: filtros adicionais de categoria e área. */
+.supply-filter-grid--compact {
+  grid-template-columns: minmax(250px, 1.4fr) repeat(5, minmax(130px, 0.72fr));
+}
+
+/* Comparativo: multisseleção de status. */
+.comparison-filters {
+  grid-template-columns: minmax(240px, 1.4fr) repeat(5, minmax(145px, 0.8fr));
+}
+.comparison-status-filter {
+  position: relative;
+  min-width: 0;
+}
+.comparison-status-filter > summary {
+  min-height: 43px;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #cfd6d1;
+  border-radius: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+.comparison-status-filter > summary::-webkit-details-marker {
+  display: none;
+}
+.comparison-status-filter > summary span {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.comparison-status-filter > summary strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comparison-status-filter__menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(280px, calc(100vw - 32px));
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #cfd6d1;
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(32, 38, 36, 0.14);
+}
+.comparison-status-filter__menu label {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.comparison-status-filter__menu label:hover {
+  background: var(--surface-soft);
+}
+.comparison-status-filter__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+.comparison-status-filter__actions button {
+  padding: 4px 0;
+  color: var(--brand);
+  background: transparent;
+  border: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* Cotações expandidas: marcadores herdados do Comparativo. */
+.quote-detail-metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.quote-comparison-marker {
+  width: fit-content;
+  padding: 2px 6px;
+  color: #72520d !important;
+  background: #f7e7b9;
+  border-radius: 999px;
+  font-size: 0.62rem !important;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+/* Barra lateral recolhível no desktop. */
+.app-layout {
+  transition: grid-template-columns 180ms ease;
+}
+.app-layout--sidebar-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+.sidebar {
+  transition: width 180ms ease;
+}
+.sidebar-collapse-toggle {
+  width: 30px;
+  height: 30px;
+  position: absolute;
+  z-index: 4;
+  top: 72px;
+  right: -15px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #dce8e4;
+  background: #24443d;
+  border: 1px solid #3b5a53;
+  border-radius: 50%;
+  box-shadow: 0 3px 10px rgba(17, 29, 25, 0.2);
+}
+.sidebar-collapse-toggle:hover {
+  color: #fff;
+  background: #2b5147;
+  border-color: #57756c;
+}
+.sidebar--collapsed .sidebar__brand {
+  justify-content: center;
+  padding-inline: 10px;
+}
+.sidebar--collapsed .sidebar__brand > span:last-child {
+  display: none;
+}
+.sidebar--collapsed .sidebar__nav {
+  padding-inline: 9px;
+}
+.sidebar--collapsed .sidebar__nav a {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 9px;
+  font-size: 0;
+}
+.sidebar--collapsed .sidebar__nav a svg {
+  margin: 0;
+}
+.sidebar--collapsed .sidebar__account {
+  grid-template-columns: 38px;
+  justify-content: center;
+  gap: 5px;
+  padding-inline: 9px;
+}
+.sidebar--collapsed .sidebar__account .avatar,
+.sidebar--collapsed .sidebar__account .account-copy {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .supply-filter-grid--compact,
+  .comparison-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1050px) {
+  .app-layout--sidebar-collapsed {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .sidebar-collapse-toggle {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .supply-filter-grid--compact,
+  .comparison-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .supply-filter-grid--compact,
+  .comparison-filters {
+    grid-template-columns: 1fr;
+  }
+}
