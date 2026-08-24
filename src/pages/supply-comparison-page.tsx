@@ -138,7 +138,7 @@ export function SupplyComparisonPage() {
           />
         </label>
         <details className="comparison-status-filter">
-          <summary>
+          <summary aria-label="Filtrar status no comparativo">
             <span>Status</span>
             <strong>{statusSummary}</strong>
           </summary>

@@ -304,7 +304,7 @@ describe('SupplyComparisonPage', () => {
     expect(screen.queryByText('Fornecedor Rascunho')).not.toBeInTheDocument();
     expect(screen.queryByText('Fornecedor Cancelado')).not.toBeInTheDocument();
 
-    await user.click(screen.getByText('Recebida'));
+    await user.click(screen.getByLabelText('Filtrar status no comparativo'));
     await user.click(screen.getByRole('checkbox', { name: 'Rascunho' }));
     await user.click(screen.getByRole('checkbox', { name: 'Cancelada' }));
 

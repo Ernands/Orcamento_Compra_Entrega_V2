@@ -614,7 +614,7 @@ describe('SupplyQuotesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Ver resumo' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Resumo das cotacoes' });
-    expect(within(dialog).getByText(/Cancelada/)).toBeInTheDocument();
+    expect(within(dialog).getByText('Sem pesquisa · Cancelada · Todas as lojas')).toBeInTheDocument();
     const totalQuotes = within(dialog).getByText('Total de cotacoes').closest('article');
     expect(totalQuotes).not.toBeNull();
     expect(within(totalQuotes as HTMLElement).getByText('1')).toBeInTheDocument();
