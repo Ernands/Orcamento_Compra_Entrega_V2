@@ -1,0 +1,187 @@
+diff --git a/src/app/app-shell.tsx b/src/app/app-shell.tsx
+--- a/src/app/app-shell.tsx
++++ b/src/app/app-shell.tsx
+@@
+                 {can('quotes.view') && (
+                   <NavLink to="/suprimentos/cotacoes" onClick={() => setMobileOpen(false)}>
+                     <ReceiptText size={19} />
+                     Cotacoes
+                   </NavLink>
+                 )}
++                {can('quotes.view') && (
++                  <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
++                    <ChartNoAxesCombined size={19} />
++                    Comparativo
++                  </NavLink>
++                )}
+                 {can('purchases.view' as never) && (
+                   <NavLink to="/suprimentos/compras" onClick={() => setMobileOpen(false)}>
+                     <ShoppingCart size={19} />
+                     Compras
+                   </NavLink>
+                 )}
+-                {can('quotes.view') && (
+-                  <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
+-                    <ChartNoAxesCombined size={19} />
+-                    Comparativo
+-                  </NavLink>
+-                )}
+               </>
+             )}
+           </>
+         )}
+
+diff --git a/src/pages/supply-comparison-page.tsx b/src/pages/supply-comparison-page.tsx
+--- a/src/pages/supply-comparison-page.tsx
++++ b/src/pages/supply-comparison-page.tsx
+@@
+ import { calculateQuoteLine, formatBRL, moneyToCents } from '../domain/supply-calculations';
+ import { getComparisonHighlights } from '../domain/supply-comparison';
+ import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
+-import { isSupplyQuoteEligibleForComparison } from '../domain/supply-quote-status';
+-import type { SupplyItem, SupplyNeed, SupplyQuote, SupplyQuoteItem } from '../domain/types';
++import {
++  getEffectiveSupplyQuoteStatus,
++  SUPPLY_QUOTE_STATUS_LABELS,
++} from '../domain/supply-quote-status';
++import type {
++  SupplyItem,
++  SupplyNeed,
++  SupplyQuote,
++  SupplyQuoteItem,
++  SupplyQuoteStatus,
++} from '../domain/types';
+@@
+ interface ComparisonRow {
+   quote: SupplyQuote;
+   item: SupplyQuoteItem;
+ }
++
++const COMPARISON_STATUS_OPTIONS: SupplyQuoteStatus[] = [
++  'received',
++  'draft',
++  'expired',
++  'cancelled',
++];
+@@
+   const [itemId, setItemId] = useState('');
+   const [needId, setNeedId] = useState('');
+   const [context, setContext] = useState('all');
++  const [statuses, setStatuses] = useState<SupplyQuoteStatus[]>(['received']);
+@@
+   const availableNeeds = needs.filter(
+     (need) => (!storeId || need.storeId === storeId) && (!itemId || need.supplyItemId === itemId),
+   );
++  const toggleStatus = (status: SupplyQuoteStatus) => {
++    setStatuses((current) => {
++      if (!current.includes(status)) return [...current, status];
++      if (current.length === 1) return current;
++      return current.filter((entry) => entry !== status);
++    });
++  };
++  const statusSummary =
++    statuses.length === COMPARISON_STATUS_OPTIONS.length
++      ? 'Todos os status'
++      : statuses.map((status) => SUPPLY_QUOTE_STATUS_LABELS[status]).join(', ');
+   const rows = useMemo(() => {
+     const search = query.trim().toLocaleLowerCase('pt-BR');
+     return quotes.flatMap((quote): ComparisonRow[] => {
+-      if (!isSupplyQuoteEligibleForComparison(quote)) return [];
++      if (!statuses.includes(getEffectiveSupplyQuoteStatus(quote))) return [];
+       if (context !== 'all' && quote.contextType !== context) return [];
+@@
+         .map((item) => ({ quote, item }));
+     });
+-  }, [context, itemId, needId, query, quotes, storeId]);
++  }, [context, itemId, needId, query, quotes, statuses, storeId]);
+@@
+         <label className="search-field">
+           <Search size={18} />
+           <input
+@@
+             placeholder="Fornecedor, item ou marca"
+           />
+         </label>
++        <details className="comparison-status-filter">
++          <summary>
++            <span>Status</span>
++            <strong>{statusSummary}</strong>
++          </summary>
++          <div className="comparison-status-filter__menu">
++            {COMPARISON_STATUS_OPTIONS.map((status) => (
++              <label key={status}>
++                <input
++                  type="checkbox"
++                  checked={statuses.includes(status)}
++                  onChange={() => toggleStatus(status)}
++                />
++                <span>{SUPPLY_QUOTE_STATUS_LABELS[status]}</span>
++              </label>
++            ))}
++            <div className="comparison-status-filter__actions">
++              <button type="button" onClick={() => setStatuses(['received'])}>
++                Somente recebidas
++              </button>
++              <button type="button" onClick={() => setStatuses([...COMPARISON_STATUS_OPTIONS])}>
++                Todos
++              </button>
++            </div>
++          </div>
++        </details>
+         <select
+           aria-label="Filtrar loja no comparativo"
+@@
+                   <span>
+                     {quote.validUntil || 'Sem validade'}
+-                    <StatusBadge status={quote.status} />
++                    <StatusBadge status={getEffectiveSupplyQuoteStatus(quote)} />
+                   </span>
+                 </article>
+               );
+
+diff --git a/src/tests/supply-comparison-page.test.tsx b/src/tests/supply-comparison-page.test.tsx
+--- a/src/tests/supply-comparison-page.test.tsx
++++ b/src/tests/supply-comparison-page.test.tsx
+@@
+   it('compara somente cotacoes recebidas e ainda validas', async () => {
+@@
+     expect(
+       within(noValiditySupplier.closest('article')!).getByText('Menor prazo'),
+     ).toBeInTheDocument();
+   });
++
++  it('inicia em Recebida e permite comparar varios status ao mesmo tempo', async () => {
++    const user = userEvent.setup();
++    const draftQuote: SupplyQuote = {
++      ...quotes[0],
++      id: 'quote-draft-filter',
++      code: 'COT-DRAFT',
++      supplierName: 'Fornecedor Rascunho',
++      status: 'draft',
++      items: [line('line-draft-filter', 'quote-draft-filter', 0, '9', '0', 8)],
++    };
++    const cancelledQuote: SupplyQuote = {
++      ...quotes[1],
++      id: 'quote-cancelled-filter',
++      code: 'COT-CANCELLED',
++      supplierName: 'Fornecedor Cancelado',
++      status: 'cancelled',
++      items: [line('line-cancelled-filter', 'quote-cancelled-filter', 1, '8', '0', 4)],
++    };
++    vi.mocked(listSupplyQuotes).mockResolvedValue([quotes[0], draftQuote, cancelledQuote]);
++
++    render(<SupplyComparisonPage />);
++
++    expect(await screen.findByText('Fornecedor Local')).toBeInTheDocument();
++    expect(screen.queryByText('Fornecedor Rascunho')).not.toBeInTheDocument();
++    expect(screen.queryByText('Fornecedor Cancelado')).not.toBeInTheDocument();
++
++    await user.click(screen.getByText('Recebida'));
++    await user.click(screen.getByRole('checkbox', { name: 'Rascunho' }));
++    await user.click(screen.getByRole('checkbox', { name: 'Cancelada' }));
++
++    expect(await screen.findByText('Fornecedor Rascunho')).toBeInTheDocument();
++    expect(screen.getByText('Fornecedor Cancelado')).toBeInTheDocument();
++    expect(screen.getByText('Fornecedor Local')).toBeInTheDocument();
++  });
+ });
