@@ -1196,7 +1196,9 @@ export function SupplyQuotesPage() {
     () =>
       getGroupedComparisonHighlights(
         quotes
-          .filter((quote) => getEffectiveSupplyQuoteStatus(quote) === 'received')
+          .filter((quote) =>
+            ['draft', 'received', 'expired'].includes(getEffectiveSupplyQuoteStatus(quote)),
+          )
           .flatMap((quote) => quote.items),
       ),
     [quotes],
