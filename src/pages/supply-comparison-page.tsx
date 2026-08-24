@@ -1,5 +1,5 @@
 import { Clock3, ExternalLink, Search, Tag, Truck } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
 import {
   listSupplyItems,
@@ -49,6 +49,9 @@ export function SupplyComparisonPage() {
   const [needId, setNeedId] = useState('');
   const [context, setContext] = useState('all');
   const [statuses, setStatuses] = useState<SupplyQuoteStatus[]>(['received']);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const statusFilterRef = useRef<HTMLDetailsElement>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -67,9 +70,35 @@ export function SupplyComparisonPage() {
       setLoading(false);
     }
   }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!statusMenuOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !statusFilterRef.current?.contains(target)) {
+        setStatusMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setStatusMenuOpen(false);
+      const summary = statusFilterRef.current?.querySelector('summary');
+      if (summary instanceof HTMLElement) summary.focus();
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [statusMenuOpen]);
+
   const stores = useMemo(
     () => [...new Map(needs.map((need) => [need.storeId, need])).values()],
     [needs],
@@ -137,7 +166,12 @@ export function SupplyComparisonPage() {
             placeholder="Fornecedor, item ou marca"
           />
         </label>
-        <details className="comparison-status-filter">
+        <details
+          ref={statusFilterRef}
+          className="comparison-status-filter"
+          open={statusMenuOpen}
+          onToggle={(event) => setStatusMenuOpen(event.currentTarget.open)}
+        >
           <summary aria-label="Filtrar status no comparativo">
             <span>Status</span>
             <strong>{statusSummary}</strong>
@@ -154,10 +188,22 @@ export function SupplyComparisonPage() {
               </label>
             ))}
             <div className="comparison-status-filter__actions">
-              <button type="button" onClick={() => setStatuses(['received'])}>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatuses(['received']);
+                  setStatusMenuOpen(false);
+                }}
+              >
                 Somente recebidas
               </button>
-              <button type="button" onClick={() => setStatuses([...COMPARISON_STATUS_OPTIONS])}>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatuses([...COMPARISON_STATUS_OPTIONS]);
+                  setStatusMenuOpen(false);
+                }}
+              >
                 Todos
               </button>
             </div>
