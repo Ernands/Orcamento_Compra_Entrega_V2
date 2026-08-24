@@ -39,11 +39,6 @@ diff --git a/src/pages/supply-comparison-page.tsx b/src/pages/supply-comparison-
 -import { getComparisonHighlights } from '../domain/supply-comparison';
 +import { getGroupedComparisonHighlights } from '../domain/supply-comparison';
 @@
- interface ComparisonRow {
-   quote: SupplyQuote;
-   item: SupplyQuoteItem;
- }
--
 -function getGroupedHighlights(rows: ComparisonRow[]) {
 -  const groups = new Map<string, SupplyQuoteItem[]>();
 -  rows.forEach(({ item }) => {
@@ -64,12 +59,12 @@ diff --git a/src/pages/supply-comparison-page.tsx b/src/pages/supply-comparison-
 -  });
 -  return merged;
 -}
++function getGroupedHighlights(rows: ComparisonRow[]) {
++  return getGroupedComparisonHighlights(rows.map(({ item }) => item));
++}
 @@
 -  const highlights = useMemo(() => getGroupedHighlights(rows), [rows]);
-+  const highlights = useMemo(
-+    () => getGroupedComparisonHighlights(rows.map(({ item }) => item)),
-+    [rows],
-+  );
++  const highlights = useMemo(() => getGroupedHighlights(rows), [rows]);
 
 diff --git a/src/pages/supply-quotes-page.tsx b/src/pages/supply-quotes-page.tsx
 --- a/src/pages/supply-quotes-page.tsx
