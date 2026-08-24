@@ -10,6 +10,8 @@ export interface QuoteSummaryFilters {
   search: string;
   status: string;
   store: string;
+  category?: string;
+  area?: string;
   states?: string[];
   allocationMode?: 'original' | 'allocated';
 }
@@ -50,6 +52,9 @@ function filtersAsText(filters: QuoteSummaryFilters): string {
     `Status: ${filters.status || 'Todos'}`,
     `Loja: ${filters.store || 'Todas'}`,
   ];
+
+  if (filters.category) parts.push(`Categoria: ${filters.category}`);
+  if (filters.area) parts.push(`Area: ${filters.area}`);
 
   if (filters.states) {
     parts.push(`UFs: ${filters.states.length ? filters.states.join(', ') : 'Todas'}`);

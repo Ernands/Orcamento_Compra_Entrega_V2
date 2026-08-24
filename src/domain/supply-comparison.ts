@@ -40,3 +40,26 @@ export function getComparisonHighlights(items: SupplyQuoteItem[]): ComparisonHig
     ),
   };
 }
+
+export function getGroupedComparisonHighlights(items: SupplyQuoteItem[]): ComparisonHighlights {
+  const groups = new Map<string, SupplyQuoteItem[]>();
+  items.forEach((item) => {
+    const key = [item.supplyItemId, item.quantity, item.unit].join('|');
+    groups.set(key, [...(groups.get(key) || []), item]);
+  });
+
+  const merged: ComparisonHighlights = {
+    lowestUnitPriceIds: new Set<string>(),
+    lowestTotalIds: new Set<string>(),
+    shortestLeadTimeIds: new Set<string>(),
+  };
+
+  groups.forEach((groupItems) => {
+    const current = getComparisonHighlights(groupItems);
+    current.lowestUnitPriceIds.forEach((id) => merged.lowestUnitPriceIds.add(id));
+    current.lowestTotalIds.forEach((id) => merged.lowestTotalIds.add(id));
+    current.shortestLeadTimeIds.forEach((id) => merged.shortestLeadTimeIds.add(id));
+  });
+
+  return merged;
+}

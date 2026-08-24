@@ -321,6 +321,36 @@ describe('SupplyQuotesPage', () => {
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
   });
 
+  it('permite voltar cotacao recebida para rascunho', async () => {
+    const user = userEvent.setup();
+    const received = quoteWithStatus('received');
+    vi.mocked(listSupplyQuotes).mockResolvedValue([received]);
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: `Alterar status ${received.code}` }));
+    await user.click(screen.getByRole('button', { name: 'Voltar para rascunho' }));
+
+    expect(setSupplyQuoteStatus).toHaveBeenCalledWith(received.id, 'draft');
+    expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
+  });
+
+  it('orienta devolver a compra quando houver CMP ativa ao voltar para rascunho', async () => {
+    const user = userEvent.setup();
+    const received = quoteWithStatus('received');
+    vi.mocked(listSupplyQuotes).mockResolvedValue([received]);
+    vi.mocked(setSupplyQuoteStatus).mockRejectedValue(new Error('quote has active purchase'));
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: `Alterar status ${received.code}` }));
+    await user.click(screen.getByRole('button', { name: 'Voltar para rascunho' }));
+
+    expect(
+      await screen.findByText(
+        'Esta cotacao possui uma compra ativa. Devolva a compra para cotacao antes de voltar ao rascunho.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('aprova cotacao recebida e cria compra pelo modal de status', async () => {
     const user = userEvent.setup();
     const received = quoteWithStatus('received');
@@ -332,6 +362,21 @@ describe('SupplyQuotesPage', () => {
 
     expect(approveSupplyQuoteForPurchase).toHaveBeenCalledWith(received.id);
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
+  });
+
+  it('informa quando o backend negar permissao para aprovar compra', async () => {
+    const user = userEvent.setup();
+    const received = quoteWithStatus('received');
+    vi.mocked(listSupplyQuotes).mockResolvedValue([received]);
+    vi.mocked(approveSupplyQuoteForPurchase).mockRejectedValue(new Error('permission denied'));
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: `Alterar status ${received.code}` }));
+    await user.click(screen.getByRole('button', { name: 'Aprovar compra' }));
+
+    expect(
+      await screen.findByText('Seu usuario nao possui permissao para aprovar esta cotacao para compra.'),
+    ).toBeInTheDocument();
   });
 
   it('exclui somente cotacao em rascunho apos confirmacao', async () => {
@@ -402,6 +447,64 @@ describe('SupplyQuotesPage', () => {
     expect(screen.getByText(/Item sem URL segura/)).toBeInTheDocument();
   });
 
+  it('mostra no detalhe expandido os destaques da comparacao entre cotacoes recebidas', async () => {
+    const user = userEvent.setup();
+    const quoteA: SupplyQuote = {
+      ...quoteWithStatus('received'),
+      id: 'quote-comparison-a',
+      code: 'COT-COMP-A',
+      supplierName: 'Fornecedor A',
+      items: [
+        {
+          ...quoteItem,
+          id: 'quote-item-comparison-a',
+          quoteId: 'quote-comparison-a',
+          unitPrice: '10.00',
+          shippingType: 'informed',
+          shippingAmount: '100.00',
+          deliveryDays: 8,
+        },
+      ],
+    };
+    const quoteB: SupplyQuote = {
+      ...quoteWithStatus('received'),
+      id: 'quote-comparison-b',
+      code: 'COT-COMP-B',
+      supplierName: 'Fornecedor B',
+      items: [
+        {
+          ...quoteItem,
+          id: 'quote-item-comparison-b',
+          quoteId: 'quote-comparison-b',
+          unitPrice: '11.00',
+          shippingType: 'free',
+          shippingAmount: '0.00',
+          deliveryDays: 3,
+        },
+      ],
+    };
+    vi.mocked(listSupplyQuotes).mockResolvedValue([quoteA, quoteB]);
+    renderPage();
+
+    const quoteACode = await screen.findByText('COT-COMP-A');
+    const quoteAGroup = quoteACode.closest('.quote-list__group');
+    expect(quoteAGroup).not.toBeNull();
+    await user.click(within(quoteAGroup as HTMLElement).getByRole('button', { name: 'Detalhar COT-COMP-A' }));
+
+    expect(within(quoteAGroup as HTMLElement).getByText('Menor preco')).toBeInTheDocument();
+    expect(within(quoteAGroup as HTMLElement).queryByText('Menor custo')).not.toBeInTheDocument();
+    expect(within(quoteAGroup as HTMLElement).queryByText('Menor prazo')).not.toBeInTheDocument();
+
+    const quoteBCode = screen.getByText('COT-COMP-B');
+    const quoteBGroup = quoteBCode.closest('.quote-list__group');
+    expect(quoteBGroup).not.toBeNull();
+    await user.click(within(quoteBGroup as HTMLElement).getByRole('button', { name: 'Detalhar COT-COMP-B' }));
+
+    expect(within(quoteBGroup as HTMLElement).queryByText('Menor preco')).not.toBeInTheDocument();
+    expect(within(quoteBGroup as HTMLElement).getByText('Menor custo')).toBeInTheDocument();
+    expect(within(quoteBGroup as HTMLElement).getByText('Menor prazo')).toBeInTheDocument();
+  });
+
   it('mostra contagem de anexos e resume apenas as cotacoes filtradas', async () => {
     const user = userEvent.setup();
     const receivedQuote = {
@@ -422,6 +525,96 @@ describe('SupplyQuotesPage', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Resumo das cotacoes' });
     expect(within(dialog).getByText('Fornecedor Um · Rascunho · LOJ-001 - Loja Um')).toBeInTheDocument();
+    const totalQuotes = within(dialog).getByText('Total de cotacoes').closest('article');
+    expect(totalQuotes).not.toBeNull();
+    expect(within(totalQuotes as HTMLElement).getByText('1')).toBeInTheDocument();
+  });
+
+  it('filtra cotacoes pela categoria e area do mesmo item', async () => {
+    const user = userEvent.setup();
+    const climateItem: SupplyItem = {
+      ...item,
+      id: 'item-clima',
+      code: 'ITM-0087',
+      name: 'Ar-condicionado split inverter',
+      category: 'Climatizacao',
+      areaName: 'Atendimento',
+    };
+    const officeItem: SupplyItem = {
+      ...item,
+      id: 'item-office',
+      code: 'ITM-0090',
+      name: 'Cadeira administrativa',
+      category: 'Mobiliario',
+      areaName: 'Itens Gerais',
+    };
+    const climateQuote = {
+      ...quoteWithStatus('received'),
+      id: 'quote-clima',
+      code: 'COT-CLIMA',
+      items: [{
+        ...quoteItem,
+        id: 'quote-item-clima',
+        quoteId: 'quote-clima',
+        supplyItemId: climateItem.id,
+        itemCode: climateItem.code,
+        itemName: climateItem.name,
+      }],
+    };
+    const officeQuote = {
+      ...quoteWithStatus('received'),
+      id: 'quote-office',
+      code: 'COT-OFFICE',
+      items: [{
+        ...quoteItem,
+        id: 'quote-item-office',
+        quoteId: 'quote-office',
+        supplyItemId: officeItem.id,
+        itemCode: officeItem.code,
+        itemName: officeItem.name,
+      }],
+    };
+    vi.mocked(listSupplyItems).mockResolvedValue([climateItem, officeItem]);
+    vi.mocked(listSupplyQuotes).mockResolvedValue([climateQuote, officeQuote]);
+    renderPage();
+
+    await screen.findByText('COT-CLIMA');
+    await user.selectOptions(screen.getByLabelText('Filtrar categoria do item'), 'Climatizacao');
+    await user.selectOptions(screen.getByLabelText('Filtrar area do item'), 'Atendimento');
+
+    expect(screen.getByText('COT-CLIMA')).toBeInTheDocument();
+    expect(screen.queryByText('COT-OFFICE')).not.toBeInTheDocument();
+  });
+
+  it('ignora cotacoes canceladas no resumo quando o status cancelada nao foi solicitado', async () => {
+    const user = userEvent.setup();
+    const received = quoteWithStatus('received');
+    const cancelled = quoteWithStatus('cancelled');
+    vi.mocked(listSupplyQuotes).mockResolvedValue([received, cancelled]);
+    renderPage();
+
+    await screen.findByText(received.code);
+    await user.click(screen.getByRole('button', { name: 'Ver resumo' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Resumo das cotacoes' });
+    const totalQuotes = within(dialog).getByText('Total de cotacoes').closest('article');
+    expect(totalQuotes).not.toBeNull();
+    expect(within(totalQuotes as HTMLElement).getByText('1')).toBeInTheDocument();
+  });
+
+  it('inclui canceladas no resumo quando o filtro de status estiver em cancelada', async () => {
+    const user = userEvent.setup();
+    const received = quoteWithStatus('received');
+    const cancelled = quoteWithStatus('cancelled');
+    vi.mocked(listSupplyQuotes).mockResolvedValue([received, cancelled]);
+    renderPage();
+
+    await screen.findByText(received.code);
+    await user.selectOptions(screen.getByLabelText('Filtrar status'), 'cancelled');
+    await user.click(screen.getByRole('button', { name: 'Ver resumo' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Resumo das cotacoes' });
+    expect(within(dialog).getByText(/Cancelada/)).toBeInTheDocument();
     const totalQuotes = within(dialog).getByText('Total de cotacoes').closest('article');
     expect(totalQuotes).not.toBeNull();
     expect(within(totalQuotes as HTMLElement).getByText('1')).toBeInTheDocument();

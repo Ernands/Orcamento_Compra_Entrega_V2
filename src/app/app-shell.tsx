@@ -10,6 +10,8 @@ import {
   LogOut,
   Menu,
   PackageSearch,
+  PanelLeftClose,
+  PanelLeftOpen,
   ReceiptText,
   ShieldCheck,
   ShoppingCart,
@@ -44,6 +46,7 @@ const SECTION_STORAGE = {
   supply: 'implanta27.sidebar.supply',
   administration: 'implanta27.sidebar.administration',
 } as const;
+const SIDEBAR_COLLAPSED_STORAGE = 'implanta27.sidebar.collapsed';
 
 function readSectionState(key: string): boolean {
   if (typeof window === 'undefined') return true;
@@ -63,8 +66,18 @@ function persistSectionState(key: string, value: boolean) {
   }
 }
 
+function readSidebarCollapsedState(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedState);
   const [signingOut, setSigningOut] = useState(false);
   const [implantationOpen, setImplantationOpen] = useState(() =>
     readSectionState(SECTION_STORAGE.implantation),
@@ -128,6 +141,14 @@ export function AppShell() {
     });
   };
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      persistSectionState(SIDEBAR_COLLAPSED_STORAGE, next);
+      return next;
+    });
+  };
+
   const sectionButtonStyle = (spaced: boolean) => ({
     width: '100%',
     display: 'flex',
@@ -154,7 +175,7 @@ export function AppShell() {
     }
   };
 
-  const navigation = (
+  const renderNavigation = (compact = false) => (
     <>
       <div className="sidebar__brand">
         <span className="brand-mark">
@@ -168,7 +189,7 @@ export function AppShell() {
       <nav className="sidebar__nav" aria-label="Navegacao principal">
         {can('dashboard.view') && (
           <>
-            <span className="nav-section">Dashboard</span>
+            {!compact && <span className="nav-section">Dashboard</span>}
             <NavLink to="/dashboard" end onClick={() => setMobileOpen(false)}>
               <LayoutDashboard size={19} />
               Visao Geral
@@ -188,17 +209,19 @@ export function AppShell() {
 
         {canViewImplementationSection && (
           <>
-            <button
-              type="button"
-              className="nav-section"
-              style={sectionButtonStyle(can('dashboard.view'))}
-              aria-expanded={implantationOpen}
-              onClick={toggleImplantation}
-            >
-              <span>Implantacao</span>
-              <ChevronRight size={15} style={sectionChevronStyle(implantationOpen)} />
-            </button>
-            {implantationOpen && (
+            {!compact && (
+              <button
+                type="button"
+                className="nav-section"
+                style={sectionButtonStyle(can('dashboard.view'))}
+                aria-expanded={implantationOpen}
+                onClick={toggleImplantation}
+              >
+                <span>Implantacao</span>
+                <ChevronRight size={15} style={sectionChevronStyle(implantationOpen)} />
+              </button>
+            )}
+            {(compact || implantationOpen) && (
               <>
                 {can('stores.view') && (
                   <NavLink to="/lojas" onClick={() => setMobileOpen(false)}>
@@ -225,17 +248,19 @@ export function AppShell() {
 
         {canViewSupply && (
           <>
-            <button
-              type="button"
-              className="nav-section"
-              style={sectionButtonStyle(true)}
-              aria-expanded={supplyOpen}
-              onClick={toggleSupply}
-            >
-              <span>Suprimentos</span>
-              <ChevronRight size={15} style={sectionChevronStyle(supplyOpen)} />
-            </button>
-            {supplyOpen && (
+            {!compact && (
+              <button
+                type="button"
+                className="nav-section"
+                style={sectionButtonStyle(true)}
+                aria-expanded={supplyOpen}
+                onClick={toggleSupply}
+              >
+                <span>Suprimentos</span>
+                <ChevronRight size={15} style={sectionChevronStyle(supplyOpen)} />
+              </button>
+            )}
+            {(compact || supplyOpen) && (
               <>
                 {can('items.view') && (
                   <NavLink to="/suprimentos/itens" onClick={() => setMobileOpen(false)}>
@@ -261,16 +286,16 @@ export function AppShell() {
                     Cotacoes
                   </NavLink>
                 )}
-                {can('purchases.view' as never) && (
-                  <NavLink to="/suprimentos/compras" onClick={() => setMobileOpen(false)}>
-                    <ShoppingCart size={19} />
-                    Compras
-                  </NavLink>
-                )}
                 {can('quotes.view') && (
                   <NavLink to="/suprimentos/comparativo" onClick={() => setMobileOpen(false)}>
                     <ChartNoAxesCombined size={19} />
                     Comparativo
+                  </NavLink>
+                )}
+                {can('purchases.view' as never) && (
+                  <NavLink to="/suprimentos/compras" onClick={() => setMobileOpen(false)}>
+                    <ShoppingCart size={19} />
+                    Compras
                   </NavLink>
                 )}
               </>
@@ -280,17 +305,19 @@ export function AppShell() {
 
         {can('access.view') && (
           <>
-            <button
-              type="button"
-              className="nav-section"
-              style={sectionButtonStyle(true)}
-              aria-expanded={administrationOpen}
-              onClick={toggleAdministration}
-            >
-              <span>Administracao</span>
-              <ChevronRight size={15} style={sectionChevronStyle(administrationOpen)} />
-            </button>
-            {administrationOpen && (
+            {!compact && (
+              <button
+                type="button"
+                className="nav-section"
+                style={sectionButtonStyle(true)}
+                aria-expanded={administrationOpen}
+                onClick={toggleAdministration}
+              >
+                <span>Administracao</span>
+                <ChevronRight size={15} style={sectionChevronStyle(administrationOpen)} />
+              </button>
+            )}
+            {(compact || administrationOpen) && (
               <NavLink to="/acessos" onClick={() => setMobileOpen(false)}>
                 <ShieldCheck size={19} />
                 Acessos
@@ -324,15 +351,27 @@ export function AppShell() {
   );
 
   return (
-    <div className="app-layout">
-      <aside className="sidebar">{navigation}</aside>
+    <div className={`app-layout ${sidebarCollapsed ? 'app-layout--sidebar-collapsed' : ''}`}>
+      <aside className={`sidebar ${sidebarCollapsed ? 'sidebar--collapsed' : ''}`}>
+        {renderNavigation(sidebarCollapsed)}
+        <button
+          type="button"
+          className="sidebar-collapse-toggle"
+          aria-label={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+          title={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+          aria-pressed={sidebarCollapsed}
+          onClick={toggleSidebar}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+      </aside>
       {mobileOpen && (
         <div className="mobile-nav-backdrop" onMouseDown={() => setMobileOpen(false)}>
           <aside className="mobile-nav" onMouseDown={(event) => event.stopPropagation()}>
             <IconButton label="Fechar menu" onClick={() => setMobileOpen(false)}>
               <X size={20} />
             </IconButton>
-            {navigation}
+            {renderNavigation(false)}
           </aside>
         </div>
       )}

@@ -197,4 +197,22 @@ describe('SupplyPurchasesPage', () => {
       }),
     );
   });
+
+  it('informa quando o backend negar permissao para devolver a compra para cotacao', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    vi.mocked(returnPurchaseToQuote).mockRejectedValue(new Error('permission denied'));
+    renderPage();
+    await screen.findByText('CMP-00001');
+
+    await user.click(screen.getByRole('button', { name: 'Voltar CMP-00001 para cotacao' }));
+
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Seu usuario nao possui permissao para devolver esta compra para cotacao.',
+    );
+    confirmSpy.mockRestore();
+    alertSpy.mockRestore();
+  });
 });

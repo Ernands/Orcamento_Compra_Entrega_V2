@@ -1,4 +1,4 @@
-import { Clock3, Search, Tag, Truck } from 'lucide-react';
+import { Clock3, ExternalLink, Search, Tag, Truck } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
 import {
@@ -7,35 +7,34 @@ import {
   listSupplyQuotes,
 } from '../data/supplies/supplies-repository';
 import { calculateQuoteLine, formatBRL, moneyToCents } from '../domain/supply-calculations';
-import { getComparisonHighlights } from '../domain/supply-comparison';
+import { getGroupedComparisonHighlights } from '../domain/supply-comparison';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
-import { isSupplyQuoteEligibleForComparison } from '../domain/supply-quote-status';
-import type { SupplyItem, SupplyNeed, SupplyQuote, SupplyQuoteItem } from '../domain/types';
+import {
+  getEffectiveSupplyQuoteStatus,
+  SUPPLY_QUOTE_STATUS_LABELS,
+} from '../domain/supply-quote-status';
+import type {
+  SupplyItem,
+  SupplyNeed,
+  SupplyQuote,
+  SupplyQuoteItem,
+  SupplyQuoteStatus,
+} from '../domain/types';
 
 interface ComparisonRow {
   quote: SupplyQuote;
   item: SupplyQuoteItem;
 }
 
-function getGroupedHighlights(rows: ComparisonRow[]) {
-  const groups = new Map<string, SupplyQuoteItem[]>();
-  rows.forEach(({ item }) => {
-    const key = [item.supplyItemId, item.quantity, item.unit].join('|');
-    groups.set(key, [...(groups.get(key) || []), item]);
-  });
+const COMPARISON_STATUS_OPTIONS: SupplyQuoteStatus[] = [
+  'received',
+  'draft',
+  'expired',
+  'cancelled',
+];
 
-  const merged = {
-    lowestUnitPriceIds: new Set<string>(),
-    lowestTotalIds: new Set<string>(),
-    shortestLeadTimeIds: new Set<string>(),
-  };
-  groups.forEach((items) => {
-    const current = getComparisonHighlights(items);
-    current.lowestUnitPriceIds.forEach((id) => merged.lowestUnitPriceIds.add(id));
-    current.lowestTotalIds.forEach((id) => merged.lowestTotalIds.add(id));
-    current.shortestLeadTimeIds.forEach((id) => merged.shortestLeadTimeIds.add(id));
-  });
-  return merged;
+function getGroupedHighlights(rows: ComparisonRow[]) {
+  return getGroupedComparisonHighlights(rows.map(({ item }) => item));
 }
 
 export function SupplyComparisonPage() {
@@ -49,6 +48,7 @@ export function SupplyComparisonPage() {
   const [itemId, setItemId] = useState('');
   const [needId, setNeedId] = useState('');
   const [context, setContext] = useState('all');
+  const [statuses, setStatuses] = useState<SupplyQuoteStatus[]>(['received']);
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -77,10 +77,21 @@ export function SupplyComparisonPage() {
   const availableNeeds = needs.filter(
     (need) => (!storeId || need.storeId === storeId) && (!itemId || need.supplyItemId === itemId),
   );
+  const toggleStatus = (status: SupplyQuoteStatus) => {
+    setStatuses((current) => {
+      if (!current.includes(status)) return [...current, status];
+      if (current.length === 1) return current;
+      return current.filter((entry) => entry !== status);
+    });
+  };
+  const statusSummary =
+    statuses.length === COMPARISON_STATUS_OPTIONS.length
+      ? 'Todos os status'
+      : statuses.map((status) => SUPPLY_QUOTE_STATUS_LABELS[status]).join(', ');
   const rows = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
     return quotes.flatMap((quote): ComparisonRow[] => {
-      if (!isSupplyQuoteEligibleForComparison(quote)) return [];
+      if (!statuses.includes(getEffectiveSupplyQuoteStatus(quote))) return [];
       if (context !== 'all' && quote.contextType !== context) return [];
       return quote.items
         .filter(
@@ -98,7 +109,7 @@ export function SupplyComparisonPage() {
         )
         .map((item) => ({ quote, item }));
     });
-  }, [context, itemId, needId, query, quotes, storeId]);
+  }, [context, itemId, needId, query, quotes, statuses, storeId]);
   const highlights = useMemo(() => getGroupedHighlights(rows), [rows]);
 
   return (
@@ -126,6 +137,32 @@ export function SupplyComparisonPage() {
             placeholder="Fornecedor, item ou marca"
           />
         </label>
+        <details className="comparison-status-filter">
+          <summary>
+            <span>Status</span>
+            <strong>{statusSummary}</strong>
+          </summary>
+          <div className="comparison-status-filter__menu">
+            {COMPARISON_STATUS_OPTIONS.map((status) => (
+              <label key={status}>
+                <input
+                  type="checkbox"
+                  checked={statuses.includes(status)}
+                  onChange={() => toggleStatus(status)}
+                />
+                <span>{SUPPLY_QUOTE_STATUS_LABELS[status]}</span>
+              </label>
+            ))}
+            <div className="comparison-status-filter__actions">
+              <button type="button" onClick={() => setStatuses(['received'])}>
+                Somente recebidas
+              </button>
+              <button type="button" onClick={() => setStatuses([...COMPARISON_STATUS_OPTIONS])}>
+                Todos
+              </button>
+            </div>
+          </div>
+        </details>
         <select
           aria-label="Filtrar loja no comparativo"
           value={storeId}
@@ -223,6 +260,17 @@ export function SupplyComparisonPage() {
                         : 'Origem nao informada'}{' '}
                       - {quote.code}
                     </small>
+                    {item.productUrl && /^https?:\/\//i.test(item.productUrl) && (
+                      <a
+                        className="quote-product-link"
+                        href={item.productUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink size={14} />
+                        Ver produto
+                      </a>
+                    )}
                   </div>
                   <div>
                     <strong>{item.itemName}</strong>
@@ -261,7 +309,7 @@ export function SupplyComparisonPage() {
                   </span>
                   <span>
                     {quote.validUntil || 'Sem validade'}
-                    <StatusBadge status={quote.status} />
+                    <StatusBadge status={getEffectiveSupplyQuoteStatus(quote)} />
                   </span>
                 </article>
               );

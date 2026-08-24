@@ -99,7 +99,7 @@ export function QuoteSummaryModal({
       className="quote-summary-modal"
       open={open}
       title="Resumo das cotacoes"
-      description="Visao geral das cotacoes filtradas na listagem."
+      description="Visao geral das cotacoes filtradas. Canceladas entram somente quando o filtro Status estiver em Cancelada."
       onClose={onClose}
     >
       <div className="quote-summary-actions">
@@ -108,6 +108,8 @@ export function QuoteSummaryModal({
           <strong>
             {filters.search || 'Sem pesquisa'} · {filters.status || 'Todos os status'} ·{' '}
             {filters.store || 'Todas as lojas'}
+            {filters.category ? ` · ${filters.category}` : ''}
+            {filters.area ? ` · ${filters.area}` : ''}
           </strong>
         </div>
         <button
