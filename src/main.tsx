@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app/app';
 import { GlobalErrorBoundary } from './app/global-error-boundary';
 import './styles.css';
+import './pending-adjustments.css';
 
 const root = document.getElementById('root');
 

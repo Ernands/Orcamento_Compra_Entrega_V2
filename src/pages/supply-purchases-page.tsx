@@ -470,7 +470,20 @@ export function SupplyPurchasesPage() {
       await returnPurchaseToQuote(purchase.id);
       await load();
     } catch (failure) {
-      window.alert(failure instanceof Error ? failure.message : 'Nao foi possivel devolver para cotacao.');
+      const message = failure instanceof Error ? failure.message : '';
+      window.alert(
+        message.includes('permission denied')
+          ? 'Seu usuario nao possui permissao para devolver esta compra para cotacao.'
+          : message.includes('executed items')
+            ? 'Esta compra ja possui itens comprados e nao pode voltar para cotacao.'
+            : message.includes('active payments')
+              ? 'Esta compra possui pagamentos ativos. Cancele-os antes de devolver para cotacao.'
+              : message.includes('active documents')
+                ? 'Esta compra possui documentos ativos. Remova-os antes de devolver para cotacao.'
+                : message.includes('already closed')
+                  ? 'Esta compra ja esta encerrada.'
+                  : 'Nao foi possivel devolver para cotacao.',
+      );
     } finally {
       setReturningId(null);
     }

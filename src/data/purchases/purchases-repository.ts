@@ -304,7 +304,7 @@ export async function approveSupplyQuoteForPurchase(quoteId: string): Promise<st
   const { data, error } = await supabase.rpc('approve_supply_quote_for_purchase' as never, {
     p_quote_id: quoteId,
   } as never);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data;
 }
 
@@ -374,7 +374,7 @@ export async function returnPurchaseToQuote(purchaseId: string): Promise<void> {
   const { error } = await supabase.rpc('return_supply_purchase_to_quote' as never, {
     p_purchase_id: purchaseId,
   } as never);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 const PURCHASE_BUCKET = 'purchase-attachments';

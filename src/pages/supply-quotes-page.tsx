@@ -52,6 +52,7 @@ import {
   formatBRL,
   moneyToCents,
 } from '../domain/supply-calculations';
+import { getGroupedComparisonHighlights } from '../domain/supply-comparison';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
 import { selectLowestPriceQuotesByItem } from '../domain/supply-quote-lowest-price';
 import {
@@ -924,13 +925,11 @@ function formatDate(value: string | null) {
 
 const QUOTE_STATUS_TRANSITIONS: Partial<Record<SupplyQuoteStatus, SupplyQuoteStatus[]>> = {
   draft: ['received', 'cancelled'],
-  received: ['cancelled', 'expired'],
+  received: ['draft', 'cancelled', 'expired'],
 };
 
-const QUOTE_STATUS_ACTIONS: Record<
-  Exclude<SupplyQuoteStatus, 'draft'>,
-  { label: string; icon: typeof CheckCircle2 }
-> = {
+const QUOTE_STATUS_ACTIONS: Record<SupplyQuoteStatus, { label: string; icon: typeof CheckCircle2 }> = {
+  draft: { label: 'Voltar para rascunho', icon: Edit3 },
   received: { label: 'Marcar como recebida', icon: CheckCircle2 },
   cancelled: { label: 'Cancelar cotacao', icon: Ban },
   expired: { label: 'Marcar como expirada', icon: Clock3 },
@@ -962,8 +961,17 @@ function QuoteStatusModal({
       await setSupplyQuoteStatus(quote.id, status);
       await onSaved();
       onClose();
-    } catch {
-      setError('Nao foi possivel alterar o status desta cotacao.');
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : '';
+      setError(
+        message.includes('active purchase')
+          ? 'Esta cotacao possui uma compra ativa. Devolva a compra para cotacao antes de voltar ao rascunho.'
+          : message.includes('permission denied')
+            ? 'Seu usuario nao possui permissao para alterar o status desta cotacao.'
+            : message.includes('invalid quote status transition')
+              ? 'Esta alteracao de status nao e permitida no estado atual da cotacao.'
+              : 'Nao foi possivel alterar o status desta cotacao.',
+      );
     } finally {
       setSaving(false);
     }
@@ -984,6 +992,14 @@ function QuoteStatusModal({
           ? 'Esta cotacao ja possui uma compra ativa.'
           : message.includes('expired')
             ? 'A cotacao esta expirada e nao pode ser aprovada para compra.'
+            : message.includes('permission denied')
+              ? 'Seu usuario nao possui permissao para aprovar esta cotacao para compra.'
+              : message.includes('must be received')
+                ? 'A cotacao precisa estar com status Recebida antes da aprovacao para compra.'
+                : message.includes('active payments')
+                  ? 'A compra anterior possui pagamentos ativos e nao pode ser reaprovada.'
+                  : message.includes('active documents')
+                    ? 'A compra anterior possui documentos ativos e nao pode ser reaprovada.'
             : 'Nao foi possivel aprovar esta cotacao para compra.',
       );
     } finally {
@@ -1016,7 +1032,7 @@ function QuoteStatusModal({
               Fechar
             </button>
             {transitions.map((status) => {
-              const action = QUOTE_STATUS_ACTIONS[status as Exclude<SupplyQuoteStatus, 'draft'>];
+              const action = QUOTE_STATUS_ACTIONS[status];
               const ActionIcon = action.icon;
               return (
                 <button
@@ -1063,6 +1079,8 @@ export function SupplyQuotesPage() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [storeId, setStoreId] = useState('');
+  const [category, setCategory] = useState('');
+  const [area, setArea] = useState('');
   const [priceFilter, setPriceFilter] = useState<'all' | 'lowest'>('all');
   const [editing, setEditing] = useState<SupplyQuote | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1125,6 +1143,21 @@ export function SupplyQuotesPage() {
     setSearchParams(next, { replace: true });
   }, [loading, quotes, searchParams, setSearchParams]);
 
+  const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const categories = useMemo(
+    () =>
+      [...new Set(items.map((item) => item.category).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
+    [items],
+  );
+  const areas = useMemo(
+    () =>
+      [...new Set(items.map((item) => item.areaName).filter((value): value is string => Boolean(value)))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [items],
+  );
+
   const baseFiltered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
     return quotes.filter(
@@ -1135,9 +1168,17 @@ export function SupplyQuotesPage() {
             .toLocaleLowerCase('pt-BR')
             .includes(search)) &&
         (!status || getEffectiveSupplyQuoteStatus(quote) === status) &&
-        (!storeId || quote.stores.some((store) => store.id === storeId)),
+        (!storeId || quote.stores.some((store) => store.id === storeId)) &&
+        ((!category && !area) ||
+          quote.items.some((quoteItem) => {
+            const catalogItem = itemById.get(quoteItem.supplyItemId);
+            return (
+              (!category || catalogItem?.category === category) &&
+              (!area || catalogItem?.areaName === area)
+            );
+          })),
     );
-  }, [query, quotes, status, storeId]);
+  }, [area, category, itemById, query, quotes, status, storeId]);
 
   const lowestPriceSelection = useMemo(
     () => selectLowestPriceQuotesByItem(baseFiltered),
@@ -1149,6 +1190,23 @@ export function SupplyQuotesPage() {
         ? baseFiltered.filter((quote) => lowestPriceSelection.quoteIds.has(quote.id))
         : baseFiltered,
     [baseFiltered, lowestPriceSelection, priceFilter],
+  );
+
+  const comparisonHighlights = useMemo(
+    () =>
+      getGroupedComparisonHighlights(
+        quotes
+          .filter((quote) => getEffectiveSupplyQuoteStatus(quote) === 'received')
+          .flatMap((quote) => quote.items),
+      ),
+    [quotes],
+  );
+  const summaryQuotes = useMemo(
+    () =>
+      status === 'cancelled'
+        ? filtered
+        : filtered.filter((quote) => getEffectiveSupplyQuoteStatus(quote) !== 'cancelled'),
+    [filtered, status],
   );
 
   const attachmentCounts = useMemo(() => {
@@ -1170,8 +1228,10 @@ export function SupplyQuotesPage() {
             return store ? `${store.code} - ${store.name}` : '';
           })()
         : '',
+      category,
+      area,
     }),
-    [query, status, storeId, stores],
+    [area, category, query, status, storeId, stores],
   );
   const toggleQuoteDetails = (quoteId: string) => {
     setExpandedIds((current) => {
@@ -1284,6 +1344,26 @@ export function SupplyQuotesPage() {
             <option key={store.id} value={store.id}>
               {store.code}
             </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrar categoria do item"
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+        >
+          <option value="">Todas categorias</option>
+          {categories.map((entry) => (
+            <option key={entry} value={entry}>{entry}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrar area do item"
+          value={area}
+          onChange={(event) => setArea(event.target.value)}
+        >
+          <option value="">Todas areas</option>
+          {areas.map((entry) => (
+            <option key={entry} value={entry}>{entry}</option>
           ))}
         </select>
         <select
@@ -1443,18 +1523,31 @@ export function SupplyQuotesPage() {
                           <span>
                             {item.quantity} {item.unit}
                           </span>
-                          <span>{formatBRL(moneyToCents(item.unitPrice))}</span>
+                          <span className="quote-detail-metric">
+                            {formatBRL(moneyToCents(item.unitPrice))}
+                            {comparisonHighlights.lowestUnitPriceIds.has(item.id) && (
+                              <small className="quote-comparison-marker">Menor preco</small>
+                            )}
+                          </span>
                           <span>
                             Frete:{' '}
                             {item.shippingType === 'pending'
                               ? 'A consultar'
                               : formatBRL(total.shippingCents || 0n)}
                           </span>
-                          <strong>{formatBRL(total.totalCents)}</strong>
-                          <span>
+                          <span className="quote-detail-metric">
+                            <strong>{formatBRL(total.totalCents)}</strong>
+                            {comparisonHighlights.lowestTotalIds.has(item.id) && (
+                              <small className="quote-comparison-marker">Menor custo</small>
+                            )}
+                          </span>
+                          <span className="quote-detail-metric">
                             {item.deliveryDays === null
                               ? 'Prazo nao informado'
                               : `${item.deliveryDays} dias`}
+                            {comparisonHighlights.shortestLeadTimeIds.has(item.id) && (
+                              <small className="quote-comparison-marker">Menor prazo</small>
+                            )}
                           </span>
                         </div>
                       );
@@ -1494,7 +1587,7 @@ export function SupplyQuotesPage() {
       />
       <QuoteSummaryModal
         open={summaryOpen}
-        quotes={filtered}
+        quotes={summaryQuotes}
         filters={summaryFilters}
         onClose={() => setSummaryOpen(false)}
       />

@@ -457,7 +457,7 @@ export async function setSupplyQuoteStatus(
     p_quote_id: quoteId,
     p_status: status,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteSupplyQuote(quoteId: string): Promise<void> {

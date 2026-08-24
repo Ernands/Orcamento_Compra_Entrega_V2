@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [feat/purchases-workflow]
+    branches: [main]
 
 permissions:
   contents: read
@@ -28,3 +28,5 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
+      - name: Build
+        run: npm run build

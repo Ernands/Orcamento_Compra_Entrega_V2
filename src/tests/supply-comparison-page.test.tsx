@@ -175,6 +175,27 @@ describe('SupplyComparisonPage', () => {
     expect(screen.queryByText('Fornecedor Web')).not.toBeInTheDocument();
   });
 
+  it('exibe Ver produto usando a URL salva na cotacao', async () => {
+    const productUrl = 'https://loja.example/produto';
+    vi.mocked(listSupplyQuotes).mockResolvedValue([
+      {
+        ...quotes[0],
+        items: [{ ...quotes[0].items[0], productUrl }],
+      },
+      quotes[1],
+    ]);
+
+    render(<SupplyComparisonPage />);
+
+    const supplier = await screen.findByText('Fornecedor Local');
+    const row = supplier.closest('article');
+    expect(row).not.toBeNull();
+    const link = within(row!).getByRole('link', { name: 'Ver produto' });
+    expect(link).toHaveAttribute('href', productUrl);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('calcula destaques separadamente para itens diferentes', async () => {
     const otherItem: SupplyItem = {
       ...catalogItem,
@@ -255,5 +276,40 @@ describe('SupplyComparisonPage', () => {
     expect(
       within(noValiditySupplier.closest('article')!).getByText('Menor prazo'),
     ).toBeInTheDocument();
+  });
+
+  it('inicia em Recebida e permite comparar varios status ao mesmo tempo', async () => {
+    const user = userEvent.setup();
+    const draftQuote: SupplyQuote = {
+      ...quotes[0],
+      id: 'quote-draft-filter',
+      code: 'COT-DRAFT',
+      supplierName: 'Fornecedor Rascunho',
+      status: 'draft',
+      items: [line('line-draft-filter', 'quote-draft-filter', 0, '9', '0', 8)],
+    };
+    const cancelledQuote: SupplyQuote = {
+      ...quotes[1],
+      id: 'quote-cancelled-filter',
+      code: 'COT-CANCELLED',
+      supplierName: 'Fornecedor Cancelado',
+      status: 'cancelled',
+      items: [line('line-cancelled-filter', 'quote-cancelled-filter', 1, '8', '0', 4)],
+    };
+    vi.mocked(listSupplyQuotes).mockResolvedValue([quotes[0], draftQuote, cancelledQuote]);
+
+    render(<SupplyComparisonPage />);
+
+    expect(await screen.findByText('Fornecedor Local')).toBeInTheDocument();
+    expect(screen.queryByText('Fornecedor Rascunho')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fornecedor Cancelado')).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Filtrar status no comparativo'));
+    await user.click(screen.getByRole('checkbox', { name: 'Rascunho' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Cancelada' }));
+
+    expect(await screen.findByText('Fornecedor Rascunho')).toBeInTheDocument();
+    expect(screen.getByText('Fornecedor Cancelado')).toBeInTheDocument();
+    expect(screen.getByText('Fornecedor Local')).toBeInTheDocument();
   });
 });

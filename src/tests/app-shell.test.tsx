@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../app/app-shell';
 import { useSession } from '../app/session-provider';
 
@@ -38,6 +39,10 @@ function renderShell(capabilities: string[]) {
 }
 
 describe('AppShell', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('mostra apenas modulos implementados e permitidos para Consulta', () => {
     renderShell(['stores.view']);
     expect(screen.getAllByRole('link', { name: 'Lojas' }).length).toBeGreaterThan(0);
@@ -73,5 +78,30 @@ describe('AppShell', () => {
     expect(screen.getAllByRole('link', { name: 'Implantacao' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Suprimentos' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Lojas' })).not.toBeInTheDocument();
+  });
+
+  it('recolhe a barra lateral e persiste a preferencia no navegador', async () => {
+    const user = userEvent.setup();
+    renderShell(['stores.view', 'items.view', 'quotes.view']);
+
+    const collapseButton = screen.getByRole('button', { name: 'Recolher menu lateral' });
+    expect(document.querySelector('.app-layout')).not.toHaveClass('app-layout--sidebar-collapsed');
+
+    await user.click(collapseButton);
+
+    expect(screen.getByRole('button', { name: 'Expandir menu lateral' })).toBeInTheDocument();
+    expect(document.querySelector('.app-layout')).toHaveClass('app-layout--sidebar-collapsed');
+    expect(window.localStorage.getItem('implanta27.sidebar.collapsed')).toBe('true');
+  });
+
+  it('mantem os atalhos por icone disponiveis quando a barra inicia recolhida', () => {
+    window.localStorage.setItem('implanta27.sidebar.collapsed', 'true');
+    window.localStorage.setItem('implanta27.sidebar.supply', 'false');
+
+    renderShell(['items.view', 'quotes.view']);
+
+    expect(screen.getByRole('button', { name: 'Expandir menu lateral' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Itens' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cotacoes' })).toBeInTheDocument();
   });
 });
