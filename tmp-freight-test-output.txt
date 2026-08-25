@@ -1,0 +1,112 @@
+
+> implanta-27-v2@0.1.0 test
+> vitest run --run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/home/runner/work/Orcamento_Compra_Entrega_V2/Orcamento_Compra_Entrega_V2[39m
+
+ [31m❯[39m src/tests/supply-quotes-page.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m src/tests/supply-comparison-page.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 946[2mms[22m[39m
+     [33m[2m✓[22m[39m filtra alternativas pela loja [33m 302[2mms[22m[39m
+ [32m✓[39m src/tests/quote-attachments.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1169[2mms[22m[39m
+     [33m[2m✓[22m[39m envia automaticamente varios arquivos e confirma quando foram salvos [33m 522[2mms[22m[39m
+     [33m[2m✓[22m[39m previsualiza imagem, PDF e video por URL assinada [33m 358[2mms[22m[39m
+ [32m✓[39m src/tests/supply-purchases-page.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1346[2mms[22m[39m
+     [33m[2m✓[22m[39m mostra aprovado, comprado, falta e filtra o resumo por falta comprar [33m 479[2mms[22m[39m
+     [33m[2m✓[22m[39m registra compra parcial com valores realizados [33m 314[2mms[22m[39m
+     [33m[2m✓[22m[39m registra pagamento sem armazenar dados completos do cartao [33m 433[2mms[22m[39m
+ [32m✓[39m src/tests/dashboard-metrics.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/tests/quote-summary.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 383[2mms[22m[39m
+ [31m❯[39m src/tests/supply-quotes-comparison-status.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m src/tests/app-shell.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 815[2mms[22m[39m
+ [32m✓[39m src/tests/supply-items-page.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1943[2mms[22m[39m
+     [33m[2m✓[22m[39m lista e filtra o catalogo global com uso em necessidades [33m 563[2mms[22m[39m
+     [33m[2m✓[22m[39m cadastra e edita todos os campos operacionais do item [33m 1325[2mms[22m[39m
+ [32m✓[39m src/tests/stores-page.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 959[2mms[22m[39m
+     [33m[2m✓[22m[39m filtra por cidade no desktop ou mobile [33m 335[2mms[22m[39m
+     [33m[2m✓[22m[39m valida e cadastra uma loja quando stores.create esta liberada [33m 458[2mms[22m[39m
+ [32m✓[39m src/tests/supply-needs-page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 647[2mms[22m[39m
+     [33m[2m✓[22m[39m prioriza necessidades sem item e permite vincular o catalogo [33m 587[2mms[22m[39m
+ [32m✓[39m src/tests/login-flow.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/tests/checklist-master-page.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1198[2mms[22m[39m
+     [33m[2m✓[22m[39m carrega versao e publica o draft configurado [33m 378[2mms[22m[39m
+     [33m[2m✓[22m[39m cria uma nova versao com possibilidade de snapshot por clonagem [33m 366[2mms[22m[39m
+     [33m[2m✓[22m[39m aceita offset negativo e explica a relacao com a inauguracao [33m 451[2mms[22m[39m
+ [32m✓[39m src/tests/login-page.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1913[2mms[22m[39m
+     [33m[2m✓[22m[39m mostra somente CPF e senha, sem cadastro publico ou Google [33m 325[2mms[22m[39m
+ [32m✓[39m src/tests/session-provider.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 335[2mms[22m[39m
+ [32m✓[39m src/tests/access-page.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 453[2mms[22m[39m
+ [32m✓[39m src/tests/suppliers-page.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1245[2mms[22m[39m
+     [33m[2m✓[22m[39m lista e filtra fornecedores por canal [33m 336[2mms[22m[39m
+     [33m[2m✓[22m[39m cadastra e edita fornecedor com canal [33m 862[2mms[22m[39m
+ [32m✓[39m src/tests/guards.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m src/tests/dashboard-page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 517[2mms[22m[39m
+     [33m[2m✓[22m[39m carrega a visao geral e oferece troca direta entre os modulos [33m 425[2mms[22m[39m
+ [32m✓[39m src/tests/supply-quote-lowest-price.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/tests/supply-item-detail-page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 389[2mms[22m[39m
+     [33m[2m✓[22m[39m exibe cadastro, datas e usos acessiveis sem liberar edicao [33m 385[2mms[22m[39m
+ [32m✓[39m src/tests/auth-repository.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/tests/store-summary-needs-page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 685[2mms[22m[39m
+     [33m[2m✓[22m[39m cria uma necessidade manual quando a capability permite [33m 561[2mms[22m[39m
+ [32m✓[39m src/tests/store-implementation-page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m src/tests/store-attachments-page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 325[2mms[22m[39m
+     [33m[2m✓[22m[39m mantem Consulta em leitura e oculta upload/remocao [33m 307[2mms[22m[39m
+ [32m✓[39m src/tests/pending-items-page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 383[2mms[22m[39m
+     [33m[2m✓[22m[39m filtra pendencias por status e atraso [33m 378[2mms[22m[39m
+ [32m✓[39m src/tests/supply-comparison-status-dropdown.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 524[2mms[22m[39m
+     [33m[2m✓[22m[39m fecha ao clicar fora, pressionar Escape ou usar um atalho [33m 520[2mms[22m[39m
+ [32m✓[39m src/tests/supply-calculations.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/tests/retry-fetch.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/tests/implementation-progress.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/tests/supply-quote-status.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/tests/supabase-pagination.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/tests/cpf.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/tests/supply-quotes-comparison-status.test.tsx[2m [ src/tests/supply-quotes-comparison-status.test.tsx ][22m
+[31m[1mError[22m: Failed to resolve import "../data/supplies/freight-destinations-repository" from "src/tests/supply-quotes-comparison-status.test.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36m/home/runner/work/Orcamento_Compra_Entrega_V2/Orcamento_Compra_Entrega_V2/src/tests/supply-quotes-comparison-status.test.tsx[39m:9:0
+[33m  38 |  const __vi_import_3__ = await import("../data/attachments/quote-attachments-repository");
+  39 |  const __vi_import_4__ = await import("../data/stores/stores-repository");
+  40 |  const __vi_import_5__ = await import("../data/supplies/freight-destinations-repository");
+     |                                       ^
+  41 |  const __vi_import_6__ = await import("../data/supplies/supplies-repository");
+  42 |  const __vi_import_7__ = await import("../domain/supply-comparison");[39m
+[90m [2m❯[22m TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:[2m31066:39[22m[39m
+[90m [2m❯[22m TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:[2m31063:14[22m[39m
+[90m [2m❯[22m normalizeUrl node_modules/vite/dist/node/chunks/node.js:[2m28008:18[22m[39m
+[90m [2m❯[22m node_modules/vite/dist/node/chunks/node.js:[2m28076:30[22m[39m
+[90m [2m❯[22m TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:[2m28044:4[22m[39m
+[90m [2m❯[22m EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:[2m30851:14[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/vite/dist/node/chunks/node.js:[2m20619:26[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/tests/supply-quotes-page.test.tsx[2m [ src/tests/supply-quotes-page.test.tsx ][22m
+[31m[1mError[22m: Failed to resolve import "../data/supplies/freight-destinations-repository" from "src/tests/supply-quotes-page.test.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36m/home/runner/work/Orcamento_Compra_Entrega_V2/Orcamento_Compra_Entrega_V2/src/tests/supply-quotes-page.test.tsx[39m:14:0
+[33m  38 |  const __vi_import_6__ = await import("../data/purchases/quote-payment-terms-repository");
+  39 |  const __vi_import_7__ = await import("../data/stores/stores-repository");
+  40 |  const __vi_import_8__ = await import("../data/supplies/freight-destinations-repository");
+     |                                       ^
+  41 |  const __vi_import_9__ = await import("../data/supplies/supplies-repository");
+  42 |  const __vi_import_10__ = await import("../pages/supply-quotes-page");[39m
+[90m [2m❯[22m TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:[2m31066:39[22m[39m
+[90m [2m❯[22m TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:[2m31063:14[22m[39m
+[90m [2m❯[22m normalizeUrl node_modules/vite/dist/node/chunks/node.js:[2m28008:18[22m[39m
+[90m [2m❯[22m node_modules/vite/dist/node/chunks/node.js:[2m28076:30[22m[39m
+[90m [2m❯[22m TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:[2m28044:4[22m[39m
+[90m [2m❯[22m EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:[2m30851:14[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/vite/dist/node/chunks/node.js:[2m20619:26[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m31 passed[39m[22m[90m (33)[39m
+[2m      Tests [22m [1m[32m110 passed[39m[22m[90m (110)[39m
+[2m   Start at [22m 16:03:48
+[2m   Duration [22m 24.68s[2m (transform 1.55s, setup 6.73s, import 6.91s, tests 16.46s, environment 35.31s)[22m
+
