@@ -16,6 +16,8 @@ export type SupplierChannelType =
 export type SupplyQuoteStatus = 'draft' | 'received' | 'expired' | 'cancelled';
 export type SupplyQuoteContext = 'store' | 'consolidated';
 export type SupplyShippingType = 'free' | 'informed' | 'pending';
+export type SupplyFreightDestinationType = 'profile' | 'store';
+export type SupplyComparisonMode = 'item' | 'quote';
 
 export type Capability =
   | 'stores.view'
@@ -328,6 +330,49 @@ export interface SupplierValues {
   channelActive: boolean;
 }
 
+export interface SupplyFreightProfile {
+  id: string;
+  name: string;
+  state: string;
+  active: boolean;
+  position: number;
+  storeIds: string[];
+}
+
+export interface SupplyQuoteItemDestinationValues {
+  key: string;
+  destinationType: SupplyFreightDestinationType;
+  profileId: string;
+  storeId: string;
+  label: string;
+  state: string;
+  destinationCount: number;
+  quantity: string;
+  unit: string;
+  shippingType: SupplyShippingType;
+  shippingAmount: string;
+  deliveryDays: string;
+  notes: string;
+}
+
+export interface SupplyQuoteItemDestination {
+  id: string;
+  quoteItemId: string;
+  destinationType: SupplyFreightDestinationType;
+  profileId: string | null;
+  storeId: string | null;
+  label: string;
+  state: string;
+  destinationCount: number;
+  quantity: string;
+  unit: string;
+  shippingType: SupplyShippingType;
+  shippingAmount: string | null;
+  deliveryDays: number | null;
+  notes: string | null;
+  position: number;
+}
+
 export interface SupplyQuoteItemValues {
   key: string;
   supplyItemId: string;
@@ -346,6 +391,7 @@ export interface SupplyQuoteItemValues {
   notes: string;
   productUrl: string;
   capturedAt: string;
+  destinations: SupplyQuoteItemDestinationValues[];
 }
 
 export interface SupplyQuoteValues {
@@ -386,6 +432,8 @@ export interface SupplyQuoteItem {
   notes: string | null;
   productUrl: string | null;
   capturedAt: string | null;
+  position?: number;
+  destinations?: SupplyQuoteItemDestination[];
 }
 
 export interface SupplyQuote {

@@ -7,8 +7,10 @@ import type {
   SupplyItemDetail,
   SupplyItemValues,
   SupplyNeed,
+  SupplyFreightProfile,
   SupplyQuote,
   SupplyQuoteItem,
+  SupplyQuoteItemDestination,
   SupplyQuoteStatus,
   SupplyQuoteValues,
 } from '../../domain/types';
@@ -21,7 +23,16 @@ type SupplierTableRow = Database['public']['Tables']['suppliers']['Row'];
 type ChannelRow = Database['public']['Tables']['supplier_channels']['Row'];
 type QuoteRow = Database['public']['Tables']['supply_quotes']['Row'];
 type QuoteStoreRow = Database['public']['Tables']['supply_quote_stores']['Row'];
-type QuoteItemRow = Database['public']['Tables']['supply_quote_items']['Row'];
+type QuoteItemRow = Database['public']['Tables']['supply_quote_items']['Row'] & { position: number };
+type FreightProfileRow = { id: string; name: string; state: string; active: boolean; position: number };
+type FreightProfileStoreRow = { profile_id: string; store_id: string };
+type QuoteDestinationRow = {
+  id: string; quote_item_id: string; destination_type: 'profile' | 'store';
+  profile_id: string | null; store_id: string | null; label_snapshot: string;
+  state_snapshot: string; destination_count: number; quantity: number | string; unit: string;
+  shipping_type: 'free' | 'informed' | 'pending'; shipping_amount: number | string | null;
+  delivery_days: number | null; notes: string | null; position: number;
+};
 type SupplierOperationalRow = Pick<
   SupplierTableRow,
   | 'id'
@@ -306,11 +317,58 @@ export async function saveSupplier(values: SupplierValues): Promise<string> {
   return data;
 }
 
+function mapQuoteDestination(row: QuoteDestinationRow): SupplyQuoteItemDestination {
+  return {
+    id: row.id,
+    quoteItemId: row.quote_item_id,
+    destinationType: row.destination_type,
+    profileId: row.profile_id,
+    storeId: row.store_id,
+    label: row.label_snapshot,
+    state: row.state_snapshot,
+    destinationCount: row.destination_count,
+    quantity: String(row.quantity),
+    unit: row.unit,
+    shippingType: row.shipping_type,
+    shippingAmount: row.shipping_amount === null ? null : String(row.shipping_amount),
+    deliveryDays: row.delivery_days,
+    notes: row.notes,
+    position: row.position,
+  };
+}
+
+export async function listSupplyFreightProfiles(): Promise<SupplyFreightProfile[]> {
+  const [profilesResult, profileStoresResult] = await Promise.all([
+    supabase.from('supply_freight_profiles' as never).select('*').order('position'),
+    supabase.from('supply_freight_profile_stores' as never).select('*'),
+  ]);
+  if (profilesResult.error) throw profilesResult.error;
+  if (profileStoresResult.error) throw profileStoresResult.error;
+  const profiles = profilesResult.data as unknown as FreightProfileRow[];
+  const memberships = profileStoresResult.data as unknown as FreightProfileStoreRow[];
+  const storesByProfile = new Map<string, string[]>();
+  memberships.forEach((membership) => {
+    storesByProfile.set(membership.profile_id, [
+      ...(storesByProfile.get(membership.profile_id) || []),
+      membership.store_id,
+    ]);
+  });
+  return profiles.map((profile) => ({
+    id: profile.id,
+    name: profile.name,
+    state: profile.state,
+    active: profile.active,
+    position: profile.position,
+    storeIds: storesByProfile.get(profile.id) || [],
+  }));
+}
+
 function mapQuoteItem(
   row: QuoteItemRow,
   items: Map<string, SupplyItem>,
   needs: Map<string, { title: string }>,
   stores: Map<string, Pick<Store, 'id' | 'code' | 'name' | 'city' | 'state'>>,
+  destinations: SupplyQuoteItemDestination[],
 ): SupplyQuoteItem {
   const item = items.get(row.supply_item_id);
   const store = row.store_id ? stores.get(row.store_id) : null;
@@ -338,12 +396,21 @@ function mapQuoteItem(
     notes: row.notes,
     productUrl: row.product_url,
     capturedAt: row.captured_at,
+    position: row.position,
+    destinations,
   };
 }
 
 export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
-  const [quotesResult, quoteStoreRows, quoteItemRows, itemsResult, needsResult, storesResult] =
-    await Promise.all([
+  const [
+    quotesResult,
+    quoteStoreRows,
+    quoteItemRows,
+    quoteDestinationRows,
+    itemsResult,
+    needsResult,
+    storesResult,
+  ] = await Promise.all([
       supabase.from('supply_quotes').select('*').order('quote_date', { ascending: false }),
       fetchAllPages<QuoteStoreRow>((from, to) =>
         supabase
@@ -359,7 +426,15 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
           .select('*')
           .order('created_at')
           .order('id')
-          .range(from, to),
+          .range(from, to) as never,
+      ),
+      fetchAllPages<QuoteDestinationRow>((from, to) =>
+        supabase
+          .from('supply_quote_item_destinations' as never)
+          .select('*')
+          .order('quote_item_id')
+          .order('position')
+          .range(from, to) as never,
       ),
       supabase.from('supply_items').select('*'),
       supabase.from('store_needs').select('id, title'),
@@ -385,10 +460,16 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
     current.push(store);
     quoteStores.set(row.quote_id, current);
   });
+  const destinationsByItem = new Map<string, SupplyQuoteItemDestination[]>();
+  quoteDestinationRows.forEach((row) => {
+    const current = destinationsByItem.get(row.quote_item_id) || [];
+    current.push(mapQuoteDestination(row));
+    destinationsByItem.set(row.quote_item_id, current);
+  });
   const quoteItems = new Map<string, SupplyQuoteItem[]>();
   quoteItemRows.forEach((row) => {
     const current = quoteItems.get(row.quote_id) || [];
-    current.push(mapQuoteItem(row, items, needs, stores));
+    current.push(mapQuoteItem(row, items, needs, stores, destinationsByItem.get(row.id) || []));
     quoteItems.set(row.quote_id, current);
   });
 

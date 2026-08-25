@@ -1,4 +1,9 @@
-import type { SupplyQuoteItem, SupplyQuoteItemValues } from './types';
+import type {
+  SupplyQuoteItem,
+  SupplyQuoteItemDestination,
+  SupplyQuoteItemDestinationValues,
+  SupplyQuoteItemValues,
+} from './types';
 
 type DecimalInput = string | number;
 
@@ -44,22 +49,54 @@ export interface QuoteLineCalculation {
   shippingPending: boolean;
 }
 
+type CalculableDestination = Pick<
+  SupplyQuoteItemDestination | SupplyQuoteItemDestinationValues,
+  'shippingType' | 'shippingAmount'
+>;
+
 type CalculableLine = Pick<
   SupplyQuoteItem | SupplyQuoteItemValues,
   'quantity' | 'unitPrice' | 'discountAmount' | 'shippingType' | 'shippingAmount' | 'otherCosts'
->;
+> & {
+  destinations?: CalculableDestination[];
+};
+
+export function calculateDestinationShipping(destinations: CalculableDestination[]) {
+  return destinations.reduce(
+    (result, destination) => {
+      if (destination.shippingType === 'pending') {
+        return { ...result, shippingPending: true };
+      }
+      const current =
+        destination.shippingType === 'free' ? 0n : moneyToCents(destination.shippingAmount || 0);
+      return {
+        shippingCents: result.shippingCents + current,
+        shippingPending: result.shippingPending,
+      };
+    },
+    { shippingCents: 0n, shippingPending: false },
+  );
+}
 
 export function calculateQuoteLine(line: CalculableLine): QuoteLineCalculation {
   const subtotalCents = roundedDivide(
     quantityToThousandths(line.quantity) * moneyToCents(line.unitPrice),
     1000n,
   );
-  const shippingPending = line.shippingType === 'pending';
-  const shippingCents = shippingPending
-    ? null
-    : line.shippingType === 'free'
-      ? 0n
-      : moneyToCents(line.shippingAmount || 0);
+  const destinations = line.destinations || [];
+  const destinationShipping = destinations.length
+    ? calculateDestinationShipping(destinations)
+    : null;
+  const shippingPending = destinationShipping
+    ? destinationShipping.shippingPending
+    : line.shippingType === 'pending';
+  const shippingCents = destinationShipping
+    ? destinationShipping.shippingCents
+    : shippingPending
+      ? null
+      : line.shippingType === 'free'
+        ? 0n
+        : moneyToCents(line.shippingAmount || 0);
   const otherCostsCents = moneyToCents(line.otherCosts || 0);
   const discountCents = moneyToCents(line.discountAmount || 0);
 
@@ -95,6 +132,27 @@ export function calculateQuoteTotals(lines: CalculableLine[]) {
       shippingPending: false,
     },
   );
+}
+
+type DeliveryDestination = Pick<
+  SupplyQuoteItemDestination | SupplyQuoteItemDestinationValues,
+  'deliveryDays'
+>;
+
+type DeliveryLine = Pick<SupplyQuoteItem | SupplyQuoteItemValues, 'deliveryDays'> & {
+  destinations?: DeliveryDestination[];
+};
+
+export function getQuoteLineDeliveryDays(line: DeliveryLine): number | null {
+  const destinations = line.destinations || [];
+  if (!destinations.length) {
+    if (line.deliveryDays === '' || line.deliveryDays === null) return null;
+    return Number(line.deliveryDays);
+  }
+  if (destinations.some((destination) => destination.deliveryDays === '' || destination.deliveryDays === null)) {
+    return null;
+  }
+  return Math.max(...destinations.map((destination) => Number(destination.deliveryDays)));
 }
 
 export function formatBRL(cents: bigint): string {

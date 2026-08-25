@@ -6,14 +6,25 @@ import {
   listSupplyNeeds,
   listSupplyQuotes,
 } from '../data/supplies/supplies-repository';
-import { calculateQuoteLine, formatBRL, moneyToCents } from '../domain/supply-calculations';
-import { getGroupedComparisonHighlights } from '../domain/supply-comparison';
+import {
+  calculateQuoteLine,
+  calculateQuoteTotals,
+  formatBRL,
+  getQuoteLineDeliveryDays,
+  moneyToCents,
+} from '../domain/supply-calculations';
+import {
+  getGroupedComparisonHighlights,
+  getGroupedQuoteComparisonHighlights,
+  getQuoteDeliveryDays,
+} from '../domain/supply-comparison';
 import { SUPPLIER_CHANNEL_LABELS } from '../domain/supply-options';
 import {
   getEffectiveSupplyQuoteStatus,
   SUPPLY_QUOTE_STATUS_LABELS,
 } from '../domain/supply-quote-status';
 import type {
+  SupplyComparisonMode,
   SupplyItem,
   SupplyNeed,
   SupplyQuote,
@@ -37,6 +48,28 @@ function getGroupedHighlights(rows: ComparisonRow[]) {
   return getGroupedComparisonHighlights(rows.map(({ item }) => item));
 }
 
+function shippingLabel(item: SupplyQuoteItem) {
+  const calculation = calculateQuoteLine(item);
+  if (calculation.shippingPending) {
+    return calculation.shippingCents && calculation.shippingCents > 0n
+      ? `${formatBRL(calculation.shippingCents)} + pendente`
+      : 'A consultar';
+  }
+  return calculation.shippingCents === 0n
+    ? 'Frete gratis'
+    : formatBRL(calculation.shippingCents || 0n);
+}
+
+function quoteShippingLabel(quote: SupplyQuote) {
+  const totals = calculateQuoteTotals(quote.items);
+  if (totals.shippingPending) {
+    return totals.shippingCents > 0n
+      ? `${formatBRL(totals.shippingCents)} + pendente`
+      : 'A consultar';
+  }
+  return totals.shippingCents === 0n ? 'Frete gratis' : formatBRL(totals.shippingCents);
+}
+
 export function SupplyComparisonPage() {
   const [quotes, setQuotes] = useState<SupplyQuote[]>([]);
   const [items, setItems] = useState<SupplyItem[]>([]);
@@ -49,6 +82,7 @@ export function SupplyComparisonPage() {
   const [needId, setNeedId] = useState('');
   const [context, setContext] = useState('all');
   const [statuses, setStatuses] = useState<SupplyQuoteStatus[]>(['received']);
+  const [evaluationMode, setEvaluationMode] = useState<SupplyComparisonMode>('item');
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const statusFilterRef = useRef<HTMLDetailsElement>(null);
 
@@ -131,7 +165,13 @@ export function SupplyComparisonPage() {
             (!itemId || item.supplyItemId === itemId) &&
             (!needId || item.storeNeedId === needId) &&
             (!search ||
-              [quote.supplierName, item.itemName, item.offeredBrandModel || '', quote.code]
+              [
+                quote.supplierName,
+                item.itemName,
+                item.offeredBrandModel || '',
+                quote.code,
+                ...(item.destinations || []).map((destination) => destination.label),
+              ]
                 .join(' ')
                 .toLocaleLowerCase('pt-BR')
                 .includes(search)),
@@ -140,6 +180,14 @@ export function SupplyComparisonPage() {
     });
   }, [context, itemId, needId, query, quotes, statuses, storeId]);
   const highlights = useMemo(() => getGroupedHighlights(rows), [rows]);
+  const filteredQuotes = useMemo(() => {
+    const ids = new Set(rows.map(({ quote }) => quote.id));
+    return quotes.filter((quote) => ids.has(quote.id));
+  }, [quotes, rows]);
+  const quoteHighlights = useMemo(
+    () => getGroupedQuoteComparisonHighlights(filteredQuotes),
+    [filteredQuotes],
+  );
 
   return (
     <section className="page-stack">
@@ -151,11 +199,30 @@ export function SupplyComparisonPage() {
         </div>
         <div className="page-heading__actions">
           <div className="summary-number">
-            <strong>{rows.length}</strong>
-            <span>alternativas</span>
+            <strong>{evaluationMode === 'item' ? rows.length : filteredQuotes.length}</strong>
+            <span>{evaluationMode === 'item' ? 'alternativas' : 'cotacoes'}</span>
           </div>
         </div>
       </header>
+
+      <div className="comparison-mode-switch" role="group" aria-label="Modo de avaliacao do comparativo">
+        <span>Avaliacao</span>
+        <button
+          type="button"
+          className={evaluationMode === 'item' ? 'is-active' : ''}
+          onClick={() => setEvaluationMode('item')}
+        >
+          Item a item
+        </button>
+        <button
+          type="button"
+          className={evaluationMode === 'quote' ? 'is-active' : ''}
+          onClick={() => setEvaluationMode('quote')}
+        >
+          Cotacao completa
+        </button>
+      </div>
+
       <div className="comparison-filters">
         <label className="search-field">
           <Search size={18} />
@@ -163,7 +230,7 @@ export function SupplyComparisonPage() {
             aria-label="Buscar alternativas"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Fornecedor, item ou marca"
+            placeholder="Fornecedor, item, destino ou marca"
           />
         </label>
         <details
@@ -261,24 +328,83 @@ export function SupplyComparisonPage() {
           <option value="consolidated">Consolidado</option>
         </select>
       </div>
-      <div className="comparison-legend">
-        <span>
-          <Tag size={14} />
-          Menor preco unitario
-        </span>
-        <span>
-          <Truck size={14} />
-          Menor custo conhecido
-        </span>
-        <span>
-          <Clock3 size={14} />
-          Menor prazo
-        </span>
-      </div>
+
+      {evaluationMode === 'item' ? (
+        <div className="comparison-legend">
+          <span><Tag size={14} />Menor preco unitario</span>
+          <span><Truck size={14} />Menor custo conhecido</span>
+          <span><Clock3 size={14} />Menor prazo</span>
+        </div>
+      ) : (
+        <div className="comparison-legend">
+          <span><Tag size={14} />Menor total entre escopos equivalentes</span>
+          <span><Clock3 size={14} />Menor prazo final</span>
+          <span>Frete pendente nao concorre a menor total</span>
+        </div>
+      )}
+
       {loading ? (
         <InlineLoading label="Carregando comparativo" />
       ) : error ? (
         <ErrorState message={error} onRetry={() => void load()} />
+      ) : evaluationMode === 'quote' ? (
+        filteredQuotes.length ? (
+          <div className="comparison-table-wrap">
+            <div className="comparison-table comparison-table--quotes">
+              <div className="comparison-table__header comparison-table__header--quotes">
+                <span>Cotacao / fornecedor</span>
+                <span>Escopo</span>
+                <span>Produtos</span>
+                <span>Frete</span>
+                <span>Total conhecido</span>
+                <span>Prazo final</span>
+                <span>Validade</span>
+              </div>
+              {filteredQuotes.map((quote) => {
+                const totals = calculateQuoteTotals(quote.items);
+                const deliveryDays = getQuoteDeliveryDays(quote);
+                const destinationCount = quote.items.reduce(
+                  (sum, item) => sum + (item.destinations || []).reduce((current, destination) => current + destination.destinationCount, 0),
+                  0,
+                );
+                return (
+                  <article className="comparison-row comparison-row--quotes" key={quote.id}>
+                    <div>
+                      <strong>{quote.code}</strong>
+                      <span>{quote.supplierName}</span>
+                      <small>{SUPPLIER_CHANNEL_LABELS[quote.channel]}</small>
+                    </div>
+                    <div>
+                      <strong>{quote.items.length} {quote.items.length === 1 ? 'item' : 'itens'}</strong>
+                      <span>{quote.stores.length} {quote.stores.length === 1 ? 'loja' : 'lojas'}</span>
+                      {destinationCount > 0 && <small>{destinationCount} destinos de frete</small>}
+                      {!quoteHighlights.comparableQuoteIds.has(quote.id) && (
+                        <small>Sem outra cotacao de escopo equivalente</small>
+                      )}
+                    </div>
+                    <span>{formatBRL(totals.itemsCents - totals.discountCents + totals.otherCostsCents)}</span>
+                    <span>{quoteShippingLabel(quote)}</span>
+                    <span className={quoteHighlights.lowestTotalQuoteIds.has(quote.id) ? 'comparison-best' : ''}>
+                      <strong>{formatBRL(totals.totalCents)}</strong>
+                      {totals.shippingPending && <small>Total parcial: frete pendente</small>}
+                      {quoteHighlights.lowestTotalQuoteIds.has(quote.id) && <small>Menor total</small>}
+                    </span>
+                    <span className={quoteHighlights.shortestLeadTimeQuoteIds.has(quote.id) ? 'comparison-best' : ''}>
+                      {deliveryDays === null ? 'Nao informado' : `${deliveryDays} dias`}
+                      {quoteHighlights.shortestLeadTimeQuoteIds.has(quote.id) && <small>Menor prazo</small>}
+                    </span>
+                    <span>
+                      {quote.validUntil || 'Sem validade'}
+                      <StatusBadge status={getEffectiveSupplyQuoteStatus(quote)} />
+                    </span>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <EmptyState title="Nenhuma cotacao encontrada" detail="Ajuste os filtros ou registre novas cotacoes." />
+        )
       ) : rows.length ? (
         <div className="comparison-table-wrap">
           <div className="comparison-table">
@@ -295,26 +421,18 @@ export function SupplyComparisonPage() {
             </div>
             {rows.map(({ quote, item }) => {
               const calculation = calculateQuoteLine(item);
+              const deliveryDays = getQuoteLineDeliveryDays(item);
               return (
                 <article className="comparison-row" key={item.id}>
                   <div>
                     <strong>{quote.supplierName}</strong>
                     <span>{SUPPLIER_CHANNEL_LABELS[quote.channel]}</span>
                     <small>
-                      {quote.originCity
-                        ? `${quote.originCity}/${quote.originState}`
-                        : 'Origem nao informada'}{' '}
-                      - {quote.code}
+                      {quote.originCity ? `${quote.originCity}/${quote.originState}` : 'Origem nao informada'} - {quote.code}
                     </small>
                     {item.productUrl && /^https?:\/\//i.test(item.productUrl) && (
-                      <a
-                        className="quote-product-link"
-                        href={item.productUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <ExternalLink size={14} />
-                        Ver produto
+                      <a className="quote-product-link" href={item.productUrl} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} />Ver produto
                       </a>
                     )}
                   </div>
@@ -322,35 +440,30 @@ export function SupplyComparisonPage() {
                     <strong>{item.itemName}</strong>
                     <span>{item.offeredBrandModel || 'Marca/modelo nao informado'}</span>
                     <small>
-                      {item.storeCode ||
-                        `Consolidado: ${quote.stores.map((store) => store.code).join(', ')}`}
+                      {item.storeCode
+                        ? `${item.storeCode} - ${item.storeName || ''}`
+                        : `Consolidado: ${quote.stores.map((store) => store.code).join(', ')}`}
                     </small>
+                    {(item.destinations || []).length > 0 && (
+                      <small className="comparison-destinations-summary">
+                        {(item.destinations || []).map((destination) => destination.label).join(' · ')}
+                      </small>
+                    )}
                   </div>
-                  <span>
-                    {item.quantity} {item.unit}
-                  </span>
-                  <span
-                    className={highlights.lowestUnitPriceIds.has(item.id) ? 'comparison-best' : ''}
-                  >
+                  <span>{item.quantity} {item.unit}</span>
+                  <span className={highlights.lowestUnitPriceIds.has(item.id) ? 'comparison-best' : ''}>
                     {formatBRL(moneyToCents(item.unitPrice))}
                     {highlights.lowestUnitPriceIds.has(item.id) && <small>Menor preco</small>}
                   </span>
                   <span>{formatBRL(calculation.subtotalCents)}</span>
-                  <span>
-                    {item.shippingType === 'pending'
-                      ? 'A consultar'
-                      : item.shippingType === 'free'
-                        ? 'Gratis'
-                        : formatBRL(calculation.shippingCents || 0n)}
-                  </span>
+                  <span>{shippingLabel(item)}</span>
                   <span className={highlights.lowestTotalIds.has(item.id) ? 'comparison-best' : ''}>
                     {formatBRL(calculation.totalCents)}
+                    {calculation.shippingPending && <small>Custo parcial</small>}
                     {highlights.lowestTotalIds.has(item.id) && <small>Menor custo</small>}
                   </span>
-                  <span
-                    className={highlights.shortestLeadTimeIds.has(item.id) ? 'comparison-best' : ''}
-                  >
-                    {item.deliveryDays === null ? 'Nao informado' : `${item.deliveryDays} dias`}
+                  <span className={highlights.shortestLeadTimeIds.has(item.id) ? 'comparison-best' : ''}>
+                    {deliveryDays === null ? 'Nao informado' : `${deliveryDays} dias`}
                     {highlights.shortestLeadTimeIds.has(item.id) && <small>Menor prazo</small>}
                   </span>
                   <span>
@@ -363,10 +476,7 @@ export function SupplyComparisonPage() {
           </div>
         </div>
       ) : (
-        <EmptyState
-          title="Nenhuma alternativa encontrada"
-          detail="Ajuste os filtros ou registre novas cotacoes."
-        />
+        <EmptyState title="Nenhuma alternativa encontrada" detail="Ajuste os filtros ou registre novas cotacoes." />
       )}
     </section>
   );
