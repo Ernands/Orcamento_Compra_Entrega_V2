@@ -25,6 +25,11 @@ replace(
     '                  (sum, item) => sum + item.destinations.reduce((current, destination) => current + destination.destinationCount, 0),',
     '                  (sum, item) => sum + (item.destinations || []).reduce((current, destination) => current + destination.destinationCount, 0),',
 )
+replace(
+    'src/pages/supply-comparison-page.tsx',
+    '                    {item.destinations.length > 0 && (\n                      <small className="comparison-destinations-summary">\n                        {item.destinations.map((destination) => destination.label).join(\' · \')}\n',
+    '                    {(item.destinations || []).length > 0 && (\n                      <small className="comparison-destinations-summary">\n                        {(item.destinations || []).map((destination) => destination.label).join(\' · \')}\n',
+)
 
 replace(
     'src/pages/supply-quotes-page.tsx',
