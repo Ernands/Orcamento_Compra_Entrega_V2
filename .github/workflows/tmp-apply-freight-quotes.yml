@@ -25,6 +25,8 @@ jobs:
         run: python3 scripts/apply-freight-quotes-page.py
       - name: Apply legacy compatibility
         run: python3 scripts/fix-freight-legacy-compat.py
+      - name: Patch tests and read-model types
+        run: python3 scripts/patch-freight-tests-and-types.py
       - name: Run tests and capture diagnostics
         id: tests
         shell: bash
@@ -54,6 +56,6 @@ jobs:
           rm -f tmp-freight-test-output.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/pages/supply-quotes-page.tsx src/pages/supply-comparison-page.tsx src/domain/supply-comparison.ts
+          git add src/pages/supply-quotes-page.tsx src/pages/supply-comparison-page.tsx src/domain/supply-comparison.ts src/domain/types.ts src/tests/supply-quotes-page.test.tsx src/tests/supply-quotes-comparison-status.test.tsx
           git commit -m "feat: integrar destinos de frete nas cotacoes [apply-freight-quotes-ui]" || exit 0
           git push origin HEAD:feat/freight-destinations-comparison
