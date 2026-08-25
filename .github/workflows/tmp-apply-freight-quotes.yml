@@ -23,6 +23,8 @@ jobs:
       - run: npm ci
       - name: Apply quotes UI patch
         run: python3 scripts/apply-freight-quotes-page.py
+      - name: Apply legacy compatibility
+        run: python3 scripts/fix-freight-legacy-compat.py
       - name: Run tests and capture diagnostics
         id: tests
         shell: bash
@@ -40,7 +42,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tmp-freight-test-output.txt
+          git add -f tmp-freight-test-output.txt
           git commit -m "chore: capture freight test failure [freight-test-diagnostic]"
           git push origin HEAD:feat/freight-destinations-comparison
           exit 1
@@ -52,6 +54,6 @@ jobs:
           rm -f tmp-freight-test-output.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/pages/supply-quotes-page.tsx
+          git add src/pages/supply-quotes-page.tsx src/pages/supply-comparison-page.tsx src/domain/supply-comparison.ts
           git commit -m "feat: integrar destinos de frete nas cotacoes [apply-freight-quotes-ui]" || exit 0
           git push origin HEAD:feat/freight-destinations-comparison
