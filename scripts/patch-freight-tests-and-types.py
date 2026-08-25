@@ -16,26 +16,38 @@ patch(
     '  capturedAt: string | null;\n  position?: number;\n  destinations?: SupplyQuoteItemDestination[];\n}',
 )
 
-for path in [
+# SupplyQuotesPage tests: freight profiles are loaded by the existing supplies repository.
+patch(
     'src/tests/supply-quotes-page.test.tsx',
+    '  deleteSupplyQuote,\n  listSuppliers,\n',
+    '  deleteSupplyQuote,\n  listSupplyFreightProfiles,\n  listSuppliers,\n',
+)
+patch(
+    'src/tests/supply-quotes-page.test.tsx',
+    "vi.mock('../data/supplies/supplies-repository', () => ({\n  deleteSupplyQuote: vi.fn(),\n",
+    "vi.mock('../data/supplies/supplies-repository', () => ({\n  deleteSupplyQuote: vi.fn(),\n  listSupplyFreightProfiles: vi.fn(),\n",
+)
+patch(
+    'src/tests/supply-quotes-page.test.tsx',
+    '    vi.mocked(listStores).mockResolvedValue([store]);\n',
+    '    vi.mocked(listStores).mockResolvedValue([store]);\n    vi.mocked(listSupplyFreightProfiles).mockResolvedValue([]);\n',
+)
+
+# Comparison-status test uses the same repository mock.
+patch(
     'src/tests/supply-quotes-comparison-status.test.tsx',
-]:
-    patch(
-        path,
-        "import { listStores } from '../data/stores/stores-repository';\n" if path.endswith('supply-quotes-page.test.tsx') else "import {\n  listStores,\n} from '../data/stores/stores-repository';\n",
-        ("import { listStores } from '../data/stores/stores-repository';\n" if path.endswith('supply-quotes-page.test.tsx') else "import {\n  listStores,\n} from '../data/stores/stores-repository';\n")
-        + "import { listSupplyFreightProfiles } from '../data/supplies/freight-destinations-repository';\n",
-    )
-    patch(
-        path,
-        "vi.mock('../data/stores/stores-repository', () => ({ listStores: vi.fn() }));\n",
-        "vi.mock('../data/stores/stores-repository', () => ({ listStores: vi.fn() }));\nvi.mock('../data/supplies/freight-destinations-repository', () => ({\n  listSupplyFreightProfiles: vi.fn(),\n}));\n",
-    )
-    patch(
-        path,
-        "    vi.mocked(listStores).mockResolvedValue([store]);\n" if path.endswith('supply-quotes-page.test.tsx') else "    vi.mocked(listStores).mockResolvedValue([]);\n",
-        ("    vi.mocked(listStores).mockResolvedValue([store]);\n" if path.endswith('supply-quotes-page.test.tsx') else "    vi.mocked(listStores).mockResolvedValue([]);\n")
-        + "    vi.mocked(listSupplyFreightProfiles).mockResolvedValue([]);\n",
-    )
+    '  listSuppliers,\n  listSupplyItems,\n',
+    '  listSupplyFreightProfiles,\n  listSuppliers,\n  listSupplyItems,\n',
+)
+patch(
+    'src/tests/supply-quotes-comparison-status.test.tsx',
+    "vi.mock('../data/supplies/supplies-repository', () => ({\n  deleteSupplyQuote: vi.fn(),\n",
+    "vi.mock('../data/supplies/supplies-repository', () => ({\n  deleteSupplyQuote: vi.fn(),\n  listSupplyFreightProfiles: vi.fn(),\n",
+)
+patch(
+    'src/tests/supply-quotes-comparison-status.test.tsx',
+    '    vi.mocked(listStores).mockResolvedValue([]);\n',
+    '    vi.mocked(listStores).mockResolvedValue([]);\n    vi.mocked(listSupplyFreightProfiles).mockResolvedValue([]);\n',
+)
 
 print('freight tests and type compatibility patched')
