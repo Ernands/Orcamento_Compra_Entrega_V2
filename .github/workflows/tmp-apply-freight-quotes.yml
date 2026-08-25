@@ -28,11 +28,11 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm test -- --run > tmp-freight-test-output.log 2>&1
+          npm test -- --run > tmp-freight-test-output.txt 2>&1
           status=$?
           set -e
           echo "status=$status" >> "$GITHUB_OUTPUT"
-          cat tmp-freight-test-output.log
+          cat tmp-freight-test-output.txt
           exit 0
       - name: Persist failed test diagnostics
         if: steps.tests.outputs.status != '0'
@@ -40,7 +40,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tmp-freight-test-output.log
+          git add tmp-freight-test-output.txt
           git commit -m "chore: capture freight test failure [freight-test-diagnostic]"
           git push origin HEAD:feat/freight-destinations-comparison
           exit 1
@@ -49,7 +49,7 @@ jobs:
       - run: npm run build
       - name: Commit validated patch
         run: |
-          rm -f tmp-freight-test-output.log
+          rm -f tmp-freight-test-output.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/pages/supply-quotes-page.tsx
