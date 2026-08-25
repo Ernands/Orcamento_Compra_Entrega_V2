@@ -82,8 +82,8 @@ export function getGroupedComparisonHighlights(items: SupplyQuoteItem[]): Compar
 }
 
 function destinationScope(item: SupplyQuoteItem, quote: SupplyQuote): string {
-  if (item.destinations.length) {
-    return item.destinations
+  if ((item.destinations || []).length) {
+    return (item.destinations || [])
       .map((destination) =>
         [
           destination.destinationType,

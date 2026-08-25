@@ -432,8 +432,8 @@ export interface SupplyQuoteItem {
   notes: string | null;
   productUrl: string | null;
   capturedAt: string | null;
-  position: number;
-  destinations: SupplyQuoteItemDestination[];
+  position?: number;
+  destinations?: SupplyQuoteItemDestination[];
 }
 
 export interface SupplyQuote {

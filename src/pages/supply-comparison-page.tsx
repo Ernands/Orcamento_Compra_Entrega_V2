@@ -170,7 +170,7 @@ export function SupplyComparisonPage() {
                 item.itemName,
                 item.offeredBrandModel || '',
                 quote.code,
-                ...item.destinations.map((destination) => destination.label),
+                ...(item.destinations || []).map((destination) => destination.label),
               ]
                 .join(' ')
                 .toLocaleLowerCase('pt-BR')
@@ -364,7 +364,7 @@ export function SupplyComparisonPage() {
                 const totals = calculateQuoteTotals(quote.items);
                 const deliveryDays = getQuoteDeliveryDays(quote);
                 const destinationCount = quote.items.reduce(
-                  (sum, item) => sum + item.destinations.reduce((current, destination) => current + destination.destinationCount, 0),
+                  (sum, item) => sum + (item.destinations || []).reduce((current, destination) => current + destination.destinationCount, 0),
                   0,
                 );
                 return (
@@ -444,9 +444,9 @@ export function SupplyComparisonPage() {
                         ? `${item.storeCode} - ${item.storeName || ''}`
                         : `Consolidado: ${quote.stores.map((store) => store.code).join(', ')}`}
                     </small>
-                    {item.destinations.length > 0 && (
+                    {(item.destinations || []).length > 0 && (
                       <small className="comparison-destinations-summary">
-                        {item.destinations.map((destination) => destination.label).join(' · ')}
+                        {(item.destinations || []).map((destination) => destination.label).join(' · ')}
                       </small>
                     )}
                   </div>

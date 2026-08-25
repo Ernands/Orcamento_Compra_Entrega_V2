@@ -7,6 +7,7 @@ import {
   listStores,
 } from '../data/stores/stores-repository';
 import {
+  listSupplyFreightProfiles,
   listSuppliers,
   listSupplyItems,
   listSupplyNeeds,
@@ -40,6 +41,7 @@ vi.mock('../data/purchases/quote-payment-terms-repository', () => ({
 vi.mock('../data/stores/stores-repository', () => ({ listStores: vi.fn() }));
 vi.mock('../data/supplies/supplies-repository', () => ({
   deleteSupplyQuote: vi.fn(),
+  listSupplyFreightProfiles: vi.fn(),
   listSuppliers: vi.fn(),
   listSupplyItems: vi.fn(),
   listSupplyNeeds: vi.fn(),
@@ -52,6 +54,12 @@ vi.mock('../domain/supply-comparison', () => ({
     lowestTotalIds: new Set<string>(),
     shortestLeadTimeIds: new Set<string>(),
   })),
+  getGroupedQuoteComparisonHighlights: vi.fn(() => ({
+    lowestTotalQuoteIds: new Set<string>(),
+    shortestLeadTimeQuoteIds: new Set<string>(),
+    comparableQuoteIds: new Set<string>(),
+  })),
+  getQuoteDeliveryDays: vi.fn(() => null),
 }));
 
 function quoteWithStatus(status: SupplyQuoteStatus): SupplyQuote {
@@ -112,6 +120,7 @@ describe('SupplyQuotesPage comparison statuses', () => {
     vi.mocked(listSupplyNeeds).mockResolvedValue([]);
     vi.mocked(listSuppliers).mockResolvedValue([]);
     vi.mocked(listStores).mockResolvedValue([]);
+    vi.mocked(listSupplyFreightProfiles).mockResolvedValue([]);
   });
 
   it('compara rascunho, recebida e expirada e exclui cancelada dos destaques', async () => {

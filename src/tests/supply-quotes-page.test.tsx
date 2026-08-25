@@ -13,6 +13,7 @@ import {
 import { listStores } from '../data/stores/stores-repository';
 import {
   deleteSupplyQuote,
+  listSupplyFreightProfiles,
   listSuppliers,
   listSupplyItems,
   listSupplyNeeds,
@@ -57,6 +58,7 @@ vi.mock('../data/purchases/quote-payment-terms-repository', async () => {
 vi.mock('../data/stores/stores-repository', () => ({ listStores: vi.fn() }));
 vi.mock('../data/supplies/supplies-repository', () => ({
   deleteSupplyQuote: vi.fn(),
+  listSupplyFreightProfiles: vi.fn(),
   listSuppliers: vi.fn(),
   listSupplyItems: vi.fn(),
   listSupplyNeeds: vi.fn(),
@@ -234,6 +236,7 @@ describe('SupplyQuotesPage', () => {
     vi.mocked(listSupplyNeeds).mockResolvedValue([need]);
     vi.mocked(listSuppliers).mockResolvedValue([supplier]);
     vi.mocked(listStores).mockResolvedValue([store]);
+    vi.mocked(listSupplyFreightProfiles).mockResolvedValue([]);
     vi.mocked(getQuotePaymentTerms).mockResolvedValue(EMPTY_QUOTE_PAYMENT_TERMS);
     vi.mocked(saveSupplyQuoteWithPaymentTerms).mockResolvedValue('quote-1');
     vi.mocked(approveSupplyQuoteForPurchase).mockResolvedValue('purchase-1');
