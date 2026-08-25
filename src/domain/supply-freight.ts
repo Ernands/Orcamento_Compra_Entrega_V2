@@ -55,8 +55,7 @@ export function allocateQuantityByWeights(totalQuantity: string, weights: number
   let allocated = raw.reduce((sum, entry) => sum + entry.value, 0n);
   let remaining = total - allocated;
   const ranked = [...raw].sort(
-    (a, b) =>
-      Number(b.remainder - a.remainder) || a.index - b.index,
+    (a, b) => Number(b.remainder - a.remainder) || a.index - b.index,
   );
   let cursor = 0;
   while (remaining > 0n) {
@@ -107,7 +106,6 @@ export interface FreightDestinationOption {
 export function getProfileDestinationOptions(
   quoteStoreIds: string[],
   profiles: SupplyFreightProfile[],
-  stores: Store[],
   itemStoreId = '',
 ): { options: FreightDestinationOption[]; uncoveredStoreIds: string[] } {
   const relevantStoreIds = itemStoreId ? [itemStoreId] : quoteStoreIds;
