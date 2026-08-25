@@ -49,5 +49,10 @@ patch(
     '    vi.mocked(listStores).mockResolvedValue([]);\n',
     '    vi.mocked(listStores).mockResolvedValue([]);\n    vi.mocked(listSupplyFreightProfiles).mockResolvedValue([]);\n',
 )
+patch(
+    'src/tests/supply-quotes-comparison-status.test.tsx',
+    "vi.mock('../domain/supply-comparison', () => ({\n  getGroupedComparisonHighlights: vi.fn(() => ({\n    lowestUnitPriceIds: new Set<string>(),\n    lowestTotalIds: new Set<string>(),\n    shortestLeadTimeIds: new Set<string>(),\n  })),\n}));\n",
+    "vi.mock('../domain/supply-comparison', () => ({\n  getGroupedComparisonHighlights: vi.fn(() => ({\n    lowestUnitPriceIds: new Set<string>(),\n    lowestTotalIds: new Set<string>(),\n    shortestLeadTimeIds: new Set<string>(),\n  })),\n  getGroupedQuoteComparisonHighlights: vi.fn(() => ({\n    lowestTotalQuoteIds: new Set<string>(),\n    shortestLeadTimeQuoteIds: new Set<string>(),\n    comparableQuoteIds: new Set<string>(),\n  })),\n  getQuoteDeliveryDays: vi.fn(() => null),\n}));\n",
+)
 
 print('freight tests and type compatibility patched')
