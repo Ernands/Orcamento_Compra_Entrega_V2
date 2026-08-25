@@ -51,17 +51,28 @@ export async function saveSupplyQuoteWithPaymentTerms(
     unit: item.unit,
     unit_price: item.unitPrice,
     discount_amount: item.discountAmount || '0',
-    shipping_type: item.shippingType,
-    shipping_amount: item.shippingType === 'informed' ? item.shippingAmount : null,
+    shipping_type: item.destinations.length ? 'pending' : item.shippingType,
+    shipping_amount:
+      !item.destinations.length && item.shippingType === 'informed' ? item.shippingAmount : null,
     other_costs: item.otherCosts || '0',
-    delivery_days: item.deliveryDays || null,
+    delivery_days: item.destinations.length ? null : item.deliveryDays || null,
     minimum_quantity: item.minimumQuantity || null,
     offered_brand_model: item.offeredBrandModel || null,
     notes: item.notes || null,
     product_url: item.productUrl || null,
     captured_at: item.capturedAt ? new Date(item.capturedAt).toISOString() : null,
+    destinations: item.destinations.map((destination) => ({
+      destination_type: destination.destinationType,
+      profile_id: destination.profileId || null,
+      store_id: destination.storeId || null,
+      quantity: destination.quantity,
+      unit: destination.unit,
+      shipping_amount: destination.shippingAmount,
+      delivery_days: destination.deliveryDays || null,
+      notes: destination.notes || null,
+    })),
   }));
-  const { data, error } = await supabase.rpc('save_supply_quote_v2' as never, {
+  const { data, error } = await supabase.rpc('save_supply_quote_v3' as never, {
     p_quote_id: values.id || null,
     p_supplier_id: values.supplierId,
     p_supplier_channel_id: values.supplierChannelId,
