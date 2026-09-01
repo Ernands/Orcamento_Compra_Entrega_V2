@@ -15,7 +15,7 @@ export type PurchaseStatus =
   | 'cancelled';
 
 export type DistributionStatus = 'pending' | 'confirmed';
-export type AllocationSource = 'snapshot' | 'manual' | 'direct' | 'legacy' | string;
+export type AllocationSource = 'pending' | 'snapshot' | 'manual' | 'direct' | 'legacy';
 export type PurchaseOrderStatus = 'active' | 'cancelled';
 export type PurchaseOrderSource = 'manual' | 'legacy_backfill';
 
