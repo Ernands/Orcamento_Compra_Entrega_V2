@@ -4,215 +4,252 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from '../app/session-provider';
 import {
-  listSupplyPurchases,
-  returnPurchaseToQuote,
-  savePurchaseItem,
-  savePurchasePayment,
-  setPurchaseReimbursementStatus,
-  type Purchase,
-} from '../data/purchases/purchases-repository';
+  cancelSupplyPurchaseOrderV2,
+  createSupplyPurchaseOrderV2,
+  listSupplyPurchasesV2,
+  savePurchaseDestinationDistributionV2,
+  savePurchaseOrderLineDistributionV2,
+} from '../data/purchases/purchases-v2-repository';
+import type { PurchaseItemV2, PurchaseOrderLineV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
-vi.mock('../data/purchases/purchases-repository', async () => {
-  const actual = await vi.importActual('../data/purchases/purchases-repository');
+vi.mock('../data/purchases/purchases-v2-repository', async () => {
+  const actual = await vi.importActual('../data/purchases/purchases-v2-repository');
   return {
     ...actual,
-    listSupplyPurchases: vi.fn(),
-    returnPurchaseToQuote: vi.fn(),
-    savePurchaseItem: vi.fn(),
-    savePurchasePayment: vi.fn(),
-    setPurchaseReimbursementStatus: vi.fn(),
-    uploadPurchaseAttachment: vi.fn(),
-    createPurchaseAttachmentSignedUrl: vi.fn(),
-    deletePurchaseAttachment: vi.fn(),
-    validatePurchaseAttachment: vi.fn(),
+    listSupplyPurchasesV2: vi.fn(),
+    createSupplyPurchaseOrderV2: vi.fn(),
+    cancelSupplyPurchaseOrderV2: vi.fn(),
+    savePurchaseDestinationDistributionV2: vi.fn(),
+    savePurchaseOrderLineDistributionV2: vi.fn(),
+    uploadPurchaseAttachmentV3: vi.fn(),
+    createPurchaseAttachmentSignedUrlV2: vi.fn(),
+    createQuoteAttachmentSignedUrlReadOnlyV2: vi.fn(),
+    deletePurchaseAttachmentV2: vi.fn(),
+    returnPurchaseToQuoteV2: vi.fn(),
+    validatePurchaseAttachmentV2: vi.fn(),
   };
 });
 
-const purchase: Purchase = {
-  id: 'purchase-1',
-  code: 'CMP-00001',
-  quoteId: 'quote-1',
-  quoteCode: 'COT-00004',
-  supplierId: 'supplier-1',
-  supplierName: 'Fornecedor Teste',
-  quoteDate: '2026-08-20',
-  approvedTotal: '1200.00',
-  hasPendingShipping: false,
-  paymentMethodSnapshot: 'credit_card',
-  entryAmountSnapshot: '200.00',
-  installmentCountSnapshot: 5,
-  paymentNotesSnapshot: 'Condicao aprovada',
-  status: 'partially_purchased',
-  reimbursementStatus: 'documents_pending',
-  notes: null,
-  approvedAt: '2026-08-21T12:00:00Z',
-  returnedAt: null,
-  stores: [
-    {
-      id: 'purchase-store-1',
-      storeId: 'store-1',
-      code: 'LOJ-001',
-      name: 'Loja Um',
-      city: 'Fortaleza',
-      state: 'CE',
-    },
-    {
-      id: 'purchase-store-2',
-      storeId: 'store-2',
-      code: 'LOJ-002',
-      name: 'Loja Dois',
-      city: 'Sobral',
-      state: 'CE',
-    },
-  ],
-  items: [
-    {
-      id: 'purchase-item-1',
-      purchaseId: 'purchase-1',
-      supplyItemId: 'item-1',
-      itemCode: 'ITM-0001',
-      itemName: 'Cadeira parcial',
-      storeId: null,
-      storeCode: null,
-      quantityApproved: '10',
-      purchasedQuantity: '4',
-      unit: 'un',
-      quotedUnitPrice: '100.00',
-      approvedLineTotal: '1000.00',
-      actualUnitPrice: '100.00',
-      actualDiscountAmount: '0',
-      actualShippingAmount: '0',
-      actualOtherCosts: '0',
-      notes: null,
-    },
-    {
-      id: 'purchase-item-2',
-      purchaseId: 'purchase-1',
-      supplyItemId: 'item-2',
-      itemCode: 'ITM-0002',
-      itemName: 'Apoio concluido',
-      storeId: 'store-1',
-      storeCode: 'LOJ-001',
-      quantityApproved: '2',
-      purchasedQuantity: '2',
-      unit: 'un',
-      quotedUnitPrice: '100.00',
-      approvedLineTotal: '200.00',
-      actualUnitPrice: '100.00',
-      actualDiscountAmount: '0',
-      actualShippingAmount: '0',
-      actualOtherCosts: '0',
-      notes: null,
-    },
-  ],
-  payments: [],
-  attachments: [],
+const baseItem: PurchaseItemV2 = {
+  id: 'item-1', purchaseId: 'purchase-1', sourceQuoteItemId: 'quote-item-1', supplyItemId: 'supply-item-1',
+  itemCode: 'ITM-0001', itemName: 'Cadeira operacional', itemDescription: null, itemCategory: 'Mobiliario', itemArea: 'Transacional',
+  brandReference: null, technicalSpecification: null, offeredBrandModel: 'Modelo A', productUrl: null,
+  storeId: null, storeCode: null, quantityApproved: '10', purchasedQuantity: '4', unit: 'un', quotedUnitPrice: '100',
+  quotedDiscountAmount: '0', quotedShippingType: 'free', quotedShippingAmount: '0', quotedOtherCosts: '0', quotedDeliveryDays: 5,
+  approvedLineTotal: '1000', actualTotal: '400', itemContextSnapshotSource: 'approval', quoteItemNotes: 'Conferir cor', destinations: [],
 };
 
-function renderPage() {
-  return render(
-    <MemoryRouter>
-      <SupplyPurchasesPage />
-    </MemoryRouter>,
-  );
+const partialLine: PurchaseOrderLineV2 = {
+  id: 'line-1', orderId: 'order-1', purchaseItemId: 'item-1', purchaseDestinationId: null,
+  itemCode: 'ITM-0001', itemName: 'Cadeira operacional', destinationLabel: null, destinationState: null,
+  quantity: '4', unit: 'un', unitPrice: '100', discountAmount: '0', shippingType: 'free', actualShippingType: 'free',
+  shippingAmount: '0', otherCosts: '0', lineTotal: '400', expectedDeliveryDate: '2026-09-06', notes: null,
+  storeDistributionStatus: 'pending', stores: [],
+};
+
+const purchase: PurchaseV2 = {
+  id: 'purchase-1', code: 'CMP-00001', quoteId: 'quote-1', quoteCode: 'COT-00170', supplierId: 'supplier-1', supplierName: 'Fornecedor Teste',
+  quoteDate: '2026-08-31', approvedTotal: '1000', hasPendingShipping: false, status: 'partially_purchased', notes: null,
+  approvedAt: '2026-09-01T10:00:00Z', returnedAt: null, supplierChannelId: 'channel-1', channelType: 'ecommerce',
+  originCity: 'Fortaleza', originState: 'CE', contact: 'Compras', quoteContextSnapshotSource: 'approval',
+  stores: [
+    { id: 'ps-1', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', address: 'Rua A', addressSnapshotSource: 'approval' },
+    { id: 'ps-2', storeId: 'store-2', code: 'LOJ-002', name: 'Loja Dois', city: 'Sobral', state: 'CE', address: 'Rua B', addressSnapshotSource: 'approval' },
+  ],
+  items: [baseItem],
+  orders: [{
+    id: 'order-1', purchaseId: 'purchase-1', purchasedOn: '2026-09-01', supplierOrderRef: 'PED-1', expectedDeliveryDate: '2026-09-06',
+    status: 'active', source: 'manual', notes: null, createdBy: 'user-1', createdByName: 'Comprador', createdAt: '2026-09-01T11:00:00Z',
+    cancelledBy: null, cancelledByName: null, cancelledAt: null, cancellationReason: null, lines: [partialLine],
+  }],
+  attachments: [],
+  quoteAttachments: [{ id: 'qa-1', quoteId: 'quote-1', originalName: 'proposta.pdf', storagePath: 'cotacoes/quote-1/proposta.pdf', mimeType: 'application/pdf', sizeBytes: 1000, description: null, documentType: 'quote', createdAt: '2026-08-31T12:00:00Z' }],
+};
+
+function renderPage(current: PurchaseV2 = purchase) {
+  vi.mocked(listSupplyPurchasesV2).mockResolvedValue([current]);
+  return render(<MemoryRouter><SupplyPurchasesPage /></MemoryRouter>);
 }
 
-describe('SupplyPurchasesPage', () => {
+describe('SupplyPurchasesPage V2', () => {
   beforeEach(() => {
     vi.mocked(useSession).mockReturnValue({ can: () => true } as never);
-    vi.mocked(listSupplyPurchases).mockResolvedValue([purchase]);
-    vi.mocked(savePurchaseItem).mockResolvedValue();
-    vi.mocked(savePurchasePayment).mockResolvedValue('payment-1');
-    vi.mocked(setPurchaseReimbursementStatus).mockResolvedValue();
-    vi.mocked(returnPurchaseToQuote).mockResolvedValue();
+    vi.mocked(createSupplyPurchaseOrderV2).mockResolvedValue('order-new');
+    vi.mocked(cancelSupplyPurchaseOrderV2).mockResolvedValue();
+    vi.mocked(savePurchaseDestinationDistributionV2).mockResolvedValue('confirmed');
+    vi.mocked(savePurchaseOrderLineDistributionV2).mockResolvedValue('confirmed');
   });
 
-  it('mostra aprovado, comprado, falta e filtra o resumo por falta comprar', async () => {
-    const user = userEvent.setup();
+  it('mostra somente operacao de Compras, sem pagamento e reembolso', async () => {
     renderPage();
-
     expect(await screen.findByText('CMP-00001')).toBeInTheDocument();
-    expect(screen.getAllByText('2 lojas').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Comprado: R\$ 600,00/)).toBeInTheDocument();
-    expect(screen.getByText(/Falta: R\$ 600,00/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Ver resumo CMP-00001' }));
-    const dialog = screen.getByRole('dialog', { name: 'Resumo CMP-00001' });
-    expect(within(dialog).getByText('Cadeira parcial')).toBeInTheDocument();
-    expect(within(dialog).getByText('Apoio concluido')).toBeInTheDocument();
-
-    await user.click(within(dialog).getByRole('button', { name: 'Falta comprar' }));
-    expect(within(dialog).getByText('Cadeira parcial')).toBeInTheDocument();
-    expect(within(dialog).queryByText('Apoio concluido')).not.toBeInTheDocument();
+    expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
+    expect(screen.queryByText(/Pagamento/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reembolso solicitado/)).not.toBeInTheDocument();
   });
 
-  it('registra compra parcial com valores realizados', async () => {
+  it('registra item sem destino sem inventar purchase_destination_id', async () => {
+    const user = userEvent.setup();
+    renderPage({ ...purchase, orders: [], status: 'approved' });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    expect(within(dialog).queryByLabelText('Destino')).not.toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Frete realizado'));
+    await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
+    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ purchaseDestinationId: null, shippingAmount: '0' })] }));
+  });
+
+  it('permite frete vazio como nao informado e envia o valor vazio ao RPC', async () => {
+    const user = userEvent.setup();
+    renderPage({ ...purchase, orders: [], status: 'approved' });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    await user.clear(within(dialog).getByLabelText('Frete realizado'));
+    expect(within(dialog).getByText(/Pendente · frete nao informado/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
+    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({ shippingAmount: '' })],
+    }));
+  });
+
+  it('seleciona automaticamente destino direto unico e envia o id correto', async () => {
+    const user = userEvent.setup();
+    const directItem: PurchaseItemV2 = { ...baseItem, destinations: [{
+      id: 'destination-1', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-1', destinationType: 'store', profileId: null, storeId: 'store-1', label: 'LOJ-001', state: 'CE', destinationCount: 1,
+      quantity: '10', unit: 'un', quotedShippingType: 'free', quotedShippingAmount: '0', quotedDeliveryDays: 5, notes: null, position: 0, distributionStatus: 'confirmed', snapshotSource: 'approval',
+      stores: [{ id: 'ds-1', purchaseDestinationId: 'destination-1', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', allocatedQuantity: '10', allocationSource: 'direct' }],
+    }] };
+    renderPage({ ...purchase, items: [directItem], orders: [], status: 'approved' });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    expect(within(dialog).getByLabelText('Destino')).toHaveValue('destination-1');
+    await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
+    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ purchaseDestinationId: 'destination-1' })] }));
+  });
+
+  it('mantem variacao como Em andamento na compra parcial', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('CMP-00001');
-
-    await user.click(screen.getByRole('button', { name: 'Editar compra de Cadeira parcial' }));
-    const dialog = screen.getByRole('dialog', { name: /Registrar compra/ });
-    const quantity = within(dialog).getByLabelText('Quantidade comprada');
-    await user.clear(quantity);
-    await user.type(quantity, '6');
-    const unitPrice = within(dialog).getByLabelText('Valor unitario realizado');
-    await user.clear(unitPrice);
-    await user.type(unitPrice, '99,80');
-    await user.click(within(dialog).getByRole('button', { name: 'Salvar realizado' }));
-
-    expect(savePurchaseItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'purchase-item-1',
-        purchasedQuantity: '6',
-        actualUnitPrice: '99,80',
-      }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Resumo CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Resumo · CMP-00001' });
+    expect(within(dialog).getByText('Em andamento')).toBeInTheDocument();
   });
 
-  it('registra pagamento sem armazenar dados completos do cartao', async () => {
+  it('deixa fallback legado explicito no resumo e rateia o aprovado por loja', async () => {
+    const user = userEvent.setup();
+    const legacyItem: PurchaseItemV2 = { ...baseItem, sourceQuoteItemId: null, destinations: [] };
+    renderPage({ ...purchase, items: [legacyItem] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Resumo CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Resumo · CMP-00001' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Prospector/UF' }));
+    expect(within(dialog).getByText('Fallback legado')).toBeInTheDocument();
+    expect(within(dialog).getByText('Rateio igualitario legado')).toBeInTheDocument();
+    expect(within(dialog).getByText('Rateio igual no aprovado')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Loja' }));
+    expect(within(dialog).getAllByText('R$ 500,00')).toHaveLength(2);
+    const approvedUnallocated = within(dialog).getByText('Aprovado nao alocado').parentElement;
+    expect(approvedUnallocated).not.toBeNull();
+    expect(within(approvedUnallocated as HTMLElement).getByText('R$ 0,00')).toBeInTheDocument();
+  });
+
+  it('nao chama frete legado incerto de gratis no historico', async () => {
+    const user = userEvent.setup();
+    const legacyLine = { ...partialLine, shippingType: 'free' as const, actualShippingType: 'pending' as const, shippingAmount: '0' };
+    const legacyOrder = { ...purchase.orders[0], source: 'legacy_backfill' as const, lines: [legacyLine] };
+    renderPage({ ...purchase, orders: [legacyOrder] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Historico CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Historico · CMP-00001' });
+    expect(within(dialog).getByText('Nao informado')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Gratis')).not.toBeInTheDocument();
+  });
+
+  it('exibe historico cancelado sem apagar o registro', async () => {
+    const user = userEvent.setup();
+    const cancelled = { ...purchase.orders[0], id: 'order-cancelled', status: 'cancelled' as const, cancelledByName: 'Comprador', cancelledAt: '2026-09-01T13:00:00Z', cancellationReason: 'Pedido duplicado' };
+    renderPage({ ...purchase, orders: [cancelled] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Historico CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Historico · CMP-00001' });
+    expect(within(dialog).getByText('Pedido duplicado')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Cancelado por Comprador/)).toBeInTheDocument();
+  });
+
+  it('distribui destino Prospector/UF pelas lojas elegiveis', async () => {
+    const user = userEvent.setup();
+    const profileItem: PurchaseItemV2 = { ...baseItem, destinations: [{
+      id: 'profile-1', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-1', destinationType: 'profile', profileId: 'fp-1', storeId: null, label: 'Valter Leandro', state: 'CE', destinationCount: 2,
+      quantity: '10', unit: 'un', quotedShippingType: 'informed', quotedShippingAmount: '50', quotedDeliveryDays: 5, notes: null, position: 0, distributionStatus: 'pending', snapshotSource: 'approval',
+      stores: [
+        { id: 'ds-1', purchaseDestinationId: 'profile-1', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', allocatedQuantity: null, allocationSource: 'snapshot' },
+        { id: 'ds-2', purchaseDestinationId: 'profile-1', storeId: 'store-2', code: 'LOJ-002', name: 'Loja Dois', city: 'Sobral', state: 'CE', allocatedQuantity: null, allocationSource: 'snapshot' },
+      ],
+    }] };
+    renderPage({ ...purchase, items: [profileItem], orders: [], status: 'approved' });
+    await screen.findByText('Valter Leandro');
+    await user.click(screen.getByRole('button', { name: 'Distribuir por loja' }));
+    const dialog = screen.getByRole('dialog', { name: 'Distribuir · Valter Leandro' });
+    const inputs = within(dialog).getAllByPlaceholderText('Quantidade');
+    await user.type(inputs[0], '4');
+    await user.type(inputs[1], '6');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar distribuicao' }));
+    expect(savePurchaseDestinationDistributionV2).toHaveBeenCalledWith('profile-1', [
+      { storeId: 'store-1', quantity: '4' }, { storeId: 'store-2', quantity: '6' },
+    ]);
+  });
+
+  it('permite distribuir fisicamente um registro sem destino', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Lojas pendentes');
+    await user.click(screen.getByRole('button', { name: 'Distribuir registro' }));
+    const dialog = screen.getByRole('dialog', { name: /Distribuir registro · Cadeira operacional/ });
+    const inputs = within(dialog).getAllByRole('textbox');
+    await user.type(inputs[0], '2');
+    await user.type(inputs[1], '2');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar distribuicao' }));
+    expect(savePurchaseOrderLineDistributionV2).toHaveBeenCalledWith('line-1', [
+      { storeId: 'store-1', quantity: '2' }, { storeId: 'store-2', quantity: '2' },
+    ]);
+  });
+
+  it('exibe documentos da cotacao em modo somente leitura', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('CMP-00001');
-
-    await user.click(screen.getByRole('button', { name: 'Pagamento CMP-00001' }));
-    const dialog = screen.getByRole('dialog', { name: 'Pagamento · CMP-00001' });
-    expect(within(dialog).getByText(/Nao informe numero completo do cartao nem CVV/)).toBeInTheDocument();
-    await user.type(
-      within(dialog).getByLabelText('Origem / cartao utilizado'),
-      'Cartao Corporativo final 1234',
-    );
-    await user.click(within(dialog).getByRole('button', { name: 'Registrar pagamento' }));
-
-    expect(savePurchasePayment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        purchaseId: 'purchase-1',
-        paymentMethod: 'credit_card',
-        sourceLabel: 'Cartao Corporativo final 1234',
-        amount: '1200.00',
-        entryAmount: '200.00',
-        installmentCount: '5',
-      }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Documentos CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Documentos · CMP-00001' });
+    expect(within(dialog).getByText('Documentos da Cotacao · somente leitura')).toBeInTheDocument();
+    expect(within(dialog).getByText('proposta.pdf')).toBeInTheDocument();
   });
 
-  it('informa quando o backend negar permissao para devolver a compra para cotacao', async () => {
+  it('nao oferece documento de reembolso no cadastro operacional de Compras', async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
-    vi.mocked(returnPurchaseToQuote).mockRejectedValue(new Error('permission denied'));
     renderPage();
     await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Documentos CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Documentos · CMP-00001' });
+    expect(within(dialog).queryByRole('option', { name: 'Documento de reembolso' })).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Voltar CMP-00001 para cotacao' }));
-
-    expect(confirmSpy).toHaveBeenCalledOnce();
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Seu usuario nao possui permissao para devolver esta compra para cotacao.',
-    );
-    confirmSpy.mockRestore();
-    alertSpy.mockRestore();
+  it('filtra por pendencia de distribuicao fisica', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('CMP-00001');
+    await user.selectOptions(screen.getByLabelText('Pendencia operacional'), 'line');
+    expect(screen.getByText('CMP-00001')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Pendencia operacional'), 'destination');
+    expect(screen.queryByText('CMP-00001')).not.toBeInTheDocument();
   });
 });
