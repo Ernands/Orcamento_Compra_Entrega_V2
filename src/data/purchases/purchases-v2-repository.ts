@@ -287,7 +287,7 @@ export async function createSupplyPurchaseOrderV2(values: RegisterPurchaseOrderI
     buildPurchaseOrderRpcPayloadV2(values) as never,
   );
   if (error) throw new Error(error.message);
-  return data as unknown as string;
+  return data;
 }
 
 export async function cancelSupplyPurchaseOrderV2(orderId: string, reason: string): Promise<void> {
@@ -307,7 +307,7 @@ export async function savePurchaseDestinationDistributionV2(
     p_allocations: allocations.map((allocation) => ({ store_id: allocation.storeId, quantity: allocation.quantity })),
   } as never);
   if (error) throw new Error(error.message);
-  return data as unknown as DistributionStatus;
+  return data;
 }
 
 export async function savePurchaseOrderLineDistributionV2(
@@ -319,7 +319,7 @@ export async function savePurchaseOrderLineDistributionV2(
     p_allocations: allocations.map((allocation) => ({ store_id: allocation.storeId, quantity: allocation.quantity })),
   } as never);
   if (error) throw new Error(error.message);
-  return data as unknown as DistributionStatus;
+  return data;
 }
 
 export async function uploadPurchaseAttachmentV3(values: {
@@ -376,7 +376,7 @@ export async function createQuoteAttachmentSignedUrlReadOnlyV2(path: string): Pr
 export async function deletePurchaseAttachmentV2(attachmentId: string): Promise<void> {
   const { data, error } = await supabase.rpc('delete_supply_purchase_attachment' as never, { p_attachment_id: attachmentId } as never);
   if (error) throw new Error(error.message);
-  const path = data as unknown as string;
+  const path = data;
   if (!path) throw new Error('Storage path ausente para o documento.');
   const { error: storageError } = await supabase.storage.from(PURCHASE_BUCKET).remove([path]);
   if (storageError) throw storageError;
