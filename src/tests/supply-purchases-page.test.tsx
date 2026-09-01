@@ -197,8 +197,8 @@ describe('SupplyPurchasesPage V2', () => {
       ],
     }] };
     renderPage({ ...purchase, items: [profileItem], orders: [], status: 'approved' });
-    await screen.findByText('Valter Leandro');
-    await user.click(screen.getByRole('button', { name: 'Distribuir por loja' }));
+    const distributeButton = await screen.findByRole('button', { name: 'Distribuir por loja' });
+    await user.click(distributeButton);
     const dialog = screen.getByRole('dialog', { name: 'Distribuir · Valter Leandro' });
     const inputs = within(dialog).getAllByPlaceholderText('Quantidade');
     await user.type(inputs[0], '4');
