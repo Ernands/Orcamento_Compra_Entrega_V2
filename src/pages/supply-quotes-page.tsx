@@ -349,11 +349,14 @@ function QuoteModal({
   const applyDestinationModeToAll = (mode: 'profile' | 'store') => {
     setError(null);
     try {
+      const destinationsByLine = values.items.map((line) =>
+        buildLineDestinations(line, values.storeIds, mode),
+      );
       setValues((current) => ({
         ...current,
-        items: current.items.map((line) => ({
+        items: current.items.map((line, index) => ({
           ...line,
-          destinations: buildLineDestinations(line, current.storeIds, mode),
+          destinations: destinationsByLine[index] || [],
         })),
       }));
     } catch (failure) {

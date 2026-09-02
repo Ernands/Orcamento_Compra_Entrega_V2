@@ -303,6 +303,20 @@ describe('SupplyQuotesPage', () => {
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
   });
 
+  it('mantem o modal aberto ao aplicar prospectores sem perfil de frete', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Nova cotacao' }));
+    await user.click(screen.getByRole('button', { name: 'Consolidada' }));
+    await user.click(screen.getByRole('checkbox', { name: /Selecionar todas as lojas/ }));
+    await user.click(screen.getByRole('button', { name: 'Prospectores / UF em todos' }));
+
+    expect(screen.getByRole('dialog', { name: 'Nova cotacao' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Lojas sem perfil de frete: LOJ-001. Use "Lojas da cotacao" para este item.'),
+    ).toBeInTheDocument();
+  });
+
   it('esconde criacao sem permissao de criar cotacoes', async () => {
     vi.mocked(useSession).mockReturnValue({
       can: (capability: string) => capability === 'quotes.view',
