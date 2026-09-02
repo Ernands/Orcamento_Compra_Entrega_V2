@@ -228,7 +228,21 @@
   width: 100%;
   margin-bottom: 18px;
 }
-.purchase-v2-portfolio-kpis { grid-template-columns: repeat(4,minmax(160px,1fr)); }
+.purchase-v2-portfolio-kpis {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(160px,1fr));
+  gap: 10px;
+}
+.purchase-v2-portfolio-kpis > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.purchase-v2-portfolio-kpis span { color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }
+.purchase-v2-portfolio-kpis strong { font-size: 1.05rem; }
 .purchase-v2-status-overview { display: grid; grid-template-columns: repeat(3,minmax(150px,1fr)); gap: 8px; }
 .purchase-v2-status-overview > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; }
 .purchase-v2-status-overview .status-badge--approved { color: #174f80; background: #e3f0fb; }
