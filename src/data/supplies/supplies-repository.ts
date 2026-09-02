@@ -33,6 +33,15 @@ type QuoteDestinationRow = {
   shipping_type: 'free' | 'informed' | 'pending'; shipping_amount: number | string | null;
   delivery_days: number | null; notes: string | null; position: number;
 };
+type QuoteDestinationStoreRow = {
+  quote_destination_id: string;
+  store_id: string;
+  store_code_snapshot: string;
+  store_name_snapshot: string;
+  store_city_snapshot: string;
+  store_state_snapshot: string;
+  snapshot_source: 'save' | 'backfill_current_profile';
+};
 type SupplierOperationalRow = Pick<
   SupplierTableRow,
   | 'id'
@@ -407,6 +416,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
     quoteStoreRows,
     quoteItemRows,
     quoteDestinationRows,
+    quoteDestinationStoreRows,
     itemsResult,
     needsResult,
     storesResult,
@@ -436,6 +446,14 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
           .order('position')
           .range(from, to) as never,
       ),
+      fetchAllPages<QuoteDestinationStoreRow>((from, to) =>
+        supabase
+          .from('supply_quote_item_destination_stores' as never)
+          .select('*')
+          .order('quote_destination_id')
+          .order('store_id')
+          .range(from, to) as never,
+      ),
       supabase.from('supply_items').select('*'),
       supabase.from('store_needs').select('id, title'),
       supabase.from('lojas').select('id, codigo_negocio, nome, cidade, uf'),
@@ -460,10 +478,27 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
     current.push(store);
     quoteStores.set(row.quote_id, current);
   });
+  const destinationStoresByDestination = new Map<string, SupplyQuoteItemDestination['stores']>();
+  quoteDestinationStoreRows.forEach((row) => {
+    const current = destinationStoresByDestination.get(row.quote_destination_id) || [];
+    current.push({
+      storeId: row.store_id,
+      code: row.store_code_snapshot,
+      name: row.store_name_snapshot,
+      city: row.store_city_snapshot,
+      state: row.store_state_snapshot,
+      snapshotSource: row.snapshot_source,
+    });
+    destinationStoresByDestination.set(row.quote_destination_id, current);
+  });
+
   const destinationsByItem = new Map<string, SupplyQuoteItemDestination[]>();
   quoteDestinationRows.forEach((row) => {
     const current = destinationsByItem.get(row.quote_item_id) || [];
-    current.push(mapQuoteDestination(row));
+    current.push({
+      ...mapQuoteDestination(row),
+      stores: destinationStoresByDestination.get(row.id) || [],
+    });
     destinationsByItem.set(row.quote_item_id, current);
   });
   const quoteItems = new Map<string, SupplyQuoteItem[]>();
