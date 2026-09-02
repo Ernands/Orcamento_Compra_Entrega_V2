@@ -1,4 +1,4 @@
-import { calculateQuoteLine, calculateQuoteTotals, moneyToCents } from './supply-calculations';
+import { calculateQuoteLine, calculateQuoteTotals, moneyToCents, quantityToThousandths } from './supply-calculations';
 import type { SupplyQuote } from './types';
 
 export interface QuoteStoreSummary {
@@ -168,7 +168,7 @@ export function buildQuoteSummary(
       if (destinations.length > 0) {
         const destinationWeights = destinations.map((destination) => ({
           key: destination.id,
-          weight: BigInt(Math.round(Number(destination.quantity) * 1000)),
+          weight: quantityToThousandths(destination.quantity),
         }));
         const destinationShipping = new Map(
           destinations.map((destination) => [
