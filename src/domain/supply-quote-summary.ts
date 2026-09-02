@@ -254,6 +254,14 @@ export function buildQuoteSummary(
         linkedStores.length > 0;
 
       if (canUseLegacyFallback) {
+        // Compatibilidade visual/auditoria: o consolidado legado permanece visivel,
+        // mas sem valor quando o usuario opta pelo fallback igualitario.
+        ensureStoreSummary(
+          totalsByStore,
+          CONSOLIDATED_STORE_SUMMARY_KEY,
+          'Consolidado / Nao distribuido',
+        );
+
         const totalShares = splitAmount(calculation.totalCents, linkedStores.length);
         const shippingShares = splitAmount(
           calculation.shippingCents || 0n,
