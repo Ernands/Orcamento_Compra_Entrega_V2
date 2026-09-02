@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,7 @@ import {
   listSupplyPurchasesV2,
   savePurchaseDestinationDistributionV2,
   savePurchaseOrderLineDistributionV2,
+  savePurchasePaymentV2,
 } from '../data/purchases/purchases-v2-repository';
 import type { PurchaseItemV2, PurchaseOrderLineV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
@@ -23,6 +24,7 @@ vi.mock('../data/purchases/purchases-v2-repository', async () => {
     cancelSupplyPurchaseOrderV2: vi.fn(),
     savePurchaseDestinationDistributionV2: vi.fn(),
     savePurchaseOrderLineDistributionV2: vi.fn(),
+    savePurchasePaymentV2: vi.fn(),
     uploadPurchaseAttachmentV3: vi.fn(),
     createPurchaseAttachmentSignedUrlV2: vi.fn(),
     createQuoteAttachmentSignedUrlReadOnlyV2: vi.fn(),
@@ -52,6 +54,7 @@ const partialLine: PurchaseOrderLineV2 = {
 const purchase: PurchaseV2 = {
   id: 'purchase-1', code: 'CMP-00001', quoteId: 'quote-1', quoteCode: 'COT-00170', supplierId: 'supplier-1', supplierName: 'Fornecedor Teste',
   quoteDate: '2026-08-31', approvedTotal: '1000', hasPendingShipping: false, status: 'partially_purchased', notes: null,
+  paymentMethodSnapshot: 'pix', entryAmountSnapshot: null, installmentCountSnapshot: null, paymentNotesSnapshot: null,
   approvedAt: '2026-09-01T10:00:00Z', returnedAt: null, supplierChannelId: 'channel-1', channelType: 'ecommerce',
   originCity: 'Fortaleza', originState: 'CE', contact: 'Compras', quoteContextSnapshotSource: 'approval',
   stores: [
@@ -63,6 +66,11 @@ const purchase: PurchaseV2 = {
     id: 'order-1', purchaseId: 'purchase-1', purchasedOn: '2026-09-01', supplierOrderRef: 'PED-1', expectedDeliveryDate: '2026-09-06',
     status: 'active', source: 'manual', notes: null, createdBy: 'user-1', createdByName: 'Comprador', createdAt: '2026-09-01T11:00:00Z',
     cancelledBy: null, cancelledByName: null, cancelledAt: null, cancellationReason: null, lines: [partialLine],
+  }],
+  payments: [{
+    id: 'payment-1', purchaseId: 'purchase-1', paymentMethod: 'pix', sourceLabel: 'Conta operacional', amount: '400',
+    entryAmount: null, installmentCount: null, firstDueDate: '2026-09-01', status: 'paid', paidAt: '2026-09-01T12:00:00Z',
+    notes: null, createdAt: '2026-09-01T12:00:00Z',
   }],
   attachments: [],
   quoteAttachments: [{ id: 'qa-1', quoteId: 'quote-1', originalName: 'proposta.pdf', storagePath: 'cotacoes/quote-1/proposta.pdf', mimeType: 'application/pdf', sizeBytes: 1000, description: null, documentType: 'quote', createdAt: '2026-08-31T12:00:00Z' }],
@@ -80,14 +88,33 @@ describe('SupplyPurchasesPage V2', () => {
     vi.mocked(cancelSupplyPurchaseOrderV2).mockResolvedValue();
     vi.mocked(savePurchaseDestinationDistributionV2).mockResolvedValue('confirmed');
     vi.mocked(savePurchaseOrderLineDistributionV2).mockResolvedValue('confirmed');
+    vi.mocked(savePurchasePaymentV2).mockResolvedValue('payment-new');
   });
 
-  it('mostra somente operacao de Compras, sem pagamento e reembolso', async () => {
+  it('mantem o reembolso fora da operacao e exibe os pagamentos', async () => {
     renderPage();
     expect(await screen.findByText('CMP-00001')).toBeInTheDocument();
     expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
-    expect(screen.queryByText(/Pagamento/)).not.toBeInTheDocument();
+    expect(screen.getByText('1 pagamentos ativos')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pagamentos CMP-00001' })).toBeInTheDocument();
     expect(screen.queryByText(/Reembolso solicitado/)).not.toBeInTheDocument();
+  });
+
+  it('lista pagamento existente e permite registrar um novo', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Pagamentos CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Pagamentos · CMP-00001' });
+    expect(within(dialog).getByText('Conta operacional')).toBeInTheDocument();
+    expect(within(dialog).getByText('R$ 400,00')).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Valor'));
+    await user.type(within(dialog).getByLabelText('Valor'), '250');
+    await user.selectOptions(within(dialog).getByLabelText('Situacao'), 'paid');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar pagamento' }));
+    expect(savePurchasePaymentV2).toHaveBeenCalledWith(expect.objectContaining({
+      purchaseId: 'purchase-1', paymentMethod: 'pix', amount: '250', status: 'paid',
+    }));
   });
 
   it('registra item sem destino sem inventar purchase_destination_id', async () => {
@@ -114,6 +141,22 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
     expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({
       lines: [expect.objectContaining({ shippingAmount: '' })],
+    }));
+  });
+
+  it('preserva a previsao de entrega alterada manualmente', async () => {
+    const user = userEvent.setup();
+    renderPage({ ...purchase, orders: [], status: 'approved' });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    fireEvent.input(within(dialog).getByLabelText('Previsao de entrega'), { target: { value: '2099-10-10' } });
+    await user.clear(within(dialog).getByLabelText('Frete realizado'));
+    await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
+    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({
+      expectedDeliveryDate: '2099-10-10',
+      lines: [expect.objectContaining({ expectedDeliveryDate: '2099-10-10' })],
     }));
   });
 

@@ -2,6 +2,7 @@ import { supabase } from '../supabase/client';
 import type {
   AllocationSource,
   DistributionStatus,
+  PaymentMethod,
   PurchaseAttachmentStoreV2,
   PurchaseAttachmentV2,
   PurchaseDestinationStoreV2,
@@ -13,11 +14,14 @@ import type {
   PurchaseOrderSource,
   PurchaseOrderStatus,
   PurchaseOrderV2,
+  PurchasePaymentStatus,
+  PurchasePaymentV2,
   PurchaseStatus,
   PurchaseStoreV2,
   PurchaseV2,
   QuoteAttachmentReadOnlyV2,
   RegisterPurchaseOrderInputV2,
+  SavePurchasePaymentInputV2,
   ShippingType,
   StoreAllocationInputV2,
   SupplierChannelType,
@@ -79,6 +83,8 @@ export function validatePurchaseAttachmentV2(file: File): string | null {
 type PurchaseRow = {
   id: string; codigo_negocio: string; quote_id: string; quote_code_snapshot: string; supplier_id: string;
   supplier_name_snapshot: string; quote_date_snapshot: string; approved_total: Numeric; has_pending_shipping: boolean;
+  payment_method_snapshot: PaymentMethod | null; entry_amount_snapshot: Numeric | null;
+  installment_count_snapshot: number | null; payment_notes_snapshot: string | null;
   status: PurchaseStatus; notes: string | null; approved_at: string; returned_at: string | null;
   supplier_channel_id_snapshot: string | null; channel_type_snapshot: SupplierChannelType | null;
   origin_city_snapshot: string | null; origin_state_snapshot: string | null; contact_snapshot: string | null;
@@ -129,6 +135,11 @@ type OrderLineStoreRow = {
   store_code_snapshot: string; store_name_snapshot: string; store_city_snapshot: string; store_state_snapshot: string;
   quantity: Numeric; allocation_source: 'direct' | 'manual';
 };
+type PaymentRow = {
+  id: string; purchase_id: string; payment_method: PaymentMethod; source_label: string | null; amount: Numeric;
+  entry_amount: Numeric | null; installment_count: number | null; first_due_date: string | null;
+  status: PurchasePaymentStatus; paid_at: string | null; notes: string | null; created_at: string;
+};
 type AttachmentRow = {
   id: string; purchase_id: string; purchase_order_id: string | null; original_name: string; storage_path: string;
   mime_type: string; size_bytes: number; description: string | null; document_type: PurchaseDocumentType;
@@ -165,7 +176,7 @@ function mapAttachmentStore(row: AttachmentStoreRow): PurchaseAttachmentStoreV2 
 
 export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
   const [purchaseResult, storeResult, itemResult, destinationResult, destinationStoreResult, orderResult,
-    orderLineResult, orderLineStoreResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult] = await Promise.all([
+    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult] = await Promise.all([
     supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
     supabase.from('supply_purchase_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
@@ -174,12 +185,13 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
     supabase.from('supply_purchase_order_items' as never).select('*').order('created_at'),
     supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot'),
+    supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }),
     supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
     supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
   ]);
   const resultWithError = [purchaseResult, storeResult, itemResult, destinationResult, destinationStoreResult, orderResult,
-    orderLineResult, orderLineStoreResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult].find((result) => result.error);
+    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult].find((result) => result.error);
   if (resultWithError?.error) throw resultWithError.error;
 
   const purchases = purchaseResult.data as unknown as PurchaseRow[];
@@ -190,6 +202,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
   const orders = orderResult.data as unknown as OrderRow[];
   const lines = orderLineResult.data as unknown as OrderLineRow[];
   const lineStores = orderLineStoreResult.data as unknown as OrderLineStoreRow[];
+  const payments = paymentResult.data as unknown as PaymentRow[];
   const attachments = attachmentResult.data as unknown as AttachmentRow[];
   const attachmentStores = attachmentStoreResult.data as unknown as AttachmentStoreRow[];
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
@@ -198,6 +211,8 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     id: purchase.id, code: purchase.codigo_negocio, quoteId: purchase.quote_id, quoteCode: purchase.quote_code_snapshot,
     supplierId: purchase.supplier_id, supplierName: purchase.supplier_name_snapshot, quoteDate: purchase.quote_date_snapshot,
     approvedTotal: stringValue(purchase.approved_total), hasPendingShipping: purchase.has_pending_shipping, status: purchase.status,
+    paymentMethodSnapshot: purchase.payment_method_snapshot, entryAmountSnapshot: nullableStringValue(purchase.entry_amount_snapshot),
+    installmentCountSnapshot: purchase.installment_count_snapshot, paymentNotesSnapshot: purchase.payment_notes_snapshot,
     notes: purchase.notes, approvedAt: purchase.approved_at, returnedAt: purchase.returned_at,
     supplierChannelId: purchase.supplier_channel_id_snapshot, channelType: purchase.channel_type_snapshot,
     originCity: purchase.origin_city_snapshot, originState: purchase.origin_state_snapshot, contact: purchase.contact_snapshot,
@@ -243,6 +258,12 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
         stores: lineStores.filter((store) => store.order_line_id === line.id).map(mapLineStore),
       })),
     })),
+    payments: payments.filter((payment) => payment.purchase_id === purchase.id).map((payment): PurchasePaymentV2 => ({
+      id: payment.id, purchaseId: payment.purchase_id, paymentMethod: payment.payment_method,
+      sourceLabel: payment.source_label, amount: stringValue(payment.amount), entryAmount: nullableStringValue(payment.entry_amount),
+      installmentCount: payment.installment_count, firstDueDate: payment.first_due_date, status: payment.status,
+      paidAt: payment.paid_at, notes: payment.notes, createdAt: payment.created_at,
+    })),
     attachments: attachments.filter((attachment) => attachment.purchase_id === purchase.id).map((attachment): PurchaseAttachmentV2 => ({
       id: attachment.id, purchaseId: attachment.purchase_id, purchaseOrderId: attachment.purchase_order_id,
       originalName: attachment.original_name, storagePath: attachment.storage_path, mimeType: attachment.mime_type,
@@ -285,6 +306,31 @@ export async function createSupplyPurchaseOrderV2(values: RegisterPurchaseOrderI
   const { data, error } = await supabase.rpc(
     'create_supply_purchase_order_v2' as never,
     buildPurchaseOrderRpcPayloadV2(values) as never,
+  );
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInputV2) {
+  return {
+    p_payment_id: values.id,
+    p_purchase_id: values.purchaseId,
+    p_payment_method: values.paymentMethod,
+    p_source_label: values.sourceLabel.trim() || null,
+    p_amount: values.amount,
+    p_entry_amount: values.entryAmount || null,
+    p_installment_count: values.installmentCount ? Number(values.installmentCount) : null,
+    p_first_due_date: values.firstDueDate || null,
+    p_status: values.status,
+    p_paid_at: values.paidAt ? new Date(values.paidAt).toISOString() : null,
+    p_notes: values.notes.trim() || null,
+  };
+}
+
+export async function savePurchasePaymentV2(values: SavePurchasePaymentInputV2): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    'save_supply_purchase_payment' as never,
+    buildPurchasePaymentRpcPayloadV2(values) as never,
   );
   if (error) throw new Error(error.message);
   return data;

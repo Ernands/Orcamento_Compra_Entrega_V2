@@ -51,10 +51,11 @@ function purchase(overrides: Partial<PurchaseV2> = {}): PurchaseV2 {
   return {
     id: 'purchase-1', code: 'CMP-00001', quoteId: 'quote-1', quoteCode: 'COT-00001', supplierId: 'supplier-1',
     supplierName: 'Fornecedor', quoteDate: '2026-08-31', approvedTotal: '1000.00', hasPendingShipping: false,
+    paymentMethodSnapshot: null, entryAmountSnapshot: null, installmentCountSnapshot: null, paymentNotesSnapshot: null,
     status: 'approved', notes: null, approvedAt: '2026-09-01T10:00:00Z', returnedAt: null,
     supplierChannelId: null, channelType: 'ecommerce', originCity: null, originState: null, contact: null,
     quoteContextSnapshotSource: 'approval', stores: [store('store-1', 'L1'), store('store-2', 'L2')],
-    items: [item()], orders: [], attachments: [], quoteAttachments: [], ...overrides,
+    items: [item()], orders: [], payments: [], attachments: [], quoteAttachments: [], ...overrides,
   };
 }
 

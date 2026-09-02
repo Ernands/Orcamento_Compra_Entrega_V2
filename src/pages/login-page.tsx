@@ -27,6 +27,9 @@ export function LoginPage() {
 
   useEffect(() => {
     document.title = 'Entrar | Implanta 27';
+    return () => {
+      document.title = 'Implanta 27';
+    };
   }, []);
 
   if (!loading && session && viewer) {

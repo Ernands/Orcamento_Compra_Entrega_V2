@@ -19,6 +19,18 @@ export type AllocationSource = 'pending' | 'snapshot' | 'manual' | 'direct' | 'l
 export type PurchaseOrderStatus = 'active' | 'cancelled';
 export type PurchaseOrderSource = 'manual' | 'legacy_backfill';
 
+export type PaymentMethod =
+  | 'pix'
+  | 'boleto'
+  | 'bank_transfer'
+  | 'credit_card'
+  | 'debit_card'
+  | 'cash'
+  | 'invoiced'
+  | 'other';
+
+export type PurchasePaymentStatus = 'planned' | 'paid' | 'cancelled';
+
 export type PurchaseDocumentType =
   | 'invoice'
   | 'receipt'
@@ -162,6 +174,21 @@ export interface PurchaseOrderV2 {
   lines: PurchaseOrderLineV2[];
 }
 
+export interface PurchasePaymentV2 {
+  id: string;
+  purchaseId: string;
+  paymentMethod: PaymentMethod;
+  sourceLabel: string | null;
+  amount: string;
+  entryAmount: string | null;
+  installmentCount: number | null;
+  firstDueDate: string | null;
+  status: PurchasePaymentStatus;
+  paidAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
 export interface PurchaseAttachmentStoreV2 {
   id: string;
   attachmentId: string;
@@ -211,6 +238,10 @@ export interface PurchaseV2 {
   quoteDate: string;
   approvedTotal: string;
   hasPendingShipping: boolean;
+  paymentMethodSnapshot: PaymentMethod | null;
+  entryAmountSnapshot: string | null;
+  installmentCountSnapshot: number | null;
+  paymentNotesSnapshot: string | null;
   status: PurchaseStatus;
   notes: string | null;
   approvedAt: string;
@@ -224,6 +255,7 @@ export interface PurchaseV2 {
   stores: PurchaseStoreV2[];
   items: PurchaseItemV2[];
   orders: PurchaseOrderV2[];
+  payments: PurchasePaymentV2[];
   attachments: PurchaseAttachmentV2[];
   quoteAttachments: QuoteAttachmentReadOnlyV2[];
 }
@@ -252,4 +284,18 @@ export interface RegisterPurchaseOrderInputV2 {
   expectedDeliveryDate: string;
   notes: string;
   lines: RegisterPurchaseOrderLineInputV2[];
+}
+
+export interface SavePurchasePaymentInputV2 {
+  id: string | null;
+  purchaseId: string;
+  paymentMethod: PaymentMethod;
+  sourceLabel: string;
+  amount: string;
+  entryAmount: string;
+  installmentCount: string;
+  firstDueDate: string;
+  status: Exclude<PurchasePaymentStatus, 'cancelled'>;
+  paidAt: string;
+  notes: string;
 }

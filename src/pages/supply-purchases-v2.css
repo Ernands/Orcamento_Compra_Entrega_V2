@@ -123,6 +123,14 @@
 .purchase-v2-summary-grid span,
 .purchase-v2-unallocated span { color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }
 .purchase-v2-unallocated { grid-template-columns: repeat(2,minmax(180px,1fr)); margin-top: 10px; }
+.purchase-v2-payment-sections,
+.purchase-v2-payment-section { display: grid; gap: 12px; }
+.purchase-v2-payment-section + .purchase-v2-payment-section { padding-top: 14px; border-top: 1px solid var(--line); }
+
+@media (max-width: 1440px) {
+  .purchase-v2-filters { grid-template-columns: repeat(4,minmax(150px,1fr)); }
+  .purchase-v2-filters .search-field { grid-column: 1 / -1; }
+}
 
 @media (max-width: 1180px) {
   .purchase-v2-filters { grid-template-columns: repeat(2,minmax(180px,1fr)); }
