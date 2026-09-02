@@ -131,7 +131,7 @@
 .purchase-v2-store-scope > span small { color: var(--muted); font-weight: 500; }
 .purchase-v2-store-scope > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .purchase-v2-store-scope label { display: inline-flex; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: .75rem; }
-.purchase-v2-summary-tabs {
+.segmented.purchase-v2-summary-tabs {
   width: 100%;
   grid-template-columns: repeat(4, minmax(110px, 1fr));
   margin-bottom: 12px;
@@ -188,7 +188,7 @@
   .purchase-v2-summary-kpis,
   .purchase-v2-unallocated { grid-template-columns: 1fr; }
   .purchase-v2-card__header { grid-template-columns: 1fr; }
-  .purchase-v2-summary-tabs { grid-template-columns: repeat(2,minmax(110px,1fr)); }
+  .segmented.purchase-v2-summary-tabs { grid-template-columns: repeat(2,minmax(110px,1fr)); }
   .purchase-v2-item__numbers { grid-template-columns: repeat(2,minmax(110px,1fr)); }
   .purchase-v2-destination,
   .purchase-v2-executions > div { grid-template-columns: 1fr; }
