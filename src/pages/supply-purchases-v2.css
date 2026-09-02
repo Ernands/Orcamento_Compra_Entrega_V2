@@ -222,7 +222,12 @@
 .purchase-v2-bulk-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .purchase-v2-bulk-section > header > div { display: grid; gap: 3px; }
 .purchase-v2-bulk-section > header span { color: var(--muted); font-size: .72rem; }
-.purchase-v2-portfolio-tabs { margin-bottom: 18px; }
+.segmented.purchase-v2-portfolio-tabs {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(130px,1fr));
+  width: 100%;
+  margin-bottom: 18px;
+}
 .purchase-v2-portfolio-kpis { grid-template-columns: repeat(4,minmax(160px,1fr)); }
 .purchase-v2-status-overview { display: grid; grid-template-columns: repeat(3,minmax(150px,1fr)); gap: 8px; }
 .purchase-v2-status-overview > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; }
@@ -261,6 +266,7 @@
   .purchase-v2-unallocated { grid-template-columns: 1fr; }
   .purchase-v2-card__header { grid-template-columns: 1fr; }
   .segmented.purchase-v2-summary-tabs { grid-template-columns: repeat(2,minmax(110px,1fr)); }
+  .segmented.purchase-v2-portfolio-tabs { grid-template-columns: repeat(2,minmax(110px,1fr)); }
   .purchase-v2-manage-tabs,
   .purchase-v2-portfolio-kpis,
   .purchase-v2-status-overview { grid-template-columns: 1fr; }
