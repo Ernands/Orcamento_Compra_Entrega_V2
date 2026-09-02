@@ -180,8 +180,8 @@ export function QuoteSummaryModal({
             <h3>Totais por loja</h3>
             <p>
               {allocateConsolidated
-                ? 'Valor consolidado rateado igualmente entre as lojas de cada cotacao. O cadastro original nao e alterado.'
-                : 'Todas as lojas que constam nas cotacoes, inclusive consolidadas. Valores sem rateio entre lojas.'}
+                ? 'Destinos reais sao respeitados. Itens legados sem destino sao rateados igualmente entre as lojas da cotacao, apenas nesta visualizacao.'
+                : 'Destinos reais sao respeitados. Itens legados sem destino permanecem como Consolidado / Nao distribuido.'}
               {activeStates.length ? ` Exibindo: ${activeStates.join(', ')}.` : ''}
             </p>
           </div>
@@ -193,7 +193,7 @@ export function QuoteSummaryModal({
               onClick={() => setAllocateConsolidated((current) => !current)}
             >
               <Calculator size={17} />
-              {allocateConsolidated ? 'Ver valor original' : 'Ver valor rateado'}
+              {allocateConsolidated ? 'Nao ratear legado' : 'Ratear legado sem destino'}
             </button>
 
             <details className="quote-state-filter">
