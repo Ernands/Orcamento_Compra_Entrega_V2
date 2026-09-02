@@ -92,9 +92,11 @@ describe('SupplyPurchasesPage V2', () => {
   });
 
   it('mantem o reembolso fora da operacao e exibe os pagamentos', async () => {
+    const user = userEvent.setup();
     renderPage();
     expect(await screen.findByText('CMP-00001')).toBeInTheDocument();
     expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     expect(screen.getByText('1 pagamentos ativos')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pagamentos CMP-00001' })).toBeInTheDocument();
     expect(screen.queryByText(/Reembolso solicitado/)).not.toBeInTheDocument();
@@ -121,6 +123,7 @@ describe('SupplyPurchasesPage V2', () => {
     const user = userEvent.setup();
     renderPage({ ...purchase, orders: [], status: 'approved' });
     await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
     expect(within(dialog).queryByLabelText('Destino')).not.toBeInTheDocument();
@@ -134,6 +137,7 @@ describe('SupplyPurchasesPage V2', () => {
     const user = userEvent.setup();
     renderPage({ ...purchase, orders: [], status: 'approved' });
     await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
     await user.clear(within(dialog).getByLabelText('Frete realizado'));
@@ -148,6 +152,7 @@ describe('SupplyPurchasesPage V2', () => {
     const user = userEvent.setup();
     renderPage({ ...purchase, orders: [], status: 'approved' });
     await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
     fireEvent.input(within(dialog).getByLabelText('Previsao de entrega'), { target: { value: '2099-10-10' } });
@@ -169,6 +174,7 @@ describe('SupplyPurchasesPage V2', () => {
     }] };
     renderPage({ ...purchase, items: [directItem], orders: [], status: 'approved' });
     await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
     expect(within(dialog).getByLabelText('Destino')).toHaveValue('destination-1');
@@ -194,9 +200,10 @@ describe('SupplyPurchasesPage V2', () => {
   });
 
   it('marca compra em andamento em azul e compra concluida em verde', async () => {
-    const { container, rerender } = renderPage();
+    const first = renderPage();
     await screen.findByText('CMP-00001');
-    expect(container.querySelector('.purchase-v2-card.is-pending')).not.toBeNull();
+    expect(first.container.querySelector('.purchase-v2-card.is-pending')).not.toBeNull();
+    first.unmount();
 
     const completedItem: PurchaseItemV2 = { ...baseItem, quantityApproved: '4' };
     const completedPurchase: PurchaseV2 = {
@@ -205,11 +212,9 @@ describe('SupplyPurchasesPage V2', () => {
       items: [completedItem],
       orders: [{ ...purchase.orders[0], lines: [{ ...partialLine, quantity: '4' }] }],
     };
-    vi.mocked(listSupplyPurchasesV2).mockResolvedValue([completedPurchase]);
-    rerender(<MemoryRouter><SupplyPurchasesPage /></MemoryRouter>);
-
+    const second = renderPage(completedPurchase);
     await screen.findByText('CMP-00001');
-    expect(container.querySelector('.purchase-v2-card.is-realized')).not.toBeNull();
+    expect(second.container.querySelector('.purchase-v2-card.is-realized')).not.toBeNull();
   });
 
   it('usa confirmar loja quando o destino possui somente uma loja', async () => {
@@ -297,9 +302,10 @@ describe('SupplyPurchasesPage V2', () => {
       ],
     }] };
     renderPage({ ...purchase, items: [profileItem], orders: [], status: 'approved' });
-    const distributeButton = await screen.findByRole('button', { name: 'Distribuir entre lojas' });
+    await user.click(await screen.findByRole('button', { name: 'Detalhar CMP-00001' }));
+    const distributeButton = screen.getByRole('button', { name: 'Distribuir entre lojas' });
     await user.click(distributeButton);
-    const dialog = screen.getByRole('dialog', { name: 'Distribuir · Valter Leandro' });
+    const dialog = screen.getByRole('dialog', { name: 'Distribuir destino · Valter Leandro' });
     const inputs = within(dialog).getAllByPlaceholderText('Quantidade');
     await user.type(inputs[0], '4');
     await user.type(inputs[1], '6');
@@ -312,6 +318,7 @@ describe('SupplyPurchasesPage V2', () => {
   it('permite distribuir fisicamente um registro sem destino', async () => {
     const user = userEvent.setup();
     renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Detalhar CMP-00001' }));
     await screen.findByText('Lojas pendentes');
     await user.click(screen.getByRole('button', { name: 'Distribuir registro' }));
     const dialog = screen.getByRole('dialog', { name: /Distribuir registro · Cadeira operacional/ });
