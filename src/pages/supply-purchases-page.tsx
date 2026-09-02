@@ -1,5 +1,8 @@
 import {
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
   CreditCard,
   FileText,
   History,
@@ -478,7 +481,14 @@ function DestinationDistributionModal({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!destination) return;
-    setAllocations(Object.fromEntries(destination.stores.map((store) => [store.storeId, store.allocatedQuantity === null ? '' : store.allocatedQuantity])));
+    setAllocations(Object.fromEntries(destination.stores.map((store) => [
+      store.storeId,
+      store.allocatedQuantity === null
+        ? destination.stores.length === 1
+          ? destination.quantity
+          : ''
+        : store.allocatedQuantity,
+    ])));
     setError(null);
   }, [destination]);
   const allocated = useMemo(() => {
@@ -497,12 +507,20 @@ function DestinationDistributionModal({
     } catch (failure) { setError(errorMessage(failure, 'Nao foi possivel salvar a distribuicao.')); }
     finally { setSaving(false); }
   };
-  return <Modal open={Boolean(destination)} title={destination ? `Distribuir · ${destination.label}` : 'Distribuir por loja'} description="A distribuicao so fica confirmada quando a soma das lojas fecha exatamente a quantidade do destino." onClose={onClose}>
+  const singleStore = Boolean(destination && destination.stores.length === 1);
+  return <Modal
+    open={Boolean(destination)}
+    title={destination ? `${singleStore ? 'Confirmar loja' : 'Distribuir destino'} · ${destination.label}` : 'Distribuicao por loja'}
+    description={singleStore
+      ? 'Este destino possui uma unica loja. Confirme que toda a quantidade aprovada pertence a ela.'
+      : 'Informe quanto da quantidade aprovada deste destino pertence a cada loja. A soma deve fechar exatamente o total do destino.'}
+    onClose={onClose}
+  >
     {destination && <form className="stack-form" onSubmit={submit}>
       <div className="purchase-v2-allocation-total"><span>Destino</span><strong>{formatQuantityV2(destination.quantity)} {destination.unit}</strong><span>Alocado</span><strong>{allocated === null ? 'Valor invalido' : `${formatQuantityV2(decimalFromThousandths(allocated))} ${destination.unit}`}</strong></div>
       <div className="purchase-v2-allocation-grid">{destination.stores.map((store) => <label className="field" key={store.storeId}><span>{store.code} · {store.name}<small>{store.city}/{store.state}</small></span><input value={allocations[store.storeId] ?? ''} onChange={(event) => setAllocations((current) => ({ ...current, [store.storeId]: event.target.value }))} placeholder="Quantidade" /></label>)}</div>
       {error && <div className="form-error">{error}</div>}
-      <div className="modal-actions"><button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button><button className="button button--primary" disabled={saving}>{saving ? 'Salvando...' : 'Salvar distribuicao'}</button></div>
+      <div className="modal-actions"><button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button><button className="button button--primary" disabled={saving}>{saving ? 'Salvando...' : singleStore ? 'Confirmar loja' : 'Salvar distribuicao'}</button></div>
     </form>}
   </Modal>;
 }
@@ -693,7 +711,7 @@ function SummaryModal({ purchase, onClose }: { purchase: PurchaseV2 | null; onCl
   });
 
   return <Modal open title={`Resumo · ${purchase.code}`} description={`${purchase.quoteCode} · ${purchase.supplierName}`} onClose={onClose}>
-    <div className="segmented" role="group" aria-label="Visao do resumo de compras">
+    <div className="segmented purchase-v2-summary-tabs" role="group" aria-label="Visao do resumo de compras">
       <button type="button" className={view==='consolidated'?'is-active':''} onClick={()=>setView('consolidated')}>Consolidado</button>
       <button type="button" className={view==='destination'?'is-active':''} onClick={()=>setView('destination')}>Prospector/UF</button>
       <button type="button" className={view==='store'?'is-active':''} onClick={()=>setView('store')}>Loja</button>
@@ -701,7 +719,7 @@ function SummaryModal({ purchase, onClose }: { purchase: PurchaseV2 | null; onCl
     </div>
 
     {view==='consolidated' && <>
-      <div className="summary-kpis">
+      <div className="purchase-v2-summary-kpis">
         <div><span>Aprovado</span><strong>{formatBRL(summary.approvedCents)}</strong></div>
         <div><span>Realizado conhecido</span><strong>{formatBRL(summary.realizedCents)}</strong></div>
         <div><span>Saldo conhecido</span><strong>{formatBRL(summary.balanceCents)}</strong></div>
@@ -771,6 +789,7 @@ export function SupplyPurchasesPage() {
   const [documentsPurchase, setDocumentsPurchase] = useState<PurchaseV2 | null>(null);
   const [summaryPurchase, setSummaryPurchase] = useState<PurchaseV2 | null>(null);
   const [returningId, setReturningId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -800,6 +819,22 @@ export function SupplyPurchasesPage() {
     });
   }, [purchases,query,status,stateFilter,destinationFilter,pendingFilter]);
 
+  const allDetailsVisible =
+    filtered.length > 0 && filtered.every((purchase) => expandedIds.has(purchase.id));
+
+  const togglePurchaseDetails = (purchaseId: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(purchaseId)) next.delete(purchaseId);
+      else next.add(purchaseId);
+      return next;
+    });
+  };
+
+  const toggleAllDetails = () => {
+    setExpandedIds(allDetailsVisible ? new Set() : new Set(filtered.map((purchase) => purchase.id)));
+  };
+
   const returnToQuote = async (purchase: PurchaseV2) => {
     if (!window.confirm(`Devolver ${purchase.code} para cotacao? O backend so permite isso quando nao ha execucao/documentos impeditivos.`)) return;
     setReturningId(purchase.id);
@@ -809,15 +844,28 @@ export function SupplyPurchasesPage() {
   };
 
   return <section className="page-stack purchase-v2-page">
-    <header className="page-header"><div><span className="eyebrow">Suprimentos</span><h2>Compras</h2><p>Execucao do aprovado: registros de compra, pagamentos, historico, destinos, distribuicao fisica e documentos.</p></div><button className="button button--secondary" onClick={()=>void load()}><RefreshCcw size={17}/>Atualizar</button></header>
+    <header className="page-header">
+      <div><span className="eyebrow">Suprimentos</span><h2>Compras</h2><p>Execucao do aprovado: registros de compra, pagamentos, historico, destinos, distribuicao fisica e documentos.</p></div>
+      <div className="page-heading__actions">
+        <button className="button button--secondary" disabled={!filtered.length} onClick={toggleAllDetails}>
+          <ChevronsUpDown size={17}/>
+          {allDetailsVisible ? 'Recolher todas as compras' : 'Expandir todas as compras'}
+        </button>
+        <button className="button button--secondary" onClick={()=>void load()}><RefreshCcw size={17}/>Atualizar</button>
+      </div>
+    </header>
     <div className="filter-bar purchase-v2-filters"><label className="search-field"><Search size={18}/><input placeholder="Buscar compra, cotacao, fornecedor, item ou destino" value={query} onChange={(event)=>setQuery(event.target.value)}/></label><select aria-label="Status da compra" value={status} onChange={(event)=>setStatus(event.target.value)}><option value="">Todos os status</option><option value="approved">Aprovada</option><option value="partially_purchased">Parcialmente comprada</option><option value="purchased">Comprada</option><option value="returned">Devolvida</option><option value="cancelled">Cancelada</option></select><select aria-label="UF" value={stateFilter} onChange={(event)=>setStateFilter(event.target.value)}><option value="">Todas as UFs</option>{states.map((state)=><option key={state} value={state}>{state}</option>)}</select><select aria-label="Prospector ou destino" value={destinationFilter} onChange={(event)=>setDestinationFilter(event.target.value)}><option value="">Todos os destinos</option>{destinationLabels.map((label)=><option key={label} value={label}>{label}</option>)}</select><select aria-label="Pendencia operacional" value={pendingFilter} onChange={(event)=>setPendingFilter(event.target.value)}><option value="">Todas as pendencias</option><option value="destination">Distribuicao mestre pendente</option><option value="line">Distribuicao realizada pendente</option><option value="shipping">Frete realizado pendente</option><option value="documents">Sem documento de Compra</option></select></div>
-    {loading ? <InlineLoading label="Carregando compras"/> : error ? <ErrorState message={error} onRetry={()=>void load()}/> : filtered.length ? <div className="purchase-v2-list">{filtered.map((purchase)=>{const summary=purchaseExecutionSummary(purchase);const active=purchase.orders.filter((order)=>order.status==='active');return <article key={purchase.id} className="purchase-v2-card">
-      <header className="purchase-v2-card__header"><div className="supply-identity"><small>{purchase.code}</small><strong>{purchase.quoteCode}</strong></div><div><strong>{purchase.supplierName}</strong><small>{channelLabel(purchase)}</small></div><div title={purchase.stores.map((store)=>`${store.code} - ${store.city}/${store.state}${store.address?` - ${store.address}`:''}`).join('\n')}><strong>{purchaseStoresLabel(purchase)}</strong><small>{purchase.stores.length===1?`${purchase.stores[0].city}/${purchase.stores[0].state}`:'Passe para ver as lojas'}</small></div><div><strong>{formatBRL(summary.approvedCents)}</strong><small>Realizado {formatBRL(summary.realizedCents)} · saldo {formatBRL(summary.balanceCents)}</small></div><StatusBadge status={purchase.status}/><div className="row-actions"><IconButton label={`Resumo ${purchase.code}`} onClick={()=>setSummaryPurchase(purchase)}><ShoppingCart size={17}/></IconButton><IconButton label={`Historico ${purchase.code}`} onClick={()=>setHistoryPurchase(purchase)}><History size={17}/></IconButton><IconButton label={`Pagamentos ${purchase.code}`} onClick={()=>setPaymentPurchase(purchase)}><CreditCard size={17}/></IconButton><IconButton label={`Documentos ${purchase.code}`} onClick={()=>setDocumentsPurchase(purchase)}><Paperclip size={17}/></IconButton><Link className="icon-button" aria-label={`Abrir cotacao ${purchase.quoteCode}`} title="Abrir cotacao de origem" to={`/suprimentos/cotacoes?quote=${purchase.quoteId}`}><ArrowLeft size={17}/></Link>{canApprove && purchase.status!=='returned' && purchase.status!=='cancelled' && <IconButton label={`Voltar ${purchase.code} para cotacao`} disabled={returningId===purchase.id} onClick={()=>void returnToQuote(purchase)}><RefreshCcw size={17}/></IconButton>}</div></header>
-      <div className="purchase-v2-indicators"><span>{summary.completedItems}/{purchase.items.length} itens concluidos</span><span>{active.length} registros ativos</span>{summary.pendingDestinationDistributions>0 && <span className="is-warning">{summary.pendingDestinationDistributions} destinos para distribuir</span>}{summary.pendingLineDistributions>0 && <span className="is-warning">{summary.pendingLineDistributions} registros sem distribuicao fisica</span>}{summary.pendingShippingLines>0 && <span className="is-warning">{summary.pendingShippingLines} fretes pendentes</span>}<span>{purchase.payments.filter((payment)=>payment.status!=='cancelled').length} pagamentos ativos</span><span>{purchase.attachments.length} documentos de Compra</span></div>
+    {loading ? <InlineLoading label="Carregando compras"/> : error ? <ErrorState message={error} onRetry={()=>void load()}/> : filtered.length ? <div className="purchase-v2-list">{filtered.map((purchase)=>{const summary=purchaseExecutionSummary(purchase);const active=purchase.orders.filter((order)=>order.status==='active');const expanded=expandedIds.has(purchase.id);const cardTone=purchase.status==='purchased'?'is-realized':['approved','partially_purchased'].includes(purchase.status)?'is-pending':'';return <article key={purchase.id} className={`purchase-v2-card ${cardTone}`}>
+      <header className="purchase-v2-card__header"><div className="supply-identity"><small>{purchase.code}</small><strong>{purchase.quoteCode}</strong></div><div><strong>{purchase.supplierName}</strong><small>{channelLabel(purchase)}</small></div><div title={purchase.stores.map((store)=>`${store.code} - ${store.city}/${store.state}${store.address?` - ${store.address}`:''}`).join('\n')}><strong>{purchaseStoresLabel(purchase)}</strong><small>{purchase.stores.length===1?`${purchase.stores[0].city}/${purchase.stores[0].state}`:'Passe para ver as lojas'}</small></div><div><strong>{formatBRL(summary.approvedCents)}</strong><small>Realizado {formatBRL(summary.realizedCents)} · saldo {formatBRL(summary.balanceCents)}</small></div><StatusBadge status={purchase.status}/><div className="row-actions"><IconButton label={expanded ? `Recolher ${purchase.code}` : `Detalhar ${purchase.code}`} onClick={()=>togglePurchaseDetails(purchase.id)}>{expanded ? <ChevronUp size={17}/> : <ChevronDown size={17}/>}</IconButton><IconButton label={`Resumo ${purchase.code}`} onClick={()=>setSummaryPurchase(purchase)}><ShoppingCart size={17}/></IconButton><IconButton label={`Historico ${purchase.code}`} onClick={()=>setHistoryPurchase(purchase)}><History size={17}/></IconButton><IconButton label={`Pagamentos ${purchase.code}`} onClick={()=>setPaymentPurchase(purchase)}><CreditCard size={17}/></IconButton><IconButton label={`Documentos ${purchase.code}`} onClick={()=>setDocumentsPurchase(purchase)}><Paperclip size={17}/></IconButton><Link className="icon-button" aria-label={`Abrir cotacao ${purchase.quoteCode}`} title="Abrir cotacao de origem" to={`/suprimentos/cotacoes?quote=${purchase.quoteId}`}><ArrowLeft size={17}/></Link>{canApprove && purchase.status!=='returned' && purchase.status!=='cancelled' && <IconButton label={`Voltar ${purchase.code} para cotacao`} disabled={returningId===purchase.id} onClick={()=>void returnToQuote(purchase)}><RefreshCcw size={17}/></IconButton>}</div></header>
+      {expanded && <><div className="purchase-v2-indicators"><span>{summary.completedItems}/{purchase.items.length} itens concluidos</span><span>{active.length} registros ativos</span>{summary.pendingDestinationDistributions>0 && <span className="is-warning">{summary.pendingDestinationDistributions} destinos para distribuir</span>}{summary.pendingLineDistributions>0 && <span className="is-warning">{summary.pendingLineDistributions} registros sem distribuicao fisica</span>}{summary.pendingShippingLines>0 && <span className="is-warning">{summary.pendingShippingLines} fretes pendentes</span>}<span>{purchase.payments.filter((payment)=>payment.status!=='cancelled').length} pagamentos ativos</span><span>{purchase.attachments.length} documentos de Compra</span></div>
       <div className="purchase-v2-items">{purchase.items.map((item)=>{const execution=itemExecution(item,purchase);const itemLines=active.flatMap((order)=>order.lines.map((line)=>({order,line}))).filter(({line})=>line.purchaseItemId===item.id);return <section key={item.id} className="purchase-v2-item"><header><div><strong>{item.itemName}</strong><small>{item.itemCode}{item.itemCategory?` · ${item.itemCategory}`:''}{item.itemArea?` · ${item.itemArea}`:''}</small>{item.offeredBrandModel && <small>Ofertado: {item.offeredBrandModel}</small>}{item.quoteItemNotes && <small>Obs. da cotacao: {item.quoteItemNotes}</small>}</div><div className="purchase-v2-item__numbers"><span>Aprovado <strong>{formatQuantityV2(item.quantityApproved)} {item.unit}</strong></span><span>Comprado <strong>{formatQuantityV2(decimalFromThousandths(execution.purchasedQuantity))} {item.unit}</strong></span><span>Falta <strong>{formatQuantityV2(decimalFromThousandths(execution.missingQuantity))} {item.unit}</strong></span><span>Realizado <strong>{formatBRL(execution.realizedCents)}</strong></span></div><div>{canEdit && execution.missingQuantity>0n && purchase.status!=='returned' && purchase.status!=='cancelled' && <button type="button" className="button button--primary button--small" onClick={()=>setRegistering({purchase,item})}><PackageCheck size={15}/>Registrar compra</button>}</div></header>
-        {item.destinations.length ? <div className="purchase-v2-destinations">{item.destinations.map((destination)=><div key={destination.id} className="purchase-v2-destination"><div><MapPinned size={16}/><span><strong>{destination.label}</strong><small>{destination.state} · {formatQuantityV2(destination.quantity)} {destination.unit} · {quotedShippingLabel(destination)}{destination.quotedDeliveryDays!==null?` · ${destination.quotedDeliveryDays} dias`:''}</small></span></div><span className={`purchase-v2-pill ${destination.distributionStatus==='confirmed'?'is-ok':'is-warning'}`}>{destination.destinationType==='store'?'Direto loja':destination.distributionStatus==='confirmed'?'Distribuicao confirmada':'Distribuicao pendente'}</span>{canEdit && destination.destinationType==='profile' && <button type="button" className="button button--secondary button--small" onClick={()=>setDistribution(destination)}><MapPinned size={15}/>{destination.distributionStatus==='confirmed'?'Revisar lojas':'Distribuir por loja'}</button>}</div>)}</div> : <div className="purchase-v2-hint"><strong>Item sem destinos de frete</strong><span>Nao sera criado destino artificial. A distribuicao fisica do registro pode ser informada depois.</span></div>}
+        {item.destinations.length ? <div className="purchase-v2-destinations">{item.destinations.map((destination)=><div key={destination.id} className="purchase-v2-destination"><div><MapPinned size={16}/><span><strong>{destination.label}</strong><small>{destination.state} · {formatQuantityV2(destination.quantity)} {destination.unit} · {quotedShippingLabel(destination)}{destination.quotedDeliveryDays!==null?` · ${destination.quotedDeliveryDays} dias`:''}</small></span></div><span className={`purchase-v2-pill ${destination.distributionStatus==='confirmed'?'is-ok':'is-warning'}`}>{destination.destinationType==='store'?'Direto loja':destination.distributionStatus==='confirmed'?'Distribuicao confirmada':'Distribuicao pendente'}</span>{canEdit && destination.destinationType==='profile' && <button type="button" className="button button--secondary button--small" onClick={()=>setDistribution(destination)}><MapPinned size={15}/>{destination.distributionStatus==='confirmed'
+  ? 'Revisar lojas'
+  : destination.stores.length === 1
+    ? 'Confirmar loja'
+    : 'Distribuir entre lojas'}</button>}</div>)}</div> : <div className="purchase-v2-hint"><strong>Item sem destinos de frete</strong><span>Nao sera criado destino artificial. A distribuicao fisica do registro pode ser informada depois.</span></div>}
         {itemLines.length>0 && <div className="purchase-v2-executions"><h5>Registros realizados</h5>{itemLines.map(({order,line})=><div key={line.id}><div><Truck size={15}/><span><strong>{formatDate(order.purchasedOn)} · {formatQuantityV2(line.quantity)} {line.unit} · {lineTotalCents(line)===null?'Total pendente':formatBRL(lineTotalCents(line)!)}</strong><small>{line.destinationLabel || 'Sem destino'} · {order.supplierOrderRef || 'sem pedido'} · previsao {formatDate(line.expectedDeliveryDate)}</small></span></div><span className={`purchase-v2-pill ${line.storeDistributionStatus==='confirmed'?'is-ok':'is-warning'}`}>{line.storeDistributionStatus==='confirmed'?'Lojas confirmadas':'Lojas pendentes'}</span>{canEdit && line.storeDistributionStatus!=='confirmed' && <button type="button" className="button button--secondary button--small" onClick={()=>setLineDistribution({purchase,line})}><MapPinned size={15}/>Distribuir registro</button>}</div>)}</div>}
-      </section>})}</div>
+      </section>})}</div></>}
     </article>})}</div> : <EmptyState title="Nenhuma compra" detail="As cotacoes aprovadas para compra aparecerao aqui."/>}
 
     <RegisterPurchaseModal purchase={registering?.purchase||null} item={registering?.item||null} onClose={()=>setRegistering(null)} onSaved={load}/>
