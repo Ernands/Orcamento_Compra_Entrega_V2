@@ -177,6 +177,63 @@ describe('SupplyPurchasesPage V2', () => {
     expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ purchaseDestinationId: 'destination-1' })] }));
   });
 
+  it('expande e recolhe uma compra e oferece controle para todas', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('CMP-00001');
+    expect(screen.queryByText('Registros realizados')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expandir todas as compras' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    expect(screen.getByText('Registros realizados')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recolher CMP-00001' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Recolher todas as compras' }));
+    expect(screen.queryByText('Registros realizados')).not.toBeInTheDocument();
+  });
+
+  it('marca compra em andamento em azul e compra concluida em verde', async () => {
+    const { container, rerender } = renderPage();
+    await screen.findByText('CMP-00001');
+    expect(container.querySelector('.purchase-v2-card.is-pending')).not.toBeNull();
+
+    const completedItem: PurchaseItemV2 = { ...baseItem, quantityApproved: '4' };
+    const completedPurchase: PurchaseV2 = {
+      ...purchase,
+      status: 'purchased',
+      items: [completedItem],
+      orders: [{ ...purchase.orders[0], lines: [{ ...partialLine, quantity: '4' }] }],
+    };
+    vi.mocked(listSupplyPurchasesV2).mockResolvedValue([completedPurchase]);
+    rerender(<MemoryRouter><SupplyPurchasesPage /></MemoryRouter>);
+
+    await screen.findByText('CMP-00001');
+    expect(container.querySelector('.purchase-v2-card.is-realized')).not.toBeNull();
+  });
+
+  it('usa confirmar loja quando o destino possui somente uma loja', async () => {
+    const user = userEvent.setup();
+    const singleStoreItem: PurchaseItemV2 = { ...baseItem, destinations: [{
+      id: 'single-profile', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-single', destinationType: 'profile', profileId: 'fp-single', storeId: null, label: 'Charles Pitter', state: 'MG', destinationCount: 1,
+      quantity: '10', unit: 'un', quotedShippingType: 'informed', quotedShippingAmount: '5', quotedDeliveryDays: 1, notes: null, position: 0, distributionStatus: 'pending', snapshotSource: 'approval',
+      stores: [
+        { id: 'ds-single', purchaseDestinationId: 'single-profile', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', allocatedQuantity: null, allocationSource: 'snapshot' },
+      ],
+    }] };
+    renderPage({ ...purchase, items: [singleStoreItem], orders: [], status: 'approved' });
+
+    await user.click(await screen.findByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar loja' }));
+    const dialog = screen.getByRole('dialog', { name: 'Confirmar loja · Charles Pitter' });
+    expect(within(dialog).getByDisplayValue('10')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar loja' }));
+    expect(savePurchaseDestinationDistributionV2).toHaveBeenCalledWith('single-profile', [
+      { storeId: 'store-1', quantity: '10' },
+    ]);
+  });
+
   it('mantem variacao como Em andamento na compra parcial', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -240,7 +297,7 @@ describe('SupplyPurchasesPage V2', () => {
       ],
     }] };
     renderPage({ ...purchase, items: [profileItem], orders: [], status: 'approved' });
-    const distributeButton = await screen.findByRole('button', { name: 'Distribuir por loja' });
+    const distributeButton = await screen.findByRole('button', { name: 'Distribuir entre lojas' });
     await user.click(distributeButton);
     const dialog = screen.getByRole('dialog', { name: 'Distribuir · Valter Leandro' });
     const inputs = within(dialog).getAllByPlaceholderText('Quantidade');
