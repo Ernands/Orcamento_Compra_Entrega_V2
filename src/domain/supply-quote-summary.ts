@@ -77,6 +77,68 @@ function splitAmount(value: bigint, parts: number): bigint[] {
   );
 }
 
+function allocateSignedCentsByWeights(
+  totalCents: bigint,
+  entries: Array<{ key: string; weight: bigint }>,
+): Map<string, bigint> {
+  const positive = entries.filter((entry) => entry.weight > 0n);
+  if (!positive.length) return new Map();
+
+  const sign = totalCents < 0n ? -1n : 1n;
+  const absoluteTotal = totalCents < 0n ? -totalCents : totalCents;
+  const totalWeight = positive.reduce((sum, entry) => sum + entry.weight, 0n);
+  const allocations = new Map<string, bigint>();
+  const remainders: Array<{ key: string; remainder: bigint }> = [];
+  let allocated = 0n;
+
+  positive.forEach((entry) => {
+    const numerator = absoluteTotal * entry.weight;
+    const base = numerator / totalWeight;
+    allocations.set(entry.key, base);
+    allocated += base;
+    remainders.push({ key: entry.key, remainder: numerator % totalWeight });
+  });
+
+  let remaining = absoluteTotal - allocated;
+  remainders.sort((a, b) =>
+    a.remainder === b.remainder
+      ? a.key.localeCompare(b.key)
+      : a.remainder > b.remainder
+        ? -1
+        : 1,
+  );
+
+  let index = 0;
+  while (remaining > 0n && remainders.length) {
+    const key = remainders[index % remainders.length].key;
+    allocations.set(key, (allocations.get(key) || 0n) + 1n);
+    remaining -= 1n;
+    index += 1;
+  }
+
+  return new Map([...allocations].map(([key, value]) => [key, value * sign]));
+}
+
+function addStoreAllocation(
+  totalsByStore: Map<string, MutableStoreSummary>,
+  quoteId: string,
+  store: { id: string; code: string; name: string; state: string },
+  itemCount: number,
+  shippingCents: bigint,
+  totalCents: bigint,
+) {
+  const row = ensureStoreSummary(
+    totalsByStore,
+    store.id,
+    `${store.code} - ${store.name}`,
+    store.state,
+  );
+  row.quoteIds.add(quoteId);
+  row.itemCount += itemCount;
+  row.shippingCents += shippingCents;
+  row.totalCents += totalCents;
+}
+
 export function buildQuoteSummary(
   quotes: SupplyQuote[],
   options: QuoteSummaryOptions = {},
@@ -89,8 +151,6 @@ export function buildQuoteSummary(
       a.code.localeCompare(b.code, 'pt-BR'),
     );
 
-    // Toda loja vinculada a uma cotacao deve aparecer no resumo, mesmo quando
-    // a cotacao e consolidada e ainda nao houve distribuicao dos itens por loja.
     linkedStores.forEach((store) => {
       const row = ensureStoreSummary(
         totalsByStore,
@@ -102,48 +162,121 @@ export function buildQuoteSummary(
     });
 
     quote.items.forEach((item) => {
-      const store = item.storeId ? stores.get(item.storeId) : null;
       const calculation = calculateQuoteLine(item);
+      const destinations = item.destinations || [];
 
-      const canAllocate =
-        options.allocateConsolidated &&
-        quote.contextType === 'consolidated' &&
-        !item.storeId &&
-        linkedStores.length > 0;
-
-      if (canAllocate) {
-        // Mantem a referencia visual do consolidado, mas zera seus valores quando
-        // o usuario opta pela visao rateada. O rateio e apenas de visualizacao.
-        ensureStoreSummary(
-          totalsByStore,
-          CONSOLIDATED_STORE_SUMMARY_KEY,
-          'Consolidado / Nao distribuido',
+      if (destinations.length > 0) {
+        const destinationWeights = destinations.map((destination) => ({
+          key: destination.id,
+          weight: BigInt(Math.round(Number(destination.quantity) * 1000)),
+        }));
+        const destinationShipping = new Map(
+          destinations.map((destination) => [
+            destination.id,
+            destination.shippingType === 'informed'
+              ? moneyToCents(destination.shippingAmount || '0')
+              : 0n,
+          ]),
+        );
+        const knownDestinationShipping = [...destinationShipping.values()].reduce(
+          (sum, value) => sum + value,
+          0n,
+        );
+        const commonCents = calculation.totalCents - knownDestinationShipping;
+        const commonByDestination = allocateSignedCentsByWeights(
+          commonCents,
+          destinationWeights,
         );
 
-        const totalShares = splitAmount(calculation.totalCents, linkedStores.length);
-        const shippingShares = splitAmount(calculation.shippingCents || 0n, linkedStores.length);
+        destinations.forEach((destination) => {
+          const destinationTotal =
+            (commonByDestination.get(destination.id) || 0n) +
+            (destinationShipping.get(destination.id) || 0n);
+          const destinationShippingCents = destinationShipping.get(destination.id) || 0n;
+          const snapshotStores = (destination.stores || [])
+            .map((snapshot) => ({
+              id: snapshot.storeId,
+              code: snapshot.code,
+              name: snapshot.name,
+              state: snapshot.state,
+            }))
+            .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR'));
 
-        linkedStores.forEach((linkedStore, index) => {
-          const current = ensureStoreSummary(
-            totalsByStore,
-            linkedStore.id,
-            `${linkedStore.code} - ${linkedStore.name}`,
-            linkedStore.state,
+          if (!snapshotStores.length) {
+            const current = ensureStoreSummary(
+              totalsByStore,
+              CONSOLIDATED_STORE_SUMMARY_KEY,
+              'Consolidado / Nao distribuido',
+              destination.state || null,
+            );
+            current.quoteIds.add(quote.id);
+            current.itemCount += 1;
+            current.shippingCents += destinationShippingCents;
+            current.totalCents += destinationTotal;
+            return;
+          }
+
+          const totalShares = splitAmount(destinationTotal, snapshotStores.length);
+          const shippingShares = splitAmount(
+            destinationShippingCents,
+            snapshotStores.length,
           );
-          current.shippingCents += shippingShares[index];
-          current.totalCents += totalShares[index];
+          snapshotStores.forEach((snapshotStore, index) =>
+            addStoreAllocation(
+              totalsByStore,
+              quote.id,
+              snapshotStore,
+              1,
+              shippingShares[index],
+              totalShares[index],
+            ),
+          );
         });
         return;
       }
 
-      const key = store?.id || item.storeId || CONSOLIDATED_STORE_SUMMARY_KEY;
-      const label = store
-        ? `${store.code} - ${store.name}`
-        : item.storeId && item.storeCode
-          ? `${item.storeCode} - ${item.storeName || 'Loja'}`
-          : 'Consolidado / Nao distribuido';
-      const current = ensureStoreSummary(totalsByStore, key, label, store?.state || null);
+      const directStore = item.storeId ? stores.get(item.storeId) : null;
+      if (directStore) {
+        addStoreAllocation(
+          totalsByStore,
+          quote.id,
+          directStore,
+          1,
+          calculation.shippingCents || 0n,
+          calculation.totalCents,
+        );
+        return;
+      }
 
+      const canUseLegacyFallback =
+        options.allocateConsolidated &&
+        quote.contextType === 'consolidated' &&
+        linkedStores.length > 0;
+
+      if (canUseLegacyFallback) {
+        const totalShares = splitAmount(calculation.totalCents, linkedStores.length);
+        const shippingShares = splitAmount(
+          calculation.shippingCents || 0n,
+          linkedStores.length,
+        );
+        linkedStores.forEach((linkedStore, index) =>
+          addStoreAllocation(
+            totalsByStore,
+            quote.id,
+            linkedStore,
+            1,
+            shippingShares[index],
+            totalShares[index],
+          ),
+        );
+        return;
+      }
+
+      const current = ensureStoreSummary(
+        totalsByStore,
+        CONSOLIDATED_STORE_SUMMARY_KEY,
+        'Consolidado / Nao distribuido',
+      );
       current.quoteIds.add(quote.id);
       current.itemCount += 1;
       current.shippingCents += calculation.shippingCents || 0n;
