@@ -10,6 +10,7 @@
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
+  border-left-width: 5px;
   border-radius: 8px;
 }
 .purchase-v2-card.is-pending {
@@ -26,6 +27,12 @@
 .purchase-v2-card.is-realized .purchase-v2-card__header {
   background: #edf7f1;
 }
+.purchase-v2-card--approved { border-left-color: #3478b8; }
+.purchase-v2-card--in_progress,
+.purchase-v2-card--partially_purchased { border-left-color: #d18b18; }
+.purchase-v2-card--purchased { border-left-color: #23835f; }
+.purchase-v2-card--returned { border-left-color: #7a55a5; }
+.purchase-v2-card--cancelled { border-left-color: #b84a43; }
 .purchase-v2-card__header {
   display: grid;
   grid-template-columns: minmax(90px,.6fr) minmax(180px,1.3fr) minmax(135px,.8fr) minmax(200px,1fr) auto auto;
@@ -37,6 +44,22 @@
 }
 .purchase-v2-card__header > div:not(.row-actions) { min-width: 0; display: grid; gap: 3px; }
 .purchase-v2-card__header small { color: var(--muted); font-size: .72rem; }
+.purchase-v2-card-actions { flex-wrap: wrap; justify-content: flex-end; }
+.purchase-v2-status-spotlight { display: grid; gap: 4px; justify-items: start; }
+.purchase-v2-status-spotlight > small { font-size: .62rem; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+.purchase-v2-status-spotlight .status-badge { min-height: 32px; padding: 6px 11px; font-size: .76rem; border: 1px solid transparent; }
+.purchase-v2-status-spotlight .status-badge--approved { color: #174f80; background: #e3f0fb; border-color: #b9d7ef; }
+.purchase-v2-status-spotlight .status-badge--in_progress,
+.purchase-v2-status-spotlight .status-badge--partially_purchased { color: #76510a; background: #fff1cc; border-color: #e8ca77; }
+.purchase-v2-status-spotlight .status-badge--purchased { color: #145f43; background: #ddf2e9; border-color: #aedac8; }
+.purchase-v2-status-spotlight .status-badge--returned { color: #5d3a82; background: #eee6f7; border-color: #d3bee8; }
+.purchase-v2-status-spotlight .status-badge--cancelled { color: #8b3027; background: #fae1de; border-color: #e6b8b2; }
+.purchase-v2-page .status-badge--approved { color: #174f80; background: #e3f0fb; border-color: #b9d7ef; }
+.purchase-v2-page .status-badge--in_progress,
+.purchase-v2-page .status-badge--partially_purchased { color: #76510a; background: #fff1cc; border-color: #e8ca77; }
+.purchase-v2-page .status-badge--purchased { color: #145f43; background: #ddf2e9; border-color: #aedac8; }
+.purchase-v2-page .status-badge--returned { color: #5d3a82; background: #eee6f7; border-color: #d3bee8; }
+.purchase-v2-page .status-badge--cancelled { color: #8b3027; background: #fae1de; border-color: #e6b8b2; }
 .purchase-v2-indicators {
   display: flex;
   flex-wrap: wrap;
@@ -167,6 +190,53 @@
 .purchase-v2-payment-sections,
 .purchase-v2-payment-section { display: grid; gap: 12px; }
 .purchase-v2-payment-section + .purchase-v2-payment-section { padding-top: 14px; border-top: 1px solid var(--line); }
+.modal.purchase-v2-manage-modal { width: min(100%, 1040px); }
+.modal.purchase-v2-bulk-modal { width: min(100%, 980px); }
+.modal.purchase-v2-portfolio-modal { width: min(100%, 1180px); }
+.purchase-v2-manage-tabs {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(150px,1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 6px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.purchase-v2-manage-tabs button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-weight: 800;
+}
+.purchase-v2-manage-tabs button span { min-width: 22px; padding: 2px 6px; color: var(--muted); background: #fff; border-radius: 999px; font-size: .68rem; }
+.purchase-v2-manage-tabs button.is-active { color: var(--brand-dark); background: #fff; border-color: #c8d6cf; box-shadow: 0 2px 8px rgba(23,55,44,.08); }
+.purchase-v2-bulk-section { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 7px; }
+.purchase-v2-bulk-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.purchase-v2-bulk-section > header > div { display: grid; gap: 3px; }
+.purchase-v2-bulk-section > header span { color: var(--muted); font-size: .72rem; }
+.purchase-v2-portfolio-tabs { margin-bottom: 18px; }
+.purchase-v2-portfolio-kpis { grid-template-columns: repeat(4,minmax(160px,1fr)); }
+.purchase-v2-status-overview { display: grid; grid-template-columns: repeat(3,minmax(150px,1fr)); gap: 8px; }
+.purchase-v2-status-overview > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; }
+.purchase-v2-status-overview .status-badge--approved { color: #174f80; background: #e3f0fb; }
+.purchase-v2-status-overview .status-badge--in_progress,
+.purchase-v2-status-overview .status-badge--partially_purchased { color: #76510a; background: #fff1cc; }
+.purchase-v2-status-overview .status-badge--purchased { color: #145f43; background: #ddf2e9; }
+.purchase-v2-status-overview .status-badge--returned { color: #5d3a82; background: #eee6f7; }
+.purchase-v2-status-overview .status-badge--cancelled { color: #8b3027; background: #fae1de; }
+
+@media (max-width: 1500px) {
+  .purchase-v2-card__header { grid-template-columns: repeat(3,minmax(180px,1fr)); }
+  .purchase-v2-card-actions { grid-column: 1 / -1; justify-self: start; justify-content: flex-start; }
+}
 
 @media (max-width: 1440px) {
   .purchase-v2-filters { grid-template-columns: repeat(4,minmax(150px,1fr)); }
@@ -180,6 +250,8 @@
   .purchase-v2-card__header { grid-template-columns: repeat(2,minmax(180px,1fr)); }
   .purchase-v2-card__header .row-actions { justify-self: start; }
   .purchase-v2-item > header { grid-template-columns: 1fr; }
+  .purchase-v2-portfolio-kpis,
+  .purchase-v2-status-overview { grid-template-columns: repeat(2,minmax(160px,1fr)); }
 }
 @media (max-width: 720px) {
   .purchase-v2-filters,
@@ -189,6 +261,9 @@
   .purchase-v2-unallocated { grid-template-columns: 1fr; }
   .purchase-v2-card__header { grid-template-columns: 1fr; }
   .segmented.purchase-v2-summary-tabs { grid-template-columns: repeat(2,minmax(110px,1fr)); }
+  .purchase-v2-manage-tabs,
+  .purchase-v2-portfolio-kpis,
+  .purchase-v2-status-overview { grid-template-columns: 1fr; }
   .purchase-v2-item__numbers { grid-template-columns: repeat(2,minmax(110px,1fr)); }
   .purchase-v2-destination,
   .purchase-v2-executions > div { grid-template-columns: 1fr; }

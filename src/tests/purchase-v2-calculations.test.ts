@@ -5,6 +5,9 @@ import {
   itemExecution,
   purchaseAllocationCoverage,
   purchaseExecutionSummary,
+  purchasePortfolioDestinationRows,
+  purchasePortfolioStoreRows,
+  purchasePortfolioSummary,
   purchaseStoreCosts,
   suggestedDeliveryDate,
 } from '../domain/purchase-v2-calculations';
@@ -163,5 +166,71 @@ describe('purchase-v2-calculations', () => {
   it('sugere previsao somando o prazo cotado a data da compra', () => {
     expect(suggestedDeliveryDate('2026-09-01', 5)).toBe('2026-09-06');
     expect(suggestedDeliveryDate('2026-09-01', null)).toBe('');
+  });
+
+  it('consolida valores, pagamentos e pendencias do portfolio de compras', () => {
+    const first = purchase({
+      status: 'partially_purchased',
+      items: [item({ storeId: 'store-1', storeCode: 'L1' })],
+      orders: [order([line({ storeDistributionStatus: 'pending', stores: [] })])],
+      payments: [{
+        id: 'payment-1', purchaseId: 'purchase-1', paymentMethod: 'pix', sourceLabel: null,
+        amount: '400', entryAmount: null, installmentCount: null, firstDueDate: null,
+        status: 'paid', paidAt: '2026-09-01T12:00:00Z', notes: null, createdAt: '2026-09-01T12:00:00Z',
+      }],
+      attachments: [{ id: 'attachment-1' } as never],
+    });
+    const second = purchase({
+      id: 'purchase-2', approvedTotal: '500', status: 'approved', orders: [],
+      items: [item({ id: 'item-2', purchaseId: 'purchase-2', storeId: 'store-2', storeCode: 'L2', approvedLineTotal: '500' })],
+      payments: [{
+        id: 'payment-2', purchaseId: 'purchase-2', paymentMethod: 'boleto', sourceLabel: null,
+        amount: '500', entryAmount: null, installmentCount: null, firstDueDate: '2026-09-10',
+        status: 'planned', paidAt: null, notes: null, createdAt: '2026-09-01T12:00:00Z',
+      }],
+    });
+
+    expect(purchasePortfolioSummary([first, second])).toMatchObject({
+      purchaseCount: 2,
+      approvedCents: 150000n,
+      realizedCents: 40000n,
+      paidPayments: 1,
+      paidCents: 40000n,
+      plannedPayments: 1,
+      plannedCents: 50000n,
+      documents: 1,
+      pendingLineDistributions: 1,
+      statusCounts: { partially_purchased: 1, approved: 1 },
+    });
+    expect(purchasePortfolioStoreRows([first, second]).map((row) => ({
+      code: row.code,
+      approvedCents: row.approvedCents,
+      realizedCents: row.realizedCents,
+    }))).toEqual([
+      { code: 'L1', approvedCents: 100000n, realizedCents: 0n },
+      { code: 'L2', approvedCents: 50000n, realizedCents: 0n },
+    ]);
+  });
+
+  it('agrupa a visao de prospectores e UF sem duplicar compras e lojas', () => {
+    const destinationItem = item({
+      destinations: [{
+        id: 'destination-1', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-1',
+        destinationType: 'profile', profileId: 'profile-1', storeId: null, label: 'Prospector A',
+        state: 'CE', destinationCount: 2, quantity: '10', unit: 'un', quotedShippingType: 'free',
+        quotedShippingAmount: '0', quotedDeliveryDays: 5, notes: null, position: 0,
+        distributionStatus: 'pending', snapshotSource: 'approval', stores: [
+          { id: 'ds-1', purchaseDestinationId: 'destination-1', storeId: 'store-1', code: 'L1', name: 'L1', city: 'Cidade', state: 'CE', allocatedQuantity: null, allocationSource: 'pending' },
+          { id: 'ds-2', purchaseDestinationId: 'destination-1', storeId: 'store-2', code: 'L2', name: 'L2', city: 'Cidade', state: 'CE', allocatedQuantity: null, allocationSource: 'pending' },
+        ],
+      }],
+    });
+    const current = purchase({ items: [destinationItem] });
+    expect(purchasePortfolioDestinationRows([current])).toEqual([
+      expect.objectContaining({
+        label: 'Prospector A', state: 'CE', purchaseCount: 1, itemCount: 1, storeCount: 2,
+        approvedCents: 100000n, realizedCents: 0n, pendingDistributions: 1,
+      }),
+    ]);
   });
 });

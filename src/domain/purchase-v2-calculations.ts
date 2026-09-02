@@ -4,6 +4,7 @@ import type {
   PurchaseItemV2,
   PurchaseOrderLineV2,
   PurchaseOrderV2,
+  PurchaseStatus,
   PurchaseV2,
 } from './purchase-v2-types';
 
@@ -302,6 +303,154 @@ export function purchaseStoreCosts(purchase: PurchaseV2) {
     approvedUnallocatedCents,
     realizedUnallocatedCents,
   };
+}
+
+export interface PurchasePortfolioSummaryV2 {
+  purchaseCount: number;
+  approvedCents: bigint;
+  realizedCents: bigint;
+  pendingDestinationDistributions: number;
+  pendingLineDistributions: number;
+  pendingShippingLines: number;
+  approvedUnallocatedCents: bigint;
+  realizedUnallocatedCents: bigint;
+  documents: number;
+  items: number;
+  completedItems: number;
+  paidPayments: number;
+  paidCents: bigint;
+  plannedPayments: number;
+  plannedCents: bigint;
+  statusCounts: Record<PurchaseStatus, number>;
+}
+
+export function purchasePortfolioSummary(purchases: PurchaseV2[]) {
+  return purchases.reduce<PurchasePortfolioSummaryV2>(
+    (portfolio, purchase) => {
+      const summary = purchaseExecutionSummary(purchase);
+      const storeCosts = purchaseStoreCosts(purchase);
+      portfolio.purchaseCount += 1;
+      portfolio.approvedCents += summary.approvedCents;
+      portfolio.realizedCents += summary.realizedCents;
+      portfolio.pendingDestinationDistributions += summary.pendingDestinationDistributions;
+      portfolio.pendingLineDistributions += summary.pendingLineDistributions;
+      portfolio.pendingShippingLines += summary.pendingShippingLines;
+      portfolio.approvedUnallocatedCents += storeCosts.approvedUnallocatedCents;
+      portfolio.realizedUnallocatedCents += storeCosts.realizedUnallocatedCents;
+      portfolio.documents += purchase.attachments.length;
+      portfolio.items += purchase.items.length;
+      portfolio.completedItems += summary.completedItems;
+      portfolio.statusCounts[purchase.status] = (portfolio.statusCounts[purchase.status] || 0) + 1;
+      for (const payment of purchase.payments) {
+        if (payment.status === 'cancelled') continue;
+        const amount = moneyToCents(payment.amount);
+        if (payment.status === 'paid') {
+          portfolio.paidPayments += 1;
+          portfolio.paidCents += amount;
+        } else {
+          portfolio.plannedPayments += 1;
+          portfolio.plannedCents += amount;
+        }
+      }
+      return portfolio;
+    },
+    {
+      purchaseCount: 0,
+      approvedCents: 0n,
+      realizedCents: 0n,
+      pendingDestinationDistributions: 0,
+      pendingLineDistributions: 0,
+      pendingShippingLines: 0,
+      approvedUnallocatedCents: 0n,
+      realizedUnallocatedCents: 0n,
+      documents: 0,
+      items: 0,
+      completedItems: 0,
+      paidPayments: 0,
+      paidCents: 0n,
+      plannedPayments: 0,
+      plannedCents: 0n,
+      statusCounts: {
+        approved: 0,
+        in_progress: 0,
+        partially_purchased: 0,
+        purchased: 0,
+        returned: 0,
+        cancelled: 0,
+      },
+    },
+  );
+}
+
+export function purchasePortfolioStoreRows(purchases: PurchaseV2[]) {
+  const rows = new Map<string, StoreCostRowV2 & { purchaseIds: Set<string> }>();
+  for (const purchase of purchases) {
+    for (const store of purchaseStoreCosts(purchase).rows) {
+      const current = rows.get(store.storeId) || { ...store, purchaseIds: new Set<string>() };
+      current.approvedCents += rows.has(store.storeId) ? store.approvedCents : 0n;
+      current.realizedCents += rows.has(store.storeId) ? store.realizedCents : 0n;
+      current.purchaseIds.add(purchase.id);
+      rows.set(store.storeId, current);
+    }
+  }
+  return [...rows.values()]
+    .map(({ purchaseIds, ...row }) => ({ ...row, purchaseCount: purchaseIds.size }))
+    .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR'));
+}
+
+export function purchasePortfolioDestinationRows(purchases: PurchaseV2[]) {
+  type MutableDestinationRow = {
+    key: string;
+    label: string;
+    state: string;
+    purchaseIds: Set<string>;
+    itemIds: Set<string>;
+    storeIds: Set<string>;
+    approvedCents: bigint;
+    realizedCents: bigint;
+    pendingDistributions: number;
+    pendingShippingLines: number;
+  };
+  const rows = new Map<string, MutableDestinationRow>();
+  for (const purchase of purchases) {
+    for (const item of purchase.items) {
+      const approvedByDestination = approvedDestinationAllocations(item);
+      for (const destination of item.destinations) {
+        const key = `${destination.label}\u0000${destination.state}`;
+        const current = rows.get(key) || {
+          key,
+          label: destination.label,
+          state: destination.state,
+          purchaseIds: new Set<string>(),
+          itemIds: new Set<string>(),
+          storeIds: new Set<string>(),
+          approvedCents: 0n,
+          realizedCents: 0n,
+          pendingDistributions: 0,
+          pendingShippingLines: 0,
+        };
+        const execution = destinationExecution(destination, purchase);
+        current.purchaseIds.add(purchase.id);
+        current.itemIds.add(item.id);
+        destination.stores.forEach((store) => current.storeIds.add(store.storeId));
+        current.approvedCents += approvedByDestination.get(destination.id) ?? 0n;
+        current.realizedCents += execution.realizedCents;
+        if (destination.destinationType === 'profile' && destination.distributionStatus !== 'confirmed') {
+          current.pendingDistributions += 1;
+        }
+        current.pendingShippingLines += execution.lines.filter(lineHasPendingShipping).length;
+        rows.set(key, current);
+      }
+    }
+  }
+  return [...rows.values()]
+    .map(({ purchaseIds, itemIds, storeIds, ...row }) => ({
+      ...row,
+      purchaseCount: purchaseIds.size,
+      itemCount: itemIds.size,
+      storeCount: storeIds.size,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR') || a.state.localeCompare(b.state));
 }
 
 export function calculateRegistrationTotal(values: {

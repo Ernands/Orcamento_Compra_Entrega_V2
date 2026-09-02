@@ -94,11 +94,13 @@ describe('SupplyPurchasesPage V2', () => {
   it('mantem o reembolso fora da operacao e exibe os pagamentos', async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByText('CMP-00001')).toBeInTheDocument();
+    const purchaseCode = await screen.findByText('CMP-00001');
     expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     expect(screen.getByText('1 pagamentos ativos')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Pagamentos CMP-00001' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirmar lojas CMP-00001 (1)' })).toBeInTheDocument();
+    expect(purchaseCode.closest('article')).toHaveClass('purchase-v2-card--partially_purchased');
     expect(screen.queryByText(/Reembolso solicitado/)).not.toBeInTheDocument();
   });
 
@@ -106,8 +108,10 @@ describe('SupplyPurchasesPage V2', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('CMP-00001');
-    await user.click(screen.getByRole('button', { name: 'Pagamentos CMP-00001' }));
-    const dialog = screen.getByRole('dialog', { name: 'Pagamentos · CMP-00001' });
+    await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    expect(within(dialog).getByRole('tab', { name: 'Compra' })).toHaveAttribute('aria-selected', 'true');
+    await user.click(within(dialog).getByRole('tab', { name: /Pagamentos/ }));
     expect(within(dialog).getByText('Conta operacional')).toBeInTheDocument();
     expect(within(dialog).getByText('R$ 400,00')).toBeInTheDocument();
     await user.clear(within(dialog).getByLabelText('Valor'));
@@ -125,7 +129,7 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
-    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     expect(within(dialog).queryByLabelText('Destino')).not.toBeInTheDocument();
     await user.clear(within(dialog).getByLabelText('Frete realizado'));
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
@@ -139,7 +143,7 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
-    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     await user.clear(within(dialog).getByLabelText('Frete realizado'));
     expect(within(dialog).getByText(/Pendente · frete nao informado/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
@@ -154,7 +158,7 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
-    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     fireEvent.input(within(dialog).getByLabelText('Previsao de entrega'), { target: { value: '2099-10-10' } });
     await user.clear(within(dialog).getByLabelText('Frete realizado'));
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
@@ -176,7 +180,7 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
-    const dialog = screen.getByRole('dialog', { name: /Registrar compra · Cadeira operacional/ });
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     expect(within(dialog).getByLabelText('Destino')).toHaveValue('destination-1');
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
     await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
@@ -335,8 +339,9 @@ describe('SupplyPurchasesPage V2', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('CMP-00001');
-    await user.click(screen.getByRole('button', { name: 'Documentos CMP-00001' }));
-    const dialog = screen.getByRole('dialog', { name: 'Documentos · CMP-00001' });
+    await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
     expect(within(dialog).getByText('Documentos da Cotacao · somente leitura')).toBeInTheDocument();
     expect(within(dialog).getByText('proposta.pdf')).toBeInTheDocument();
   });
@@ -345,9 +350,48 @@ describe('SupplyPurchasesPage V2', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('CMP-00001');
-    await user.click(screen.getByRole('button', { name: 'Documentos CMP-00001' }));
-    const dialog = screen.getByRole('dialog', { name: 'Documentos · CMP-00001' });
+    await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
     expect(within(dialog).queryByRole('option', { name: 'Documento de reembolso' })).not.toBeInTheDocument();
+  });
+
+  it('confirma de uma vez todas as lojas pendentes da compra', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Confirmar lojas CMP-00001 (1)' }));
+    const dialog = screen.getByRole('dialog', { name: 'Confirmar lojas · CMP-00001' });
+    await user.type(within(dialog).getByLabelText('Quantidade realizada Cadeira operacional LOJ-001'), '2');
+    await user.type(within(dialog).getByLabelText('Quantidade realizada Cadeira operacional LOJ-002'), '2');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar todas as lojas' }));
+    expect(savePurchaseOrderLineDistributionV2).toHaveBeenCalledWith('line-1', [
+      { storeId: 'store-1', quantity: '2' }, { storeId: 'store-2', quantity: '2' },
+    ]);
+  });
+
+  it('resume compras por indicadores, lojas e prospectores/UF', async () => {
+    const user = userEvent.setup();
+    const profileItem: PurchaseItemV2 = { ...baseItem, destinations: [{
+      id: 'profile-summary', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-summary', destinationType: 'profile', profileId: 'fp-summary', storeId: null, label: 'Valter Leandro', state: 'CE', destinationCount: 2,
+      quantity: '10', unit: 'un', quotedShippingType: 'informed', quotedShippingAmount: '50', quotedDeliveryDays: 5, notes: null, position: 0, distributionStatus: 'confirmed', snapshotSource: 'approval',
+      stores: [
+        { id: 'ds-summary-1', purchaseDestinationId: 'profile-summary', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', allocatedQuantity: '4', allocationSource: 'manual' },
+        { id: 'ds-summary-2', purchaseDestinationId: 'profile-summary', storeId: 'store-2', code: 'LOJ-002', name: 'Loja Dois', city: 'Sobral', state: 'CE', allocatedQuantity: '6', allocationSource: 'manual' },
+      ],
+    }] };
+    renderPage({ ...purchase, items: [profileItem] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Resumo de compras' }));
+    const dialog = screen.getByRole('dialog', { name: 'Resumo de compras' });
+    expect(within(dialog).getByText('Realizado conhecido')).toBeInTheDocument();
+    expect(within(dialog).getByText('Pagamentos pagos')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Lojas' }));
+    expect(within(dialog).getByText('LOJ-001')).toBeInTheDocument();
+    expect(within(dialog).getByText('LOJ-002')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Prospectores/UF' }));
+    expect(within(dialog).getByText('Valter Leandro')).toBeInTheDocument();
+    expect(within(dialog).getByText('CE')).toBeInTheDocument();
   });
 
   it('filtra por pendencia de distribuicao fisica', async () => {
