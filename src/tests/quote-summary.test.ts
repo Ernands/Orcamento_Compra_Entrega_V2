@@ -138,6 +138,94 @@ describe('resumo e exportacao de cotacoes', () => {
     );
   });
 
+  it('distribui cotacao consolidada pelos destinos reais e mantem o frete no destino correto', () => {
+    const destinationQuote: SupplyQuote = {
+      ...consolidatedQuote,
+      id: 'quote-destinations',
+      code: 'COT-00003',
+      stores: [storeOne, storeTwo],
+      items: [
+        {
+          ...quoteItem('4', 'quote-destinations', '100.00', '2', null),
+          destinations: [
+            {
+              id: 'destination-1',
+              quoteItemId: '4',
+              destinationType: 'profile',
+              profileId: 'profile-1',
+              storeId: null,
+              label: 'Prospector SP A - SP',
+              state: 'SP',
+              destinationCount: 1,
+              quantity: '1',
+              unit: 'un',
+              shippingType: 'informed',
+              shippingAmount: '10.00',
+              deliveryDays: 5,
+              notes: null,
+              position: 1,
+              stores: [
+                {
+                  storeId: storeOne.id,
+                  code: storeOne.code,
+                  name: storeOne.name,
+                  city: storeOne.city,
+                  state: storeOne.state,
+                  snapshotSource: 'save',
+                },
+              ],
+            },
+            {
+              id: 'destination-2',
+              quoteItemId: '4',
+              destinationType: 'profile',
+              profileId: 'profile-2',
+              storeId: null,
+              label: 'Prospector SP B - SP',
+              state: 'SP',
+              destinationCount: 1,
+              quantity: '1',
+              unit: 'un',
+              shippingType: 'informed',
+              shippingAmount: '30.00',
+              deliveryDays: 7,
+              notes: null,
+              position: 2,
+              stores: [
+                {
+                  storeId: storeTwo.id,
+                  code: storeTwo.code,
+                  name: storeTwo.name,
+                  city: storeTwo.city,
+                  state: storeTwo.state,
+                  snapshotSource: 'save',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const summary = buildQuoteSummary([destinationQuote]);
+    const rowOne = summary.totalsByStore.find((row) => row.key === storeOne.id);
+    const rowTwo = summary.totalsByStore.find((row) => row.key === storeTwo.id);
+
+    expect(summary.totalShippingCents).toBe(4000n);
+    expect(summary.totalValueCents).toBe(24000n);
+    expect(rowOne).toMatchObject({
+      shippingCents: 1000n,
+      totalCents: 11000n,
+    });
+    expect(rowTwo).toMatchObject({
+      shippingCents: 3000n,
+      totalCents: 13000n,
+    });
+    expect(summary.totalsByStore.reduce((total, row) => total + row.totalCents, 0n)).toBe(
+      summary.totalValueCents,
+    );
+  });
+
   it('rateia somente o valor nao distribuido e zera o consolidado sem alterar o total', () => {
     const summary = buildQuoteSummary(quotes, { allocateConsolidated: true });
 
