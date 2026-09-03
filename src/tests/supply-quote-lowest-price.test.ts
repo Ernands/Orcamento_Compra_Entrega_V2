@@ -58,7 +58,7 @@ function quote(id: string, code: string, quoteDate: string, items: SupplyQuoteIt
 }
 
 describe('selectLowestPriceQuotesByItem', () => {
-  it('seleciona uma cotacao vencedora para cada item distinto', () => {
+  it('seleciona uma cotacao e o item vencedor para cada item distinto', () => {
     const quoteA = quote('quote-a', 'COT-00001', '2026-08-19', [
       quoteItem('a-1', 'item-1', '10.00'),
       quoteItem('a-2', 'item-2', '40.00'),
@@ -75,6 +75,7 @@ describe('selectLowestPriceQuotesByItem', () => {
 
     expect(selection.distinctItemCount).toBe(3);
     expect([...selection.quoteIds]).toEqual(['quote-a', 'quote-b', 'quote-c']);
+    expect([...selection.winningItemIds]).toEqual(['a-1', 'b-2', 'c-1']);
     expect(selection.winningItemCountByQuote.get('quote-a')).toBe(1);
     expect(selection.winningItemCountByQuote.get('quote-b')).toBe(1);
     expect(selection.winningItemCountByQuote.get('quote-c')).toBe(1);
@@ -102,5 +103,23 @@ describe('selectLowestPriceQuotesByItem', () => {
     ]);
 
     expect([...selection.quoteIds]).toEqual(['quote-b', 'quote-d']);
+    expect([...selection.winningItemIds]).toEqual(['b-1', 'd-1']);
+  });
+
+  it('nunca usa cotacao cancelada como menor preco', () => {
+    const valid = quote('quote-valid', 'COT-00010', '2026-08-20', [
+      quoteItem('valid-item', 'item-1', '10.00'),
+    ]);
+    const cancelled: SupplyQuote = {
+      ...quote('quote-cancelled', 'COT-00011', '2026-08-21', [
+        quoteItem('cancelled-item', 'item-1', '1.00'),
+      ]),
+      status: 'cancelled',
+    };
+
+    const selection = selectLowestPriceQuotesByItem([valid, cancelled]);
+
+    expect([...selection.quoteIds]).toEqual(['quote-valid']);
+    expect([...selection.winningItemIds]).toEqual(['valid-item']);
   });
 });

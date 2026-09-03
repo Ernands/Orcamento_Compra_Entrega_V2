@@ -1,4 +1,5 @@
 import { calculateQuoteLine, moneyToCents } from './supply-calculations';
+import { getEffectiveSupplyQuoteStatus } from './supply-quote-status';
 import type { SupplyQuote, SupplyQuoteItem } from './types';
 
 interface LowestPriceCandidate {
@@ -10,6 +11,7 @@ interface LowestPriceCandidate {
 
 export interface LowestPriceQuoteSelection {
   quoteIds: Set<string>;
+  winningItemIds: Set<string>;
   winningItemCountByQuote: Map<string, number>;
   distinctItemCount: number;
 }
@@ -34,30 +36,35 @@ export function selectLowestPriceQuotesByItem(
 ): LowestPriceQuoteSelection {
   const winnerByItem = new Map<string, LowestPriceCandidate>();
 
-  quotes.forEach((quote) => {
-    quote.items.forEach((item) => {
-      const candidate: LowestPriceCandidate = {
-        quote,
-        item,
-        unitPriceCents: moneyToCents(item.unitPrice),
-        totalCents: calculateQuoteLine(item).totalCents,
-      };
-      const current = winnerByItem.get(item.supplyItemId);
-      if (!current || isBetterCandidate(candidate, current)) {
-        winnerByItem.set(item.supplyItemId, candidate);
-      }
+  quotes
+    .filter((quote) => getEffectiveSupplyQuoteStatus(quote) !== 'cancelled')
+    .forEach((quote) => {
+      quote.items.forEach((item) => {
+        const candidate: LowestPriceCandidate = {
+          quote,
+          item,
+          unitPriceCents: moneyToCents(item.unitPrice),
+          totalCents: calculateQuoteLine(item).totalCents,
+        };
+        const current = winnerByItem.get(item.supplyItemId);
+        if (!current || isBetterCandidate(candidate, current)) {
+          winnerByItem.set(item.supplyItemId, candidate);
+        }
+      });
     });
-  });
 
   const quoteIds = new Set<string>();
+  const winningItemIds = new Set<string>();
   const winningItemCountByQuote = new Map<string, number>();
-  winnerByItem.forEach(({ quote }) => {
+  winnerByItem.forEach(({ quote, item }) => {
     quoteIds.add(quote.id);
+    winningItemIds.add(item.id);
     winningItemCountByQuote.set(quote.id, (winningItemCountByQuote.get(quote.id) || 0) + 1);
   });
 
   return {
     quoteIds,
+    winningItemIds,
     winningItemCountByQuote,
     distinctItemCount: winnerByItem.size,
   };

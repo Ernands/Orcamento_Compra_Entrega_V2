@@ -355,6 +355,15 @@ export interface SupplyQuoteItemDestinationValues {
   notes: string;
 }
 
+export interface SupplyQuoteItemDestinationStore {
+  storeId: string;
+  code: string;
+  name: string;
+  city: string;
+  state: string;
+  snapshotSource: 'save' | 'backfill_current_profile';
+}
+
 export interface SupplyQuoteItemDestination {
   id: string;
   quoteItemId: string;
@@ -371,6 +380,7 @@ export interface SupplyQuoteItemDestination {
   deliveryDays: number | null;
   notes: string | null;
   position: number;
+  stores?: SupplyQuoteItemDestinationStore[];
 }
 
 export interface SupplyQuoteItemValues {

@@ -12,6 +12,7 @@ const login = vi.fn();
 
 describe('LoginPage', () => {
   beforeEach(() => {
+    document.title = 'Implanta 27';
     login.mockReset();
     vi.mocked(useSession).mockReturnValue({
       session: null,
@@ -23,6 +24,17 @@ describe('LoginPage', () => {
       refreshViewer: vi.fn(),
       can: vi.fn(() => false),
     });
+  });
+
+  it('restaura o titulo da aplicacao ao sair da tela de login', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+    expect(document.title).toBe('Entrar | Implanta 27');
+    unmount();
+    expect(document.title).toBe('Implanta 27');
   });
 
   it('mostra somente CPF e senha, sem cadastro publico ou Google', () => {
