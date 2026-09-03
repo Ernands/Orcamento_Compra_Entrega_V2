@@ -3,7 +3,7 @@ import {
   getEffectiveSupplyQuoteStatus,
   SUPPLY_QUOTE_STATUS_LABELS,
 } from '../../domain/supply-quote-status';
-import type { QuoteSummary } from '../../domain/supply-quote-summary';
+import type { QuoteAllocationSource, QuoteSummary } from '../../domain/supply-quote-summary';
 import type { SupplyQuote } from '../../domain/types';
 
 export interface QuoteSummaryFilters {
@@ -14,6 +14,7 @@ export interface QuoteSummaryFilters {
   area?: string;
   states?: string[];
   allocationMode?: 'original' | 'allocated';
+  priceMode?: string;
 }
 
 export interface QuoteSummaryExportInput {
@@ -27,9 +28,40 @@ const HEADER_COLOR = 'FF1F6F5C';
 const HEADER_TEXT_COLOR = 'FFFFFFFF';
 const LIGHT_FILL = 'FFEAF3F0';
 const MONEY_FORMAT = 'R$ #,##0.00';
+const PERCENT_FORMAT = '0.00%';
+
+const SOURCE_LABELS: Record<QuoteAllocationSource, string> = {
+  destination_profile: 'Destino real - Prospector/UF',
+  direct_store: 'Loja direta',
+  legacy_fallback: 'Fallback igualitario',
+  unallocated: 'Sem cobertura',
+};
 
 function centsToNumber(value: bigint): number {
   return Number(value) / 100;
+}
+
+function quantityToNumber(value: bigint): number {
+  return Number(value) / 1000;
+}
+
+function sourceLabels(sources: QuoteAllocationSource[]): string {
+  return sources.map((source) => SOURCE_LABELS[source]).join(' + ');
+}
+
+function formatMoney(value: bigint): string {
+  return centsToNumber(value).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
+function formatPercentFromBasisPoints(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'percent',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 10000);
 }
 
 function formatDate(value: string | null): string {
@@ -55,12 +87,15 @@ function filtersAsText(filters: QuoteSummaryFilters): string {
 
   if (filters.category) parts.push(`Categoria: ${filters.category}`);
   if (filters.area) parts.push(`Area: ${filters.area}`);
+  if (filters.priceMode) parts.push(`Precos: ${filters.priceMode}`);
 
   if (filters.states) {
     parts.push(`UFs: ${filters.states.length ? filters.states.join(', ') : 'Todas'}`);
   }
   if (filters.allocationMode) {
-    parts.push(`Valores: ${filters.allocationMode === 'allocated' ? 'Rateados' : 'Originais'}`);
+    parts.push(
+      `Legado sem destino: ${filters.allocationMode === 'allocated' ? 'Rateado' : 'Nao rateado'}`,
+    );
   }
 
   return parts.join(' | ');
@@ -90,8 +125,8 @@ export async function createQuoteSummaryWorkbook(
     views: [{ state: 'frozen', ySplit: 4 }],
   });
   summarySheet.columns = [
-    { key: 'label', width: 34 },
-    { key: 'value', width: 24 },
+    { key: 'label', width: 38 },
+    { key: 'value', width: 28 },
   ];
   summarySheet.addRow(['Implanta 27', 'Resumo de Cotacoes']);
   summarySheet.mergeCells('A1:B1');
@@ -101,16 +136,25 @@ export async function createQuoteSummaryWorkbook(
   summarySheet.addRow([]);
   summarySheet.addRow(['Indicador', 'Valor']);
   styleHeader(summarySheet.getRow(5));
-  summarySheet.addRow(['Total de cotacoes', input.summary.totalQuotes]);
-  summarySheet.addRow(['Total de itens', input.summary.totalItems]);
-  summarySheet.addRow(['Total valor unitario', centsToNumber(input.summary.totalUnitPriceCents)]);
+  summarySheet.addRow(['Total de cotacoes', input.summary.inputQuoteCount]);
+  summarySheet.addRow(['Cotacoes consideradas nos valores', input.summary.totalQuotes]);
+  summarySheet.addRow(['Valor dos produtos', centsToNumber(input.summary.totalProductsCents)]);
   summarySheet.addRow(['Total de frete', centsToNumber(input.summary.totalShippingCents)]);
   summarySheet.addRow(['Valor total das cotacoes', centsToNumber(input.summary.totalValueCents)]);
+  summarySheet.addRow(['Descontos', centsToNumber(input.summary.totalDiscountCents)]);
+  summarySheet.addRow(['Outros custos', centsToNumber(input.summary.totalOtherCostsCents)]);
+  summarySheet.addRow(['Lojas cobertas', input.summary.totalStores]);
+  summarySheet.addRow(['Destinos no resumo', input.summary.totalDestinations]);
+  summarySheet.addRow(['Cobertura real', input.summary.coverage.realCoverageBasisPoints / 10000]);
+  summarySheet.addRow(['Fallback legado', centsToNumber(input.summary.coverage.legacyFallbackCents)]);
+  summarySheet.addRow(['Sem cobertura', centsToNumber(input.summary.coverage.unallocatedCents)]);
   summarySheet.addRow(['Cotacoes por loja', input.summary.storeQuotes]);
   summarySheet.addRow(['Cotacoes consolidadas', input.summary.consolidatedQuotes]);
-  summarySheet.getCell('B8').numFmt = MONEY_FORMAT;
-  summarySheet.getCell('B9').numFmt = MONEY_FORMAT;
-  summarySheet.getCell('B10').numFmt = MONEY_FORMAT;
+  summarySheet.addRow(['Fretes pendentes', input.summary.shippingPendingCount]);
+  ['B8', 'B9', 'B10', 'B11', 'B12', 'B16', 'B17'].forEach((cell) => {
+    summarySheet.getCell(cell).numFmt = MONEY_FORMAT;
+  });
+  summarySheet.getCell('B15').numFmt = PERCENT_FORMAT;
   summarySheet.getRow(10).fill = {
     type: 'pattern',
     pattern: 'solid',
@@ -191,6 +235,42 @@ export async function createQuoteSummaryWorkbook(
   });
   itemsSheet.autoFilter = `A1:M${Math.max(1, itemsSheet.rowCount)}`;
 
+  const destinationsSheet = workbook.addWorksheet('Prospector UF', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+  });
+  destinationsSheet.columns = [
+    { header: 'Destino', key: 'destination', width: 36 },
+    { header: 'UF', key: 'state', width: 9 },
+    { header: 'Lojas', key: 'storeCount', width: 10 },
+    { header: 'Cotacoes', key: 'quoteCount', width: 12 },
+    { header: 'Itens', key: 'itemCount', width: 10 },
+    { header: 'Quantidade', key: 'quantity', width: 14 },
+    { header: 'Produtos', key: 'products', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Descontos', key: 'discounts', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Outros custos', key: 'otherCosts', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Frete', key: 'shipping', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Valor total', key: 'total', width: 20, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Cobertura', key: 'source', width: 32 },
+  ];
+  styleHeader(destinationsSheet.getRow(1));
+  input.summary.totalsByDestination.forEach((row) => {
+    destinationsSheet.addRow({
+      destination: row.label,
+      state: row.state || '',
+      storeCount: row.storeCount,
+      quoteCount: row.quoteCount,
+      itemCount: row.itemCount,
+      quantity: quantityToNumber(row.quantityThousandths),
+      products: centsToNumber(row.productCents),
+      discounts: centsToNumber(row.discountCents),
+      otherCosts: centsToNumber(row.otherCostsCents),
+      shipping: centsToNumber(row.shippingCents),
+      total: centsToNumber(row.totalCents),
+      source: sourceLabels(row.sources),
+    });
+  });
+  destinationsSheet.autoFilter = `A1:L${Math.max(1, destinationsSheet.rowCount)}`;
+
   const storesSheet = workbook.addWorksheet('Totais por loja', {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
@@ -201,6 +281,11 @@ export async function createQuoteSummaryWorkbook(
     { header: 'Quantidade de itens', key: 'itemCount', width: 22 },
     { header: 'Frete', key: 'shipping', width: 18, style: { numFmt: MONEY_FORMAT } },
     { header: 'Valor total', key: 'total', width: 20, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Quantidade', key: 'quantity', width: 14 },
+    { header: 'Produtos', key: 'products', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Descontos', key: 'discounts', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Outros custos', key: 'otherCosts', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Origem', key: 'source', width: 32 },
   ];
   styleHeader(storesSheet.getRow(1));
   input.summary.totalsByStore.forEach((row) => {
@@ -211,12 +296,21 @@ export async function createQuoteSummaryWorkbook(
       itemCount: row.itemCount,
       shipping: centsToNumber(row.shippingCents),
       total: centsToNumber(row.totalCents),
+      quantity: quantityToNumber(row.quantityThousandths),
+      products: centsToNumber(row.productCents),
+      discounts: centsToNumber(row.discountCents),
+      otherCosts: centsToNumber(row.otherCostsCents),
+      source: sourceLabels(row.sources),
     });
   });
-  storesSheet.autoFilter = `A1:F${Math.max(1, storesSheet.rowCount)}`;
+  storesSheet.autoFilter = `A1:K${Math.max(1, storesSheet.rowCount)}`;
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer;
+}
+
+interface AutoTableAwareDocument {
+  lastAutoTable?: { finalY: number };
 }
 
 export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Promise<ArrayBuffer> {
@@ -225,6 +319,7 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
     import('jspdf-autotable'),
   ]);
   const document = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const autoTableDocument = document as typeof document & AutoTableAwareDocument;
   document.setTextColor(31, 111, 92);
   document.setFontSize(16);
   document.text('Implanta 27', 14, 16);
@@ -240,38 +335,62 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
     theme: 'grid',
     head: [['Indicador', 'Valor']],
     body: [
-      ['Total de cotacoes', String(input.summary.totalQuotes)],
-      ['Total de itens', String(input.summary.totalItems)],
-      [
-        'Total valor unitario',
-        centsToNumber(input.summary.totalUnitPriceCents).toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        }),
-      ],
-      [
-        'Total de frete',
-        centsToNumber(input.summary.totalShippingCents).toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        }),
-      ],
-      [
-        'Valor total das cotacoes',
-        centsToNumber(input.summary.totalValueCents).toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        }),
-      ],
-      ['Cotacoes por loja', String(input.summary.storeQuotes)],
-      ['Cotacoes consolidadas', String(input.summary.consolidatedQuotes)],
+      ['Total de cotacoes', String(input.summary.inputQuoteCount)],
+      ['Cotacoes consideradas nos valores', String(input.summary.totalQuotes)],
+      ['Valor dos produtos', formatMoney(input.summary.totalProductsCents)],
+      ['Total de frete', formatMoney(input.summary.totalShippingCents)],
+      ['Valor total das cotacoes', formatMoney(input.summary.totalValueCents)],
+      ['Descontos', formatMoney(input.summary.totalDiscountCents)],
+      ['Outros custos', formatMoney(input.summary.totalOtherCostsCents)],
+      ['Lojas cobertas', String(input.summary.totalStores)],
+      ['Destinos', String(input.summary.totalDestinations)],
+      ['Cobertura real', formatPercentFromBasisPoints(input.summary.coverage.realCoverageBasisPoints)],
+      ['Fallback legado', formatMoney(input.summary.coverage.legacyFallbackCents)],
+      ['Sem cobertura', formatMoney(input.summary.coverage.unallocatedCents)],
     ],
     headStyles: { fillColor: [31, 111, 92] },
-    styles: { fontSize: 9 },
+    styles: { fontSize: 8.5 },
   });
 
+  let nextStartY = (autoTableDocument.lastAutoTable?.finalY || 118) + 7;
+  if (nextStartY > 235) {
+    document.addPage();
+    nextStartY = 16;
+  }
+
   autoTable(document, {
-    startY: 108,
+    startY: nextStartY,
+    theme: 'striped',
+    head: [['Prospector / destino', 'UF', 'Lojas', 'Produtos', 'Frete', 'Total']],
+    body: input.summary.totalsByDestination.map((row) => [
+      row.label,
+      row.state || '',
+      String(row.storeCount),
+      formatMoney(row.productCents),
+      formatMoney(row.shippingCents),
+      formatMoney(row.totalCents),
+    ]),
+    headStyles: { fillColor: [31, 111, 92] },
+    styles: { fontSize: 7.2, cellPadding: 1.8 },
+    columnStyles: {
+      0: { cellWidth: 55 },
+      1: { cellWidth: 10 },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'right' },
+    },
+    margin: { top: 16, bottom: 14 },
+  });
+
+  nextStartY = (autoTableDocument.lastAutoTable?.finalY || 118) + 7;
+  if (nextStartY > 235) {
+    document.addPage();
+    nextStartY = 16;
+  }
+
+  autoTable(document, {
+    startY: nextStartY,
     theme: 'striped',
     head: [['Loja', 'UF', 'Cotacoes', 'Itens', 'Frete', 'Valor total']],
     body: input.summary.totalsByStore.map((row) => [
@@ -279,14 +398,8 @@ export async function createQuoteSummaryPdf(input: QuoteSummaryExportInput): Pro
       row.state || '',
       String(row.quoteCount),
       String(row.itemCount),
-      centsToNumber(row.shippingCents).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-      }),
-      centsToNumber(row.totalCents).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-      }),
+      formatMoney(row.shippingCents),
+      formatMoney(row.totalCents),
     ]),
     headStyles: { fillColor: [31, 111, 92] },
     styles: { fontSize: 7.5, cellPadding: 2 },

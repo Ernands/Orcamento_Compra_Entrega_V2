@@ -395,6 +395,7 @@ describe('resumo e exportacao de cotacoes', () => {
       'Resumo',
       'Cotacoes',
       'Itens',
+      'Prospector UF',
       'Totais por loja',
     ]);
     expect(workbook.getWorksheet('Resumo')?.getCell('B9').value).toBe(12);
@@ -404,6 +405,8 @@ describe('resumo e exportacao de cotacoes', () => {
     );
     expect(workbook.getWorksheet('Cotacoes')?.getCell('B2').value).toBe('Rascunho');
     expect(workbook.getWorksheet('Cotacoes')?.getCell('J2').value).toBe(25);
+    expect(workbook.getWorksheet('Prospector UF')?.getCell('A1').value).toBe('Destino');
+    expect(workbook.getWorksheet('Prospector UF')?.getCell('K1').value).toBe('Valor total');
     expect(workbook.getWorksheet('Totais por loja')?.getCell('B1').value).toBe('UF');
     expect(workbook.getWorksheet('Totais por loja')?.getCell('E1').value).toBe('Frete');
   });
