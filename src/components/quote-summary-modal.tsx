@@ -18,6 +18,7 @@ import {
 } from '../data/exports/quote-summary-exports';
 import { formatBRL } from '../domain/supply-calculations';
 import { selectLowestPriceQuotesByItem } from '../domain/supply-quote-lowest-price';
+import { buildProspectorDisplayRows } from '../domain/quote-summary-prospector-view';
 import {
   buildQuoteSummary,
   CONSOLIDATED_STORE_SUMMARY_KEY,
@@ -112,6 +113,7 @@ export function QuoteSummaryModal({
       }),
     [activeStates, allocateConsolidated, preparedQuotes, selectedStoreId],
   );
+  const prospectorRows = useMemo(() => buildProspectorDisplayRows(summary), [summary]);
 
   const toggleState = (state: string) => {
     setSelectedStates((current) =>
@@ -338,15 +340,15 @@ export function QuoteSummaryModal({
           <header className="quote-store-summary__toolbar">
             <div>
               <h3>Totais por Prospector / UF</h3>
-              <p>Produto e custos comuns sao proporcionais a quantidade do destino; o frete permanece no proprio destino.</p>
+              <p>Uma linha por Prospector/UF, consolidando todos os itens. O frete permanece no respectivo destino.</p>
             </div>
           </header>
-          {summary.totalsByDestination.length ? (
+          {prospectorRows.length ? (
             <div className="quote-summary-data-table">
               <div className="quote-summary-data-table__header quote-summary-data-table__destination">
-                <span>Destino</span><span>UF</span><span>Lojas</span><span>Qtd.</span><span>Produtos</span><span>Frete</span><span>Total</span><span>Cobertura</span>
+                <span>Prospector / UF</span><span>UF</span><span>Lojas</span><span>Qtd.</span><span>Produtos</span><span>Frete</span><span>Total</span><span>Cobertura</span>
               </div>
-              {summary.totalsByDestination.map((row) => (
+              {prospectorRows.map((row) => (
                 <div className="quote-summary-data-table__row quote-summary-data-table__destination" key={row.key}>
                   <strong>{row.label}</strong>
                   <span>{row.state || '—'}</span>
