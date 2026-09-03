@@ -174,7 +174,7 @@ describe('purchase-v2-calculations', () => {
       items: [item({ storeId: 'store-1', storeCode: 'L1' })],
       orders: [order([line({ storeDistributionStatus: 'pending', stores: [] })])],
       payments: [{
-        id: 'payment-1', purchaseId: 'purchase-1', paymentMethod: 'pix', sourceLabel: null,
+        id: 'payment-1', purchaseId: 'purchase-1', purchaseOrderId: null, paymentMethod: 'pix', sourceLabel: null,
         amount: '400', entryAmount: null, installmentCount: null, firstDueDate: null,
         status: 'paid', paidAt: '2026-09-01T12:00:00Z', notes: null, createdAt: '2026-09-01T12:00:00Z',
       }],
@@ -184,7 +184,7 @@ describe('purchase-v2-calculations', () => {
       id: 'purchase-2', approvedTotal: '500', status: 'approved', orders: [],
       items: [item({ id: 'item-2', purchaseId: 'purchase-2', storeId: 'store-2', storeCode: 'L2', approvedLineTotal: '500' })],
       payments: [{
-        id: 'payment-2', purchaseId: 'purchase-2', paymentMethod: 'boleto', sourceLabel: null,
+        id: 'payment-2', purchaseId: 'purchase-2', purchaseOrderId: null, paymentMethod: 'boleto', sourceLabel: null,
         amount: '500', entryAmount: null, installmentCount: null, firstDueDate: '2026-09-10',
         status: 'planned', paidAt: null, notes: null, createdAt: '2026-09-01T12:00:00Z',
       }],

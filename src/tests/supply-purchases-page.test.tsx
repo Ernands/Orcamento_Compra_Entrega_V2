@@ -68,7 +68,7 @@ const purchase: PurchaseV2 = {
     cancelledBy: null, cancelledByName: null, cancelledAt: null, cancellationReason: null, lines: [partialLine],
   }],
   payments: [{
-    id: 'payment-1', purchaseId: 'purchase-1', paymentMethod: 'pix', sourceLabel: 'Conta operacional', amount: '400',
+    id: 'payment-1', purchaseId: 'purchase-1', purchaseOrderId: 'order-1', paymentMethod: 'pix', sourceLabel: 'Conta operacional', amount: '400',
     entryAmount: null, installmentCount: null, firstDueDate: '2026-09-01', status: 'paid', paidAt: '2026-09-01T12:00:00Z',
     notes: null, createdAt: '2026-09-01T12:00:00Z',
   }],
@@ -114,12 +114,14 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(within(dialog).getByRole('tab', { name: /Pagamentos/ }));
     expect(within(dialog).getByText('Conta operacional')).toBeInTheDocument();
     expect(within(dialog).getByText('R$ 400,00')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('01/09/2026 · PED-1 · ativo')).toHaveLength(2);
+    await user.selectOptions(within(dialog).getByLabelText('Registro/pedido relacionado'), 'order-1');
     await user.clear(within(dialog).getByLabelText('Valor'));
     await user.type(within(dialog).getByLabelText('Valor'), '250');
     await user.selectOptions(within(dialog).getByLabelText('Situacao'), 'paid');
     await user.click(within(dialog).getByRole('button', { name: 'Registrar pagamento' }));
     expect(savePurchasePaymentV2).toHaveBeenCalledWith(expect.objectContaining({
-      purchaseId: 'purchase-1', paymentMethod: 'pix', amount: '250', status: 'paid',
+      purchaseId: 'purchase-1', purchaseOrderId: 'order-1', paymentMethod: 'pix', amount: '250', status: 'paid',
     }));
   });
 
@@ -135,6 +137,8 @@ describe('SupplyPurchasesPage V2', () => {
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
     await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
     expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ purchaseDestinationId: null, shippingAmount: '0' })] }));
+    expect(within(dialog).getByText('Compra registrada.')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Pagamento e arquivo sao opcionais/)).toBeInTheDocument();
   });
 
   it('permite frete vazio como nao informado e envia o valor vazio ao RPC', async () => {
@@ -344,6 +348,24 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
     expect(within(dialog).getByText('Documentos da Cotacao · somente leitura')).toBeInTheDocument();
     expect(within(dialog).getByText('proposta.pdf')).toBeInTheDocument();
+  });
+
+  it('mostra a compra ou pedido relacionado em cada arquivo', async () => {
+    const user = userEvent.setup();
+    renderPage({
+      ...purchase,
+      attachments: [{
+        id: 'attachment-1', purchaseId: 'purchase-1', purchaseOrderId: 'order-1', originalName: 'nota-fiscal.pdf',
+        storagePath: 'compras/purchase-1/attachment-1/nota-fiscal.pdf', mimeType: 'application/pdf', sizeBytes: 1000,
+        description: null, documentType: 'invoice', documentNumber: 'NF-1', documentDate: '2026-09-01',
+        documentAmount: '400', createdAt: '2026-09-01T12:30:00Z', stores: [],
+      }],
+    });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
+    expect(within(dialog).getByText('Nota fiscal · 01/09/2026 · PED-1 · ativo · NF-1')).toBeInTheDocument();
   });
 
   it('nao oferece documento de reembolso no cadastro operacional de Compras', async () => {

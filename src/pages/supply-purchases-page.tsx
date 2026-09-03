@@ -106,6 +106,35 @@ function formatDate(value: string | null): string {
   if (!value) return 'Nao informada';
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${value.slice(0, 10)}T00:00:00Z`));
 }
+function purchaseOrderLabel(order: PurchaseOrderV2): string {
+  return `${formatDate(order.purchasedOn)} · ${order.supplierOrderRef || order.id.slice(0, 8)} · ${order.status === 'cancelled' ? 'cancelado' : 'ativo'}`;
+}
+function purchaseOrderContextLabel(purchase: PurchaseV2, purchaseOrderId: string | null): string {
+  if (!purchaseOrderId) return 'Compra geral';
+  const order = purchase.orders.find((entry) => entry.id === purchaseOrderId);
+  return order ? purchaseOrderLabel(order) : `Pedido ${purchaseOrderId.slice(0, 8)}`;
+}
+function centsToInput(value: bigint): string {
+  const whole = value / 100n;
+  const fraction = String(value % 100n).padStart(2, '0');
+  return fraction === '00' ? whole.toString() : `${whole.toString()},${fraction}`;
+}
+function suggestedPaymentAmount(purchase: PurchaseV2, purchaseOrderId: string): string {
+  const orders = purchaseOrderId
+    ? purchase.orders.filter((order) => order.id === purchaseOrderId && order.status === 'active')
+    : purchase.orders.filter((order) => order.status === 'active');
+  if (!orders.length || orders.some((order) => order.lines.some((line) => lineTotalCents(line) === null))) return '';
+
+  const generalPayments = purchase.payments.filter((payment) => payment.status !== 'cancelled' && !payment.purchaseOrderId);
+  if (purchaseOrderId && generalPayments.length) return '';
+
+  const orderTotal = orders.flatMap((order) => order.lines).reduce((sum, line) => sum + (lineTotalCents(line) || 0n), 0n);
+  const registeredPayments = purchase.payments
+    .filter((payment) => payment.status !== 'cancelled' && (purchaseOrderId ? payment.purchaseOrderId === purchaseOrderId : true))
+    .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
+  const remaining = orderTotal - registeredPayments;
+  return remaining > 0n ? centsToInput(remaining) : '';
+}
 function decimalFromThousandths(value: bigint): string {
   const whole = value / 1000n;
   const fraction = String(value % 1000n).padStart(3, '0').replace(/0+$/, '');
@@ -141,7 +170,7 @@ function RegisterPurchaseModal({
   purchase: PurchaseV2 | null;
   item: PurchaseItemV2 | null;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (orderId: string) => Promise<void>;
   embedded?: boolean;
 }) {
   const [purchasedOn, setPurchasedOn] = useState(todayInput());
@@ -221,7 +250,7 @@ function RegisterPurchaseModal({
 
     setSaving(true);
     try {
-      await createSupplyPurchaseOrderV2({
+      const orderId = await createSupplyPurchaseOrderV2({
         purchaseId: purchase.id,
         purchasedOn,
         supplierOrderRef,
@@ -239,7 +268,7 @@ function RegisterPurchaseModal({
           notes,
         }],
       });
-      await onSaved();
+      await onSaved(orderId);
       if (!embedded) onClose();
     } catch (failure) {
       setError(errorMessage(failure, 'Nao foi possivel registrar a compra.'));
@@ -304,18 +333,21 @@ function RegisterPurchaseModal({
 
 function PaymentModal({
   purchase,
+  initialPurchaseOrderId,
   onClose,
   onSaved,
   canEdit,
   embedded = false,
 }: {
   purchase: PurchaseV2 | null;
+  initialPurchaseOrderId?: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
   canEdit: boolean;
   embedded?: boolean;
 }) {
   const [method, setMethod] = useState<PaymentMethod>('pix');
+  const [purchaseOrderId, setPurchaseOrderId] = useState('');
   const [source, setSource] = useState('');
   const [amount, setAmount] = useState('');
   const [entry, setEntry] = useState('');
@@ -328,16 +360,20 @@ function PaymentModal({
 
   useEffect(() => {
     if (!purchase) return;
+    const initialOrderId = initialPurchaseOrderId && purchase.orders.some((order) => order.id === initialPurchaseOrderId)
+      ? initialPurchaseOrderId
+      : '';
     setMethod(purchase.paymentMethodSnapshot || 'pix');
+    setPurchaseOrderId(initialOrderId);
     setSource('');
-    setAmount(purchase.approvedTotal);
+    setAmount(suggestedPaymentAmount(purchase, initialOrderId));
     setEntry(purchase.entryAmountSnapshot || '');
     setInstallments(purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '');
     setFirstDueDate('');
     setStatus('planned');
     setNotes(purchase.paymentNotesSnapshot || '');
     setError(null);
-  }, [purchase]);
+  }, [initialPurchaseOrderId, purchase]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -357,6 +393,7 @@ function PaymentModal({
       await savePurchasePaymentV2({
         id: null,
         purchaseId: purchase.id,
+        purchaseOrderId: purchaseOrderId || null,
         paymentMethod: method,
         sourceLabel: source,
         amount,
@@ -383,9 +420,10 @@ function PaymentModal({
             {purchase.payments.length ? (
               <div className="table-scroll">
                 <table className="data-table">
-                  <thead><tr><th>Forma</th><th>Origem</th><th>Valor</th><th>Situacao</th><th>Vencimento / pagamento</th></tr></thead>
+                  <thead><tr><th>Compra / pedido</th><th>Forma</th><th>Origem</th><th>Valor</th><th>Situacao</th><th>Vencimento / pagamento</th></tr></thead>
                   <tbody>{purchase.payments.map((payment) => (
                     <tr key={payment.id}>
+                      <td>{purchaseOrderContextLabel(purchase, payment.purchaseOrderId)}</td>
                       <td>{PAYMENT_LABELS[payment.paymentMethod]}</td>
                       <td>{payment.sourceLabel || 'Nao informada'}</td>
                       <td><strong>{formatBRL(moneyToCents(payment.amount))}</strong>{payment.installmentCount && <small>{payment.installmentCount} parcelas</small>}</td>
@@ -403,6 +441,11 @@ function PaymentModal({
               <h4>Novo pagamento</h4>
               <form className="stack-form" onSubmit={submit}>
                 <div className="form-grid form-grid--three">
+                  <label className="field">Registro/pedido relacionado<select value={purchaseOrderId} onChange={(event) => {
+                    const nextOrderId = event.target.value;
+                    setPurchaseOrderId(nextOrderId);
+                    setAmount(suggestedPaymentAmount(purchase, nextOrderId));
+                  }}><option value="">Compra geral</option>{purchase.orders.map((order) => <option key={order.id} value={order.id}>{purchaseOrderLabel(order)}</option>)}</select></label>
                   <label className="field">Forma de pagamento<select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label className="field">Origem / cartao utilizado<input value={source} onChange={(event) => setSource(event.target.value)} placeholder="Ex.: Cartao Corporativo final 1234" /></label>
                   <label className="field">Valor<input value={amount} onChange={(event) => setAmount(event.target.value)} required /></label>
@@ -591,12 +634,14 @@ function LineDistributionModal({
 
 function DocumentsModal({
   purchase,
+  initialPurchaseOrderId,
   onClose,
   onSaved,
   canEdit,
   embedded = false,
 }: {
   purchase: PurchaseV2 | null;
+  initialPurchaseOrderId?: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
   canEdit: boolean;
@@ -613,7 +658,7 @@ function DocumentsModal({
   const [saving, setSaving] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (purchase) { setPurchaseOrderId(''); setDocumentNumber(''); setDocumentDate(''); setDocumentAmount(''); setDescription(''); setStoreIds([]); setFile(null); setError(null); } }, [purchase]);
+  useEffect(() => { if (purchase) { setPurchaseOrderId(initialPurchaseOrderId && purchase.orders.some((order) => order.id === initialPurchaseOrderId) ? initialPurchaseOrderId : ''); setDocumentNumber(''); setDocumentDate(''); setDocumentAmount(''); setDescription(''); setStoreIds([]); setFile(null); setError(null); } }, [initialPurchaseOrderId, purchase]);
   const toggleStore = (storeId: string) => setStoreIds((current) => current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId]);
   const upload = async () => {
     if (!purchase || !file) return;
@@ -633,7 +678,7 @@ function DocumentsModal({
   const content = purchase ? <div className="stack-form">
       {canEdit && <section className="purchase-v2-doc-create"><h4>Novo documento de Compra</h4><div className="form-grid form-grid--three">
         <label className="field">Tipo<select value={documentType} onChange={(event) => setDocumentType(event.target.value as PurchaseDocumentType)}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
-        <label className="field">Registro/pedido relacionado<select value={purchaseOrderId} onChange={(event) => setPurchaseOrderId(event.target.value)}><option value="">Compra geral</option>{purchase.orders.map((order) => <option key={order.id} value={order.id}>{formatDate(order.purchasedOn)} · {order.supplierOrderRef || order.id.slice(0,8)} · {order.status === 'cancelled' ? 'cancelado' : 'ativo'}</option>)}</select></label>
+        <label className="field">Registro/pedido relacionado<select value={purchaseOrderId} onChange={(event) => setPurchaseOrderId(event.target.value)}><option value="">Compra geral</option>{purchase.orders.map((order) => <option key={order.id} value={order.id}>{purchaseOrderLabel(order)}</option>)}</select></label>
         <label className="field">Numero do documento<input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></label>
         <label className="field">Data<input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} /></label>
         <label className="field">Valor<input value={documentAmount} onChange={(event) => setDocumentAmount(event.target.value)} /></label>
@@ -642,7 +687,7 @@ function DocumentsModal({
       <div className="purchase-v2-store-scope"><span>Lojas relacionadas <small>Opcional; sem selecao = documento geral da compra.</small></span><div>{purchase.stores.map((store) => <label key={store.storeId}><input type="checkbox" checked={storeIds.includes(store.storeId)} onChange={() => toggleStore(store.storeId)} />{store.code} · {store.city}/{store.state}</label>)}</div></div>
       <div className="modal-actions"><button type="button" className="button button--primary" disabled={!file || saving} onClick={() => void upload()}>{saving ? 'Enviando...' : 'Anexar documento'}</button></div></section>}
       {error && <div className="form-error">{error}</div>}
-      <section><h4>Documentos da Compra</h4>{purchase.attachments.length ? <div className="quote-attachment-list">{purchase.attachments.map((attachment) => <article key={attachment.id}><FileText size={18}/><div><strong>{attachment.originalName}</strong><span>{DOCUMENT_LABELS[attachment.documentType]}{attachment.documentNumber ? ` · ${attachment.documentNumber}` : ''}{attachment.stores.length ? ` · ${attachment.stores.map((store)=>store.code).join(', ')}` : ''}</span></div><span>{attachment.documentDate ? formatDate(attachment.documentDate) : new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span><button type="button" className="button button--secondary button--small" disabled={openingId===attachment.id} onClick={() => void openPurchase(attachment.id,attachment.storagePath)}>Abrir</button>{canEdit && <IconButton label={`Remover ${attachment.originalName}`} onClick={() => void remove(attachment.id)}><XCircle size={16}/></IconButton>}</article>)}</div> : <EmptyState title="Nenhum documento de Compra" detail="Notas, recibos, comprovantes e ordens de compra aparecerao aqui." />}</section>
+      <section><h4>Documentos da Compra</h4>{purchase.attachments.length ? <div className="quote-attachment-list">{purchase.attachments.map((attachment) => <article key={attachment.id}><FileText size={18}/><div><strong>{attachment.originalName}</strong><span>{DOCUMENT_LABELS[attachment.documentType]} · {purchaseOrderContextLabel(purchase, attachment.purchaseOrderId)}{attachment.documentNumber ? ` · ${attachment.documentNumber}` : ''}{attachment.stores.length ? ` · ${attachment.stores.map((store)=>store.code).join(', ')}` : ''}</span></div><span>{attachment.documentDate ? formatDate(attachment.documentDate) : new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span><button type="button" className="button button--secondary button--small" disabled={openingId===attachment.id} onClick={() => void openPurchase(attachment.id,attachment.storagePath)}>Abrir</button>{canEdit && <IconButton label={`Remover ${attachment.originalName}`} onClick={() => void remove(attachment.id)}><XCircle size={16}/></IconButton>}</article>)}</div> : <EmptyState title="Nenhum documento de Compra" detail="Notas, recibos, comprovantes e ordens de compra aparecerao aqui." />}</section>
       <section><h4>Documentos da Cotacao · somente leitura</h4>{purchase.quoteAttachments.length ? <div className="quote-attachment-list">{purchase.quoteAttachments.map((attachment) => <article key={attachment.id}><FileText size={18}/><div><strong>{attachment.originalName}</strong><span>{QUOTE_DOCUMENT_LABELS[attachment.documentType] || attachment.documentType} · origem {purchase.quoteCode}</span></div><span>{new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span><button type="button" className="button button--secondary button--small" disabled={openingId===attachment.id} onClick={() => void openQuote(attachment.id,attachment.storagePath)}>Abrir</button></article>)}</div> : <EmptyState title="Sem documentos na cotacao" detail="Nenhum arquivo de origem esta disponivel para esta compra." />}</section>
     </div> : null;
   if (embedded) return content;
@@ -670,11 +715,13 @@ function PurchaseManagementModal({
 }) {
   const [tab, setTab] = useState<PurchaseManagementTab>(initialTab);
   const [itemId, setItemId] = useState(initialItemId || '');
+  const [lastSavedOrderId, setLastSavedOrderId] = useState<string | undefined>();
   useEffect(() => {
     if (!purchase) return;
     const firstPending = purchase.items.find((item) => remainingItemQuantity(item, purchase) > 0n);
     setTab(initialTab);
     setItemId(initialItemId || firstPending?.id || purchase.items[0]?.id || '');
+    setLastSavedOrderId(undefined);
   // O modal deve preservar a aba durante o reload da mesma compra.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialItemId, initialTab, purchase?.id]);
@@ -682,6 +729,10 @@ function PurchaseManagementModal({
   const item = purchase.items.find((entry) => entry.id === itemId) || purchase.items[0] || null;
   const isClosed = purchase.status === 'returned' || purchase.status === 'cancelled';
   const canRegister = Boolean(item && canEdit && !isClosed && remainingItemQuantity(item, purchase) > 0n);
+  const handleOrderSaved = async (orderId: string) => {
+    setLastSavedOrderId(orderId);
+    await onSaved();
+  };
 
   return <Modal
     className="purchase-v2-manage-modal"
@@ -695,6 +746,7 @@ function PurchaseManagementModal({
       <button type="button" role="tab" aria-selected={tab === 'payment'} className={tab === 'payment' ? 'is-active' : ''} onClick={() => setTab('payment')}><CreditCard size={17}/>Pagamentos <span>{purchase.payments.filter((payment) => payment.status !== 'cancelled').length}</span></button>
       <button type="button" role="tab" aria-selected={tab === 'documents'} className={tab === 'documents' ? 'is-active' : ''} onClick={() => setTab('documents')}><Paperclip size={17}/>Arquivos <span>{purchase.attachments.length}</span></button>
     </div>
+    {lastSavedOrderId && <div className="purchase-v2-followup" role="status"><div><strong>Compra registrada.</strong><span>Pagamento e arquivo sao opcionais e podem ser vinculados a este pedido agora ou depois.</span></div><div><button type="button" className="button button--secondary button--small" onClick={() => setTab('payment')}><CreditCard size={15}/>Adicionar pagamento</button><button type="button" className="button button--secondary button--small" onClick={() => setTab('documents')}><Paperclip size={15}/>Anexar arquivo</button></div></div>}
     {tab === 'purchase' && <div className="stack-form">
       <label className="field">Item da compra
         <select aria-label="Item da compra" value={item?.id || ''} onChange={(event) => setItemId(event.target.value)}>
@@ -704,10 +756,10 @@ function PurchaseManagementModal({
           })}
         </select>
       </label>
-      {canRegister && item ? <RegisterPurchaseModal embedded purchase={purchase} item={item} onClose={onClose} onSaved={onSaved}/> : <EmptyState title={isClosed ? 'Compra encerrada' : 'Item totalmente registrado'} detail={isClosed ? 'Pagamentos e documentos permanecem disponiveis para consulta.' : 'Selecione outro item ou consulte pagamentos e arquivos nas abas acima.'}/>}
+      {canRegister && item ? <RegisterPurchaseModal embedded purchase={purchase} item={item} onClose={onClose} onSaved={handleOrderSaved}/> : <EmptyState title={isClosed ? 'Compra encerrada' : 'Item totalmente registrado'} detail={isClosed ? 'Pagamentos e documentos permanecem disponiveis para consulta.' : 'Selecione outro item ou consulte pagamentos e arquivos nas abas acima.'}/>}
     </div>}
-    {tab === 'payment' && <PaymentModal embedded purchase={purchase} onClose={onClose} onSaved={onSaved} canEdit={canEdit}/>}
-    {tab === 'documents' && <DocumentsModal embedded purchase={purchase} onClose={onClose} onSaved={onSaved} canEdit={canEdit}/>}
+    {tab === 'payment' && <PaymentModal embedded purchase={purchase} initialPurchaseOrderId={lastSavedOrderId} onClose={onClose} onSaved={onSaved} canEdit={canEdit}/>}
+    {tab === 'documents' && <DocumentsModal embedded purchase={purchase} initialPurchaseOrderId={lastSavedOrderId} onClose={onClose} onSaved={onSaved} canEdit={canEdit}/>}
   </Modal>;
 }
 

@@ -218,6 +218,21 @@
 }
 .purchase-v2-manage-tabs button span { min-width: 22px; padding: 2px 6px; color: var(--muted); background: #fff; border-radius: 999px; font-size: .68rem; }
 .purchase-v2-manage-tabs button.is-active { color: var(--brand-dark); background: #fff; border-color: #c8d6cf; box-shadow: 0 2px 8px rgba(23,55,44,.08); }
+.purchase-v2-followup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -6px 0 18px;
+  padding: 12px 14px;
+  color: #155b49;
+  background: #edf8f3;
+  border: 1px solid #b9dfd0;
+  border-radius: 7px;
+}
+.purchase-v2-followup > div { display: flex; align-items: center; gap: 8px; }
+.purchase-v2-followup > div:first-child { display: grid; gap: 2px; }
+.purchase-v2-followup span { color: #427467; font-size: .75rem; }
 .purchase-v2-bulk-section { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 7px; }
 .purchase-v2-bulk-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .purchase-v2-bulk-section > header > div { display: grid; gap: 3px; }
@@ -284,6 +299,8 @@
   .purchase-v2-manage-tabs,
   .purchase-v2-portfolio-kpis,
   .purchase-v2-status-overview { grid-template-columns: 1fr; }
+  .purchase-v2-followup,
+  .purchase-v2-followup > div { align-items: stretch; flex-direction: column; }
   .purchase-v2-item__numbers { grid-template-columns: repeat(2,minmax(110px,1fr)); }
   .purchase-v2-destination,
   .purchase-v2-executions > div { grid-template-columns: 1fr; }

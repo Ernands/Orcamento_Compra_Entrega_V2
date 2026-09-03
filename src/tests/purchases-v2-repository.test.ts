@@ -34,6 +34,7 @@ describe('buildPurchasePaymentRpcPayloadV2', () => {
     expect(buildPurchasePaymentRpcPayloadV2({
       id: null,
       purchaseId: 'purchase-1',
+      purchaseOrderId: 'order-1',
       paymentMethod: 'pix',
       sourceLabel: ' Conta operacional ',
       amount: '4880',
@@ -46,6 +47,7 @@ describe('buildPurchasePaymentRpcPayloadV2', () => {
     })).toEqual({
       p_payment_id: null,
       p_purchase_id: 'purchase-1',
+      p_purchase_order_id: 'order-1',
       p_payment_method: 'pix',
       p_source_label: 'Conta operacional',
       p_amount: '4880',

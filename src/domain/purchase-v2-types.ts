@@ -177,6 +177,7 @@ export interface PurchaseOrderV2 {
 export interface PurchasePaymentV2 {
   id: string;
   purchaseId: string;
+  purchaseOrderId: string | null;
   paymentMethod: PaymentMethod;
   sourceLabel: string | null;
   amount: string;
@@ -289,6 +290,7 @@ export interface RegisterPurchaseOrderInputV2 {
 export interface SavePurchasePaymentInputV2 {
   id: string | null;
   purchaseId: string;
+  purchaseOrderId: string | null;
   paymentMethod: PaymentMethod;
   sourceLabel: string;
   amount: string;

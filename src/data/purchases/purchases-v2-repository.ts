@@ -136,7 +136,7 @@ type OrderLineStoreRow = {
   quantity: Numeric; allocation_source: 'direct' | 'manual';
 };
 type PaymentRow = {
-  id: string; purchase_id: string; payment_method: PaymentMethod; source_label: string | null; amount: Numeric;
+  id: string; purchase_id: string; purchase_order_id: string | null; payment_method: PaymentMethod; source_label: string | null; amount: Numeric;
   entry_amount: Numeric | null; installment_count: number | null; first_due_date: string | null;
   status: PurchasePaymentStatus; paid_at: string | null; notes: string | null; created_at: string;
 };
@@ -259,7 +259,8 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
       })),
     })),
     payments: payments.filter((payment) => payment.purchase_id === purchase.id).map((payment): PurchasePaymentV2 => ({
-      id: payment.id, purchaseId: payment.purchase_id, paymentMethod: payment.payment_method,
+      id: payment.id, purchaseId: payment.purchase_id, purchaseOrderId: payment.purchase_order_id,
+      paymentMethod: payment.payment_method,
       sourceLabel: payment.source_label, amount: stringValue(payment.amount), entryAmount: nullableStringValue(payment.entry_amount),
       installmentCount: payment.installment_count, firstDueDate: payment.first_due_date, status: payment.status,
       paidAt: payment.paid_at, notes: payment.notes, createdAt: payment.created_at,
@@ -315,6 +316,7 @@ export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInpu
   return {
     p_payment_id: values.id,
     p_purchase_id: values.purchaseId,
+    p_purchase_order_id: values.purchaseOrderId,
     p_payment_method: values.paymentMethod,
     p_source_label: values.sourceLabel.trim() || null,
     p_amount: values.amount,
