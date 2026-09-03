@@ -160,7 +160,7 @@ export function QuoteSummaryModal({
             {filters.store || 'Todas as lojas'}
             {filters.category ? ` · ${filters.category}` : ''}
             {filters.area ? ` · ${filters.area}` : ''}
-            {` · ${priceMode === 'lowest' ? 'Menor preco por item' : 'Todas as cotacoes'}`}
+            {priceMode === 'lowest' ? ' · Menor preco por item' : ''}
           </strong>
         </div>
         <button
@@ -196,8 +196,11 @@ export function QuoteSummaryModal({
       <div className="quote-summary-kpis quote-summary-kpis--with-freight">
         <article>
           <ReceiptText size={20} />
-          <span>Cotacoes consideradas</span>
-          <strong>{summary.totalQuotes}</strong>
+          <span>Total de cotacoes</span>
+          <strong>{summary.inputQuoteCount}</strong>
+          {summary.inputQuoteCount !== summary.totalQuotes && (
+            <small>{summary.totalQuotes} consideradas nos valores</small>
+          )}
         </article>
         <article>
           <Boxes size={20} />
@@ -310,58 +313,22 @@ export function QuoteSummaryModal({
       {view === 'consolidated' && (
         <div className="quote-summary-consolidated">
           <div className="quote-summary-financial-grid">
-            <article>
-              <span>Produtos</span>
-              <strong>{formatBRL(summary.totalProductsCents)}</strong>
-            </article>
-            <article>
-              <span>Descontos</span>
-              <strong>- {formatBRL(summary.totalDiscountCents)}</strong>
-            </article>
-            <article>
-              <span>Outros custos</span>
-              <strong>{formatBRL(summary.totalOtherCostsCents)}</strong>
-            </article>
-            <article>
-              <span>Frete</span>
-              <strong>{formatBRL(summary.totalShippingCents)}</strong>
-            </article>
-            <article>
-              <span>Media por loja coberta</span>
-              <strong>{formatBRL(summary.averagePerStoreCents)}</strong>
-            </article>
-            <article>
-              <span>Destinos no resumo</span>
-              <strong>{summary.totalDestinations}</strong>
-            </article>
+            <article><span>Produtos</span><strong>{formatBRL(summary.totalProductsCents)}</strong></article>
+            <article><span>Descontos</span><strong>- {formatBRL(summary.totalDiscountCents)}</strong></article>
+            <article><span>Outros custos</span><strong>{formatBRL(summary.totalOtherCostsCents)}</strong></article>
+            <article><span>Frete</span><strong>{formatBRL(summary.totalShippingCents)}</strong></article>
+            <article><span>Media por loja coberta</span><strong>{formatBRL(summary.averagePerStoreCents)}</strong></article>
+            <article><span>Destinos no resumo</span><strong>{summary.totalDestinations}</strong></article>
           </div>
           <div className="quote-context-summary">
-            <article>
-              <Building2 size={19} />
-              <span>Prospector/UF</span>
-              <strong>{formatBRL(summary.coverage.destinationProfileCents)}</strong>
-            </article>
-            <article>
-              <Store size={19} />
-              <span>Loja direta</span>
-              <strong>{formatBRL(summary.coverage.directStoreCents)}</strong>
-            </article>
-            <article>
-              <Calculator size={19} />
-              <span>Fallback legado</span>
-              <strong>{formatBRL(summary.coverage.legacyFallbackCents)}</strong>
-            </article>
-            <article>
-              <MapPin size={19} />
-              <span>Sem cobertura</span>
-              <strong>{formatBRL(summary.coverage.unallocatedCents)}</strong>
-            </article>
+            <article><Building2 size={19} /><span>Prospector/UF</span><strong>{formatBRL(summary.coverage.destinationProfileCents)}</strong></article>
+            <article><Store size={19} /><span>Loja direta</span><strong>{formatBRL(summary.coverage.directStoreCents)}</strong></article>
+            <article><Calculator size={19} /><span>Fallback legado</span><strong>{formatBRL(summary.coverage.legacyFallbackCents)}</strong></article>
+            <article><MapPin size={19} /><span>Sem cobertura</span><strong>{formatBRL(summary.coverage.unallocatedCents)}</strong></article>
           </div>
           <div className="quote-summary-coverage">
             <strong>{coveragePercent(summary.coverage.realCoverageBasisPoints)}% com cobertura real</strong>
-            <span>
-              Destino Prospector/UF ou loja direta. Fallback e valores nao alocados ficam destacados separadamente.
-            </span>
+            <span>Destino Prospector/UF ou loja direta. Fallback e valores nao alocados ficam destacados separadamente.</span>
           </div>
         </div>
       )}
@@ -371,48 +338,29 @@ export function QuoteSummaryModal({
           <header className="quote-store-summary__toolbar">
             <div>
               <h3>Totais por Prospector / UF</h3>
-              <p>
-                Produto e custos comuns sao proporcionais a quantidade do destino; o frete permanece no proprio destino.
-              </p>
+              <p>Produto e custos comuns sao proporcionais a quantidade do destino; o frete permanece no proprio destino.</p>
             </div>
           </header>
           {summary.totalsByDestination.length ? (
             <div className="quote-summary-data-table">
               <div className="quote-summary-data-table__header quote-summary-data-table__destination">
-                <span>Destino</span>
-                <span>UF</span>
-                <span>Lojas</span>
-                <span>Qtd.</span>
-                <span>Produtos</span>
-                <span>Frete</span>
-                <span>Total</span>
-                <span>Cobertura</span>
+                <span>Destino</span><span>UF</span><span>Lojas</span><span>Qtd.</span><span>Produtos</span><span>Frete</span><span>Total</span><span>Cobertura</span>
               </div>
               {summary.totalsByDestination.map((row) => (
-                <div
-                  className="quote-summary-data-table__row quote-summary-data-table__destination"
-                  key={row.key}
-                >
+                <div className="quote-summary-data-table__row quote-summary-data-table__destination" key={row.key}>
                   <strong>{row.label}</strong>
                   <span>{row.state || '—'}</span>
                   <span>{row.storeCount}</span>
                   <span>{formatSummaryQuantity(row.quantityThousandths)}</span>
                   <span>{formatBRL(row.productCents)}</span>
-                  <span>
-                    {row.shippingPending
-                      ? `${formatBRL(row.shippingCents)} *`
-                      : formatBRL(row.shippingCents)}
-                  </span>
+                  <span>{row.shippingPending ? `${formatBRL(row.shippingCents)} *` : formatBRL(row.shippingCents)}</span>
                   <strong>{formatBRL(row.totalCents)}</strong>
                   <small>{sourcesLabel(row.sources)}</small>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState
-              title="Sem destinos no resumo"
-              detail="Os filtros atuais nao retornaram valores para esta visao."
-            />
+            <EmptyState title="Sem destinos no resumo" detail="Os filtros atuais nao retornaram valores para esta visao." />
           )}
         </section>
       )}
@@ -432,49 +380,29 @@ export function QuoteSummaryModal({
           {summary.totalsByStore.length ? (
             <div className="quote-summary-data-table">
               <div className="quote-summary-data-table__header quote-summary-data-table__store">
-                <span>Loja</span>
-                <span>Cidade / UF</span>
-                <span>Qtd.</span>
-                <span>Itens</span>
-                <span>Produtos</span>
-                <span>Frete</span>
-                <span>Total</span>
-                <span>Origem</span>
+                <span>Loja</span><span>Cidade / UF</span><span>Qtd.</span><span>Itens</span><span>Produtos</span><span>Frete</span><span>Total</span><span>Origem</span>
               </div>
               {summary.totalsByStore.map((row) => (
                 <div className="quote-summary-data-table__row quote-summary-data-table__store" key={row.key}>
                   <strong>{row.label}</strong>
-                  <span>
-                    {row.key === CONSOLIDATED_STORE_SUMMARY_KEY
-                      ? '—'
-                      : `${row.city || '—'} / ${row.state || '—'}`}
-                  </span>
+                  <span>{row.key === CONSOLIDATED_STORE_SUMMARY_KEY ? '—' : `${row.city || '—'} / ${row.state || '—'}`}</span>
                   <span>{formatSummaryQuantity(row.quantityThousandths)}</span>
                   <span>{row.itemCount}</span>
                   <span>{formatBRL(row.productCents)}</span>
-                  <span>
-                    {row.shippingPending
-                      ? `${formatBRL(row.shippingCents)} *`
-                      : formatBRL(row.shippingCents)}
-                  </span>
+                  <span>{row.shippingPending ? `${formatBRL(row.shippingCents)} *` : formatBRL(row.shippingCents)}</span>
                   <strong>{formatBRL(row.totalCents)}</strong>
                   <small>{sourcesLabel(row.sources)}</small>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState
-              title="Sem lojas no resumo"
-              detail="Os filtros atuais nao retornaram valores para esta visao."
-            />
+            <EmptyState title="Sem lojas no resumo" detail="Os filtros atuais nao retornaram valores para esta visao." />
           )}
         </section>
       )}
 
       {summary.shippingPendingCount > 0 && (
-        <p className="quote-summary-note">
-          * Ha frete pendente. Os totais exibidos sao parciais ate o preenchimento do frete.
-        </p>
+        <p className="quote-summary-note">* Ha frete pendente. Os totais exibidos sao parciais ate o preenchimento do frete.</p>
       )}
     </Modal>
   );

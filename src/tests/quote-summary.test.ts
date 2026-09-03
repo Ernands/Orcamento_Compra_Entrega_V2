@@ -232,8 +232,8 @@ describe('resumo e exportacao de cotacoes', () => {
     expect(rowOne).toMatchObject({ shippingCents: 1000n, totalCents: 11000n });
     expect(rowTwo).toMatchObject({ shippingCents: 3000n, totalCents: 13000n });
     expect(summary.totalsByDestination.map((row) => [row.label, row.shippingCents, row.totalCents])).toEqual([
-      ['Prospector SP A - SP', 1000n, 11000n],
       ['Prospector SP B - SP', 3000n, 13000n],
+      ['Prospector SP A - SP', 1000n, 11000n],
     ]);
     expect(summary.coverage.destinationProfileCents).toBe(24000n);
     expect(summary.coverage.realCoverageBasisPoints).toBe(10000);
