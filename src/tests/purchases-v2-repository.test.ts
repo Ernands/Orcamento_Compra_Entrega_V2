@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPurchaseOperationRpcPayloadV2,
   buildPurchaseOrderRpcPayloadV2,
   buildPurchasePaymentRpcPayloadV2,
 } from '../data/purchases/purchases-v2-repository';
@@ -58,5 +59,43 @@ describe('buildPurchasePaymentRpcPayloadV2', () => {
       p_paid_at: null,
       p_notes: 'Teste',
     });
+  });
+});
+
+describe('buildPurchaseOperationRpcPayloadV2', () => {
+  it('envia compra, custo por loja e pagamentos na mesma operacao', () => {
+    const payload = buildPurchaseOperationRpcPayloadV2({
+      ...values('12,50'),
+      lines: [{
+        ...values('12,50').lines[0],
+        storeAllocations: [
+          { storeId: 'store-1', quantity: '1.5' },
+          { storeId: 'store-2', quantity: '2.5' },
+        ],
+      }],
+      payments: [{
+        paymentMethod: 'pix',
+        sourceLabel: ' Conta operacional ',
+        amount: '411,70',
+        entryAmount: '',
+        installmentCount: '',
+        firstDueDate: '',
+        status: 'paid',
+        paidAt: '2026-09-01T12:00:00.000Z',
+        notes: ' quitado ',
+      }],
+    });
+
+    expect(payload.p_lines[0].store_allocations).toEqual([
+      { store_id: 'store-1', quantity: '1.5' },
+      { store_id: 'store-2', quantity: '2.5' },
+    ]);
+    expect(payload.p_payments).toEqual([expect.objectContaining({
+      payment_method: 'pix',
+      source_label: 'Conta operacional',
+      amount: '411,70',
+      status: 'paid',
+      notes: 'quitado',
+    })]);
   });
 });

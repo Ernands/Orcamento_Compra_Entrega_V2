@@ -14,6 +14,8 @@ import type {
   PurchaseOrderSource,
   PurchaseOrderStatus,
   PurchaseOrderV2,
+  RegisterPurchaseOperationInputV2,
+  RegisterPurchaseOperationResultV2,
   PurchasePaymentStatus,
   PurchasePaymentV2,
   PurchaseStatus,
@@ -139,6 +141,7 @@ type PaymentRow = {
   id: string; purchase_id: string; purchase_order_id: string | null; payment_method: PaymentMethod; source_label: string | null; amount: Numeric;
   entry_amount: Numeric | null; installment_count: number | null; first_due_date: string | null;
   status: PurchasePaymentStatus; paid_at: string | null; notes: string | null; created_at: string;
+  cancelled_by: string | null; cancelled_at: string | null; cancellation_reason: string | null;
 };
 type AttachmentRow = {
   id: string; purchase_id: string; purchase_order_id: string | null; original_name: string; storage_path: string;
@@ -264,6 +267,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
       sourceLabel: payment.source_label, amount: stringValue(payment.amount), entryAmount: nullableStringValue(payment.entry_amount),
       installmentCount: payment.installment_count, firstDueDate: payment.first_due_date, status: payment.status,
       paidAt: payment.paid_at, notes: payment.notes, createdAt: payment.created_at,
+      cancelledBy: payment.cancelled_by, cancelledAt: payment.cancelled_at, cancellationReason: payment.cancellation_reason,
     })),
     attachments: attachments.filter((attachment) => attachment.purchase_id === purchase.id).map((attachment): PurchaseAttachmentV2 => ({
       id: attachment.id, purchaseId: attachment.purchase_id, purchaseOrderId: attachment.purchase_order_id,
@@ -299,6 +303,10 @@ export function buildPurchaseOrderRpcPayloadV2(values: RegisterPurchaseOrderInpu
       other_costs: line.otherCosts || '0',
       expected_delivery_date: line.expectedDeliveryDate || null,
       notes: line.notes.trim() || null,
+      store_allocations: (line.storeAllocations || []).map((allocation) => ({
+        store_id: allocation.storeId,
+        quantity: allocation.quantity,
+      })),
     })),
   };
 }
@@ -310,6 +318,36 @@ export async function createSupplyPurchaseOrderV2(values: RegisterPurchaseOrderI
   );
   if (error) throw new Error(error.message);
   return data;
+}
+
+export function buildPurchaseOperationRpcPayloadV2(values: RegisterPurchaseOperationInputV2) {
+  const order = buildPurchaseOrderRpcPayloadV2(values);
+  return {
+    ...order,
+    p_payments: values.payments.map((payment) => ({
+      payment_method: payment.paymentMethod,
+      source_label: payment.sourceLabel.trim() || null,
+      amount: payment.amount,
+      entry_amount: payment.entryAmount || null,
+      installment_count: payment.installmentCount ? Number(payment.installmentCount) : null,
+      first_due_date: payment.firstDueDate || null,
+      status: payment.status,
+      paid_at: payment.paidAt ? new Date(payment.paidAt).toISOString() : null,
+      notes: payment.notes.trim() || null,
+    })),
+  };
+}
+
+export async function createSupplyPurchaseOperationV2(
+  values: RegisterPurchaseOperationInputV2,
+): Promise<RegisterPurchaseOperationResultV2> {
+  const { data, error } = await supabase.rpc(
+    'create_supply_purchase_operation_v1' as never,
+    buildPurchaseOperationRpcPayloadV2(values) as never,
+  );
+  if (error) throw new Error(error.message);
+  const result = data as unknown as { order_id: string; payment_ids: string[] };
+  return { orderId: result.order_id, paymentIds: result.payment_ids || [] };
 }
 
 export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInputV2) {
@@ -341,6 +379,14 @@ export async function savePurchasePaymentV2(values: SavePurchasePaymentInputV2):
 export async function cancelSupplyPurchaseOrderV2(orderId: string, reason: string): Promise<void> {
   const { error } = await supabase.rpc('cancel_supply_purchase_order' as never, {
     p_order_id: orderId,
+    p_reason: reason.trim(),
+  } as never);
+  if (error) throw new Error(error.message);
+}
+
+export async function cancelPurchasePaymentV2(paymentId: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_supply_purchase_payment' as never, {
+    p_payment_id: paymentId,
     p_reason: reason.trim(),
   } as never);
   if (error) throw new Error(error.message);

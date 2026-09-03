@@ -4,8 +4,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from '../app/session-provider';
 import {
+  cancelPurchasePaymentV2,
   cancelSupplyPurchaseOrderV2,
-  createSupplyPurchaseOrderV2,
+  createSupplyPurchaseOperationV2,
   listSupplyPurchasesV2,
   savePurchaseDestinationDistributionV2,
   savePurchaseOrderLineDistributionV2,
@@ -20,7 +21,8 @@ vi.mock('../data/purchases/purchases-v2-repository', async () => {
   return {
     ...actual,
     listSupplyPurchasesV2: vi.fn(),
-    createSupplyPurchaseOrderV2: vi.fn(),
+    createSupplyPurchaseOperationV2: vi.fn(),
+    cancelPurchasePaymentV2: vi.fn(),
     cancelSupplyPurchaseOrderV2: vi.fn(),
     savePurchaseDestinationDistributionV2: vi.fn(),
     savePurchaseOrderLineDistributionV2: vi.fn(),
@@ -84,7 +86,8 @@ function renderPage(current: PurchaseV2 = purchase) {
 describe('SupplyPurchasesPage V2', () => {
   beforeEach(() => {
     vi.mocked(useSession).mockReturnValue({ can: () => true } as never);
-    vi.mocked(createSupplyPurchaseOrderV2).mockResolvedValue('order-new');
+    vi.mocked(createSupplyPurchaseOperationV2).mockResolvedValue({ orderId: 'order-new', paymentIds: ['payment-new'] });
+    vi.mocked(cancelPurchasePaymentV2).mockResolvedValue();
     vi.mocked(cancelSupplyPurchaseOrderV2).mockResolvedValue();
     vi.mocked(savePurchaseDestinationDistributionV2).mockResolvedValue('confirmed');
     vi.mocked(savePurchaseOrderLineDistributionV2).mockResolvedValue('confirmed');
@@ -97,7 +100,8 @@ describe('SupplyPurchasesPage V2', () => {
     const purchaseCode = await screen.findByText('CMP-00001');
     expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
-    expect(screen.getByText('1 pagamentos ativos')).toBeInTheDocument();
+    expect(screen.getByText('1 compras realizadas')).toBeInTheDocument();
+    expect(screen.getByText(/pago vinculado R\$ 400,00/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirmar lojas CMP-00001 (1)' })).toBeInTheDocument();
     expect(purchaseCode.closest('article')).toHaveClass('purchase-v2-card--partially_purchased');
@@ -110,16 +114,16 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    expect(within(dialog).getByRole('tab', { name: 'Compra' })).toHaveAttribute('aria-selected', 'true');
-    await user.click(within(dialog).getByRole('tab', { name: /Pagamentos/ }));
-    expect(within(dialog).getByText('Conta operacional')).toBeInTheDocument();
-    expect(within(dialog).getByText('R$ 400,00')).toBeInTheDocument();
-    expect(within(dialog).getAllByText('01/09/2026 · PED-1 · ativo')).toHaveLength(2);
-    await user.selectOptions(within(dialog).getByLabelText('Registro/pedido relacionado'), 'order-1');
-    await user.clear(within(dialog).getByLabelText('Valor'));
-    await user.type(within(dialog).getByLabelText('Valor'), '250');
-    await user.selectOptions(within(dialog).getByLabelText('Situacao'), 'paid');
-    await user.click(within(dialog).getByRole('button', { name: 'Registrar pagamento' }));
+    expect(within(dialog).getByText(/Conta operacional/)).toBeInTheDocument();
+    expect(within(dialog).getAllByText('R$ 400,00').length).toBeGreaterThan(0);
+    await user.click(within(dialog).getByRole('button', { name: 'Pagamento' }));
+    const paymentEditor = within(dialog).getByText('Novo pagamento desta compra').closest('section');
+    expect(paymentEditor).not.toBeNull();
+    expect(within(paymentEditor as HTMLElement).getAllByText('01/09/2026 · PED-1 · ativo').length).toBeGreaterThan(0);
+    await user.clear(within(paymentEditor as HTMLElement).getByLabelText('Valor'));
+    await user.type(within(paymentEditor as HTMLElement).getByLabelText('Valor'), '250');
+    await user.selectOptions(within(paymentEditor as HTMLElement).getByLabelText('Situacao'), 'paid');
+    await user.click(within(paymentEditor as HTMLElement).getByRole('button', { name: 'Registrar pagamento' }));
     expect(savePurchasePaymentV2).toHaveBeenCalledWith(expect.objectContaining({
       purchaseId: 'purchase-1', purchaseOrderId: 'order-1', paymentMethod: 'pix', amount: '250', status: 'paid',
     }));
@@ -133,27 +137,34 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     expect(within(dialog).queryByLabelText('Destino')).not.toBeInTheDocument();
-    await user.clear(within(dialog).getByLabelText('Frete realizado'));
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
-    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
-    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ purchaseDestinationId: null, shippingAmount: '0' })] }));
-    expect(within(dialog).getByText('Compra registrada.')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Pagamento e arquivo sao opcionais/)).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Quantidade da loja LOJ-001'));
+    await user.type(within(dialog).getByLabelText('Quantidade da loja LOJ-001'), '5');
+    await user.clear(within(dialog).getByLabelText('Quantidade da loja LOJ-002'));
+    await user.type(within(dialog).getByLabelText('Quantidade da loja LOJ-002'), '5');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({
+        purchaseDestinationId: null,
+        shippingAmount: '0',
+        storeAllocations: [{ storeId: 'store-1', quantity: '5' }, { storeId: 'store-2', quantity: '5' }],
+      })],
+      payments: [expect.objectContaining({ amount: '1000', paymentMethod: 'pix', status: 'paid' })],
+    }));
+    expect(within(dialog).getByText('Compra registrada com pagamento e lojas vinculadas.')).toBeInTheDocument();
   });
 
-  it('permite frete vazio como nao informado e envia o valor vazio ao RPC', async () => {
+  it('exige que o frete seja informado explicitamente', async () => {
     const user = userEvent.setup();
     renderPage({ ...purchase, orders: [], status: 'approved' });
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    await user.clear(within(dialog).getByLabelText('Frete realizado'));
     expect(within(dialog).getByText(/Pendente · frete nao informado/)).toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
-    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({
-      lines: [expect.objectContaining({ shippingAmount: '' })],
-    }));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    expect(within(dialog).getByText('Informe o frete realizado. Use 0 quando o frete for gratis.')).toBeInTheDocument();
+    expect(createSupplyPurchaseOperationV2).not.toHaveBeenCalled();
   });
 
   it('preserva a previsao de entrega alterada manualmente', async () => {
@@ -164,10 +175,13 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     fireEvent.input(within(dialog).getByLabelText('Previsao de entrega'), { target: { value: '2099-10-10' } });
-    await user.clear(within(dialog).getByLabelText('Frete realizado'));
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
-    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
-    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({
+    await user.clear(within(dialog).getByLabelText('Quantidade da loja LOJ-001'));
+    await user.type(within(dialog).getByLabelText('Quantidade da loja LOJ-001'), '5');
+    await user.clear(within(dialog).getByLabelText('Quantidade da loja LOJ-002'));
+    await user.type(within(dialog).getByLabelText('Quantidade da loja LOJ-002'), '5');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
       expectedDeliveryDate: '2099-10-10',
       lines: [expect.objectContaining({ expectedDeliveryDate: '2099-10-10' })],
     }));
@@ -187,8 +201,13 @@ describe('SupplyPurchasesPage V2', () => {
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     expect(within(dialog).getByLabelText('Destino')).toHaveValue('destination-1');
     await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
-    await user.click(within(dialog).getByRole('button', { name: 'Registrar compra' }));
-    expect(createSupplyPurchaseOrderV2).toHaveBeenCalledWith(expect.objectContaining({ lines: [expect.objectContaining({ purchaseDestinationId: 'destination-1' })] }));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({
+        purchaseDestinationId: 'destination-1',
+        storeAllocations: [{ storeId: 'store-1', quantity: '10' }],
+      })],
+    }));
   });
 
   it('expande e recolhe uma compra e oferece controle para todas', async () => {
@@ -218,7 +237,12 @@ describe('SupplyPurchasesPage V2', () => {
       ...purchase,
       status: 'purchased',
       items: [completedItem],
-      orders: [{ ...purchase.orders[0], lines: [{ ...partialLine, quantity: '4' }] }],
+      orders: [{ ...purchase.orders[0], lines: [{
+        ...partialLine,
+        quantity: '4',
+        storeDistributionStatus: 'confirmed',
+        stores: [{ id: 'ls-1', orderLineId: 'line-1', purchaseDestinationStoreId: null, storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', quantity: '4', allocationSource: 'manual' }],
+      }] }],
     };
     const second = renderPage(completedPurchase);
     await screen.findByText('CMP-00001');
@@ -345,8 +369,7 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
-    expect(within(dialog).getByText('Documentos da Cotacao · somente leitura')).toBeInTheDocument();
+    await user.click(within(dialog).getByText('Documentos da cotacao · somente leitura (1)'));
     expect(within(dialog).getByText('proposta.pdf')).toBeInTheDocument();
   });
 
@@ -364,8 +387,8 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
-    expect(within(dialog).getByText('Nota fiscal · 01/09/2026 · PED-1 · ativo · NF-1')).toBeInTheDocument();
+    expect(within(dialog).getByText('nota-fiscal.pdf')).toBeInTheDocument();
+    expect(within(dialog).getByText('Nota fiscal · NF-1')).toBeInTheDocument();
   });
 
   it('nao oferece documento de reembolso no cadastro operacional de Compras', async () => {
@@ -374,7 +397,6 @@ describe('SupplyPurchasesPage V2', () => {
     await screen.findByText('CMP-00001');
     await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    await user.click(within(dialog).getByRole('tab', { name: /Arquivos/ }));
     expect(within(dialog).queryByRole('option', { name: 'Documento de reembolso' })).not.toBeInTheDocument();
   });
 
@@ -407,7 +429,7 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(screen.getByRole('button', { name: 'Resumo de compras' }));
     const dialog = screen.getByRole('dialog', { name: 'Resumo de compras' });
     expect(within(dialog).getByText('Realizado conhecido')).toBeInTheDocument();
-    expect(within(dialog).getByText('Pagamentos pagos')).toBeInTheDocument();
+    expect(within(dialog).getByText('Pago em compras vinculadas')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Lojas' }));
     expect(within(dialog).getByText('LOJ-001')).toBeInTheDocument();
     expect(within(dialog).getByText('LOJ-002')).toBeInTheDocument();

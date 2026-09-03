@@ -188,6 +188,9 @@ export interface PurchasePaymentV2 {
   paidAt: string | null;
   notes: string | null;
   createdAt: string;
+  cancelledBy?: string | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
 }
 
 export interface PurchaseAttachmentStoreV2 {
@@ -276,6 +279,7 @@ export interface RegisterPurchaseOrderLineInputV2 {
   otherCosts: string;
   expectedDeliveryDate: string;
   notes: string;
+  storeAllocations?: StoreAllocationInputV2[];
 }
 
 export interface RegisterPurchaseOrderInputV2 {
@@ -300,4 +304,25 @@ export interface SavePurchasePaymentInputV2 {
   status: Exclude<PurchasePaymentStatus, 'cancelled'>;
   paidAt: string;
   notes: string;
+}
+
+export interface RegisterPurchasePaymentInputV2 {
+  paymentMethod: PaymentMethod;
+  sourceLabel: string;
+  amount: string;
+  entryAmount: string;
+  installmentCount: string;
+  firstDueDate: string;
+  status: Exclude<PurchasePaymentStatus, 'cancelled'>;
+  paidAt: string;
+  notes: string;
+}
+
+export interface RegisterPurchaseOperationInputV2 extends RegisterPurchaseOrderInputV2 {
+  payments: RegisterPurchasePaymentInputV2[];
+}
+
+export interface RegisterPurchaseOperationResultV2 {
+  orderId: string;
+  paymentIds: string[];
 }

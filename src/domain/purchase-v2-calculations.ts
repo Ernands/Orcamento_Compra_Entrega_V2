@@ -41,6 +41,48 @@ export function lineTotalCents(line: PurchaseOrderLineV2): bigint | null {
   return line.lineTotal === null ? null : moneyToCents(line.lineTotal);
 }
 
+export function purchaseOrderTotalCents(order: PurchaseOrderV2): bigint | null {
+  if (order.lines.some((line) => lineTotalCents(line) === null)) return null;
+  return order.lines.reduce((sum, line) => sum + (lineTotalCents(line) ?? 0n), 0n);
+}
+
+export function purchaseOrderFinancialSummary(purchase: PurchaseV2, order: PurchaseOrderV2) {
+  const totalCents = purchaseOrderTotalCents(order);
+  const payments = purchase.payments.filter((payment) => payment.purchaseOrderId === order.id);
+  const activePayments = payments.filter((payment) => payment.status !== 'cancelled');
+  const paidCents = activePayments
+    .filter((payment) => payment.status === 'paid')
+    .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
+  const plannedCents = activePayments
+    .filter((payment) => payment.status === 'planned')
+    .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
+  const committedCents = paidCents + plannedCents;
+  return {
+    payments,
+    activePayments,
+    totalCents,
+    paidCents,
+    plannedCents,
+    committedCents,
+    balanceToPayCents: totalCents === null ? null : totalCents - paidCents,
+    uncoveredCents: totalCents === null ? null : totalCents - committedCents,
+    isReconciled: totalCents !== null && activePayments.length > 0 && committedCents === totalCents,
+  };
+}
+
+export function purchaseUnlinkedPayments(purchase: PurchaseV2) {
+  const payments = purchase.payments.filter((payment) => !payment.purchaseOrderId);
+  return {
+    payments,
+    paidCents: payments
+      .filter((payment) => payment.status === 'paid')
+      .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n),
+    plannedCents: payments
+      .filter((payment) => payment.status === 'planned')
+      .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n),
+  };
+}
+
 export function itemExecution(item: PurchaseItemV2, purchase: Pick<PurchaseV2, 'orders'>) {
   const lines = activeLines(purchase).filter((line) => line.purchaseItemId === item.id);
   const purchasedQuantity = lines.reduce((sum, line) => sum + quantityToThousandths(line.quantity), 0n);
@@ -305,6 +347,131 @@ export function purchaseStoreCosts(purchase: PurchaseV2) {
   };
 }
 
+export interface PurchaseOrderStoreCostLineV2 {
+  lineId: string;
+  itemCode: string;
+  itemName: string;
+  quantity: string;
+  unit: string;
+  costCents: bigint;
+}
+
+export interface PurchaseOrderStoreCostRowV2 {
+  storeId: string;
+  code: string;
+  name: string;
+  city: string;
+  state: string;
+  costCents: bigint;
+  lines: PurchaseOrderStoreCostLineV2[];
+}
+
+export function purchaseOrderStoreCosts(order: PurchaseOrderV2) {
+  const rows = new Map<string, PurchaseOrderStoreCostRowV2>();
+  let unallocatedCents = 0n;
+  let hasUnknownTotal = false;
+  let pendingLines = 0;
+
+  for (const line of order.lines) {
+    const total = lineTotalCents(line);
+    if (total === null) {
+      hasUnknownTotal = true;
+      pendingLines += 1;
+      continue;
+    }
+    if (line.storeDistributionStatus !== 'confirmed' || !line.stores.length) {
+      unallocatedCents += total;
+      pendingLines += 1;
+      continue;
+    }
+
+    const allocations = allocateSignedCentsByWeights(
+      total,
+      line.stores.map((store) => ({
+        key: store.storeId,
+        weight: quantityToThousandths(store.quantity),
+      })),
+    );
+    const distributed = [...allocations.values()].reduce((sum, value) => sum + value, 0n);
+    if (distributed !== total) {
+      unallocatedCents += total;
+      pendingLines += 1;
+      continue;
+    }
+
+    for (const store of line.stores) {
+      const costCents = allocations.get(store.storeId) ?? 0n;
+      const row = rows.get(store.storeId) || {
+        storeId: store.storeId,
+        code: store.code,
+        name: store.name,
+        city: store.city,
+        state: store.state,
+        costCents: 0n,
+        lines: [],
+      };
+      row.costCents += costCents;
+      row.lines.push({
+        lineId: line.id,
+        itemCode: line.itemCode,
+        itemName: line.itemName,
+        quantity: store.quantity,
+        unit: line.unit,
+        costCents,
+      });
+      rows.set(store.storeId, row);
+    }
+  }
+
+  return {
+    rows: [...rows.values()].sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')),
+    unallocatedCents,
+    hasUnknownTotal,
+    pendingLines,
+    isConfirmed: pendingLines === 0 && !hasUnknownTotal && unallocatedCents === 0n,
+  };
+}
+
+export function purchaseDestinationStoreCosts(purchase: PurchaseV2, destination: PurchaseDestinationV2) {
+  const item = purchase.items.find((entry) => entry.id === destination.purchaseItemId);
+  const approvedTotal = item ? approvedDestinationAllocations(item).get(destination.id) ?? 0n : 0n;
+  const approvedAllocations = destination.distributionStatus === 'confirmed'
+    ? allocateSignedCentsByWeights(approvedTotal, destination.stores
+      .filter((store) => store.allocatedQuantity !== null)
+      .map((store) => ({ key: store.storeId, weight: quantityToThousandths(store.allocatedQuantity || '0') })))
+    : new Map<string, bigint>();
+  const rows = new Map(destination.stores.map((store) => [store.storeId, {
+    storeId: store.storeId,
+    code: store.code,
+    name: store.name,
+    city: store.city,
+    state: store.state,
+    approvedQuantity: store.allocatedQuantity,
+    approvedCents: approvedAllocations.get(store.storeId) ?? 0n,
+    realizedCents: 0n,
+  }]));
+  let realizedUnallocatedCents = 0n;
+
+  for (const order of activeOrders(purchase)) {
+    const costs = purchaseOrderStoreCosts({
+      ...order,
+      lines: order.lines.filter((line) => line.purchaseDestinationId === destination.id),
+    });
+    realizedUnallocatedCents += costs.unallocatedCents;
+    for (const store of costs.rows) {
+      const row = rows.get(store.storeId);
+      if (row) row.realizedCents += store.costCents;
+      else realizedUnallocatedCents += store.costCents;
+    }
+  }
+
+  return {
+    rows: [...rows.values()].sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')),
+    approvedUnallocatedCents: approvedTotal - [...approvedAllocations.values()].reduce((sum, value) => sum + value, 0n),
+    realizedUnallocatedCents,
+  };
+}
+
 export interface PurchasePortfolioSummaryV2 {
   purchaseCount: number;
   approvedCents: bigint;
@@ -319,6 +486,8 @@ export interface PurchasePortfolioSummaryV2 {
   completedItems: number;
   paidPayments: number;
   paidCents: bigint;
+  linkedPaidCents: bigint;
+  unlinkedPaidCents: bigint;
   plannedPayments: number;
   plannedCents: bigint;
   statusCounts: Record<PurchaseStatus, number>;
@@ -347,6 +516,8 @@ export function purchasePortfolioSummary(purchases: PurchaseV2[]) {
         if (payment.status === 'paid') {
           portfolio.paidPayments += 1;
           portfolio.paidCents += amount;
+          if (payment.purchaseOrderId) portfolio.linkedPaidCents += amount;
+          else portfolio.unlinkedPaidCents += amount;
         } else {
           portfolio.plannedPayments += 1;
           portfolio.plannedCents += amount;
@@ -368,6 +539,8 @@ export function purchasePortfolioSummary(purchases: PurchaseV2[]) {
       completedItems: 0,
       paidPayments: 0,
       paidCents: 0n,
+      linkedPaidCents: 0n,
+      unlinkedPaidCents: 0n,
       plannedPayments: 0,
       plannedCents: 0n,
       statusCounts: {
@@ -408,16 +581,26 @@ export function purchasePortfolioDestinationRows(purchases: PurchaseV2[]) {
     storeIds: Set<string>;
     approvedCents: bigint;
     realizedCents: bigint;
+    approvedUnallocatedCents: bigint;
+    realizedUnallocatedCents: bigint;
     pendingDistributions: number;
     pendingShippingLines: number;
+    stores: Map<string, {
+      storeId: string;
+      code: string;
+      name: string;
+      city: string;
+      state: string;
+      approvedCents: bigint;
+      realizedCents: bigint;
+    }>;
   };
   const rows = new Map<string, MutableDestinationRow>();
   for (const purchase of purchases) {
     for (const item of purchase.items) {
-      const approvedByDestination = approvedDestinationAllocations(item);
       for (const destination of item.destinations) {
         const key = `${destination.label}\u0000${destination.state}`;
-        const current = rows.get(key) || {
+        const current: MutableDestinationRow = rows.get(key) || {
           key,
           label: destination.label,
           state: destination.state,
@@ -426,29 +609,50 @@ export function purchasePortfolioDestinationRows(purchases: PurchaseV2[]) {
           storeIds: new Set<string>(),
           approvedCents: 0n,
           realizedCents: 0n,
+          approvedUnallocatedCents: 0n,
+          realizedUnallocatedCents: 0n,
           pendingDistributions: 0,
           pendingShippingLines: 0,
+          stores: new Map(),
         };
         const execution = destinationExecution(destination, purchase);
         current.purchaseIds.add(purchase.id);
         current.itemIds.add(item.id);
         destination.stores.forEach((store) => current.storeIds.add(store.storeId));
-        current.approvedCents += approvedByDestination.get(destination.id) ?? 0n;
-        current.realizedCents += execution.realizedCents;
+        const storeCosts = purchaseDestinationStoreCosts(purchase, destination);
+        current.approvedCents += storeCosts.rows.reduce((sum, store) => sum + store.approvedCents, 0n);
+        current.realizedCents += storeCosts.rows.reduce((sum, store) => sum + store.realizedCents, 0n);
+        current.approvedUnallocatedCents += storeCosts.approvedUnallocatedCents;
+        current.realizedUnallocatedCents += storeCosts.realizedUnallocatedCents;
         if (destination.destinationType === 'profile' && destination.distributionStatus !== 'confirmed') {
           current.pendingDistributions += 1;
         }
         current.pendingShippingLines += execution.lines.filter(lineHasPendingShipping).length;
+        for (const store of storeCosts.rows) {
+          const currentStore = current.stores.get(store.storeId) || {
+            storeId: store.storeId,
+            code: store.code,
+            name: store.name,
+            city: store.city,
+            state: store.state,
+            approvedCents: 0n,
+            realizedCents: 0n,
+          };
+          currentStore.approvedCents += store.approvedCents;
+          currentStore.realizedCents += store.realizedCents;
+          current.stores.set(store.storeId, currentStore);
+        }
         rows.set(key, current);
       }
     }
   }
   return [...rows.values()]
-    .map(({ purchaseIds, itemIds, storeIds, ...row }) => ({
+    .map(({ purchaseIds, itemIds, storeIds, stores, ...row }) => ({
       ...row,
       purchaseCount: purchaseIds.size,
       itemCount: itemIds.size,
       storeCount: storeIds.size,
+      stores: [...stores.values()].sort((a, b) => a.code.localeCompare(b.code, 'pt-BR')),
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR') || a.state.localeCompare(b.state));
 }

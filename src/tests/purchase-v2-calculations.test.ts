@@ -5,6 +5,8 @@ import {
   itemExecution,
   purchaseAllocationCoverage,
   purchaseExecutionSummary,
+  purchaseOrderFinancialSummary,
+  purchaseOrderStoreCosts,
   purchasePortfolioDestinationRows,
   purchasePortfolioStoreRows,
   purchasePortfolioSummary,
@@ -106,6 +108,39 @@ describe('purchase-v2-calculations', () => {
     expect(costs.rows.every((row) => row.realizedCents === 0n)).toBe(true);
   });
 
+  it('mostra o custo exato por loja dentro de uma compra realizada', () => {
+    const currentOrder = order([line({
+      quantity: '4',
+      lineTotal: '401.00',
+      stores: [
+        { id: 'ls-1', orderLineId: 'line-1', purchaseDestinationStoreId: null, storeId: 'store-1', code: 'L1', name: 'L1', city: 'Cidade', state: 'CE', quantity: '1', allocationSource: 'manual' },
+        { id: 'ls-2', orderLineId: 'line-1', purchaseDestinationStoreId: null, storeId: 'store-2', code: 'L2', name: 'L2', city: 'Cidade', state: 'CE', quantity: '3', allocationSource: 'manual' },
+      ],
+    })]);
+    const costs = purchaseOrderStoreCosts(currentOrder);
+    expect(costs.isConfirmed).toBe(true);
+    expect(costs.unallocatedCents).toBe(0n);
+    expect(costs.rows.map((row) => ({ code: row.code, cost: row.costCents }))).toEqual([
+      { code: 'L1', cost: 10025n },
+      { code: 'L2', cost: 30075n },
+    ]);
+  });
+
+  it('concilia somente pagamentos vinculados a compra especifica', () => {
+    const currentOrder = order([line({ lineTotal: '400.00' })]);
+    const current = purchase({
+      orders: [currentOrder],
+      payments: [
+        { id: 'linked', purchaseId: 'purchase-1', purchaseOrderId: 'order-1', paymentMethod: 'pix', sourceLabel: null, amount: '400', entryAmount: null, installmentCount: null, firstDueDate: null, status: 'paid', paidAt: '2026-09-01T12:00:00Z', notes: null, createdAt: '2026-09-01T12:00:00Z' },
+        { id: 'general', purchaseId: 'purchase-1', purchaseOrderId: null, paymentMethod: 'cash', sourceLabel: null, amount: '50', entryAmount: null, installmentCount: null, firstDueDate: null, status: 'paid', paidAt: '2026-09-01T12:00:00Z', notes: null, createdAt: '2026-09-01T12:00:00Z' },
+      ],
+    });
+    const financial = purchaseOrderFinancialSummary(current, currentOrder);
+    expect(financial.paidCents).toBe(40000n);
+    expect(financial.balanceToPayCents).toBe(0n);
+    expect(financial.isReconciled).toBe(true);
+  });
+
   it('nao conclui item que ainda esteja 0,001 unidade abaixo do aprovado', () => {
     const almostComplete = line({ quantity: '9.999', lineTotal: '999.90' });
     const current = purchase({ items: [item({ quantityApproved: '10.000' })], orders: [order([almostComplete])] });
@@ -196,6 +231,8 @@ describe('purchase-v2-calculations', () => {
       realizedCents: 40000n,
       paidPayments: 1,
       paidCents: 40000n,
+      linkedPaidCents: 0n,
+      unlinkedPaidCents: 40000n,
       plannedPayments: 1,
       plannedCents: 50000n,
       documents: 1,
@@ -229,7 +266,7 @@ describe('purchase-v2-calculations', () => {
     expect(purchasePortfolioDestinationRows([current])).toEqual([
       expect.objectContaining({
         label: 'Prospector A', state: 'CE', purchaseCount: 1, itemCount: 1, storeCount: 2,
-        approvedCents: 100000n, realizedCents: 0n, pendingDistributions: 1,
+        approvedCents: 0n, approvedUnallocatedCents: 100000n, realizedCents: 0n, pendingDistributions: 1,
       }),
     ]);
   });
