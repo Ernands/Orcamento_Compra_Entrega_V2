@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { ItemMultiFilter, matchesSelectedItems, type ItemFilterOption } from '../components/item-multi-filter';
 import { EmptyState, ErrorState, IconButton, InlineLoading, Modal, StatusBadge } from '../components/ui';
 import {
   cancelSupplyPurchaseOrderV2,
@@ -1491,6 +1492,7 @@ export function SupplyPurchasesPage() {
   const [status, setStatus] = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [destinationFilter, setDestinationFilter] = useState('');
+  const [itemFilterIds, setItemFilterIds] = useState<string[]>([]);
   const [pendingFilter, setPendingFilter] = useState('');
   const [management, setManagement] = useState<{purchase: PurchaseV2; tab: PurchaseManagementTab; itemId?: string} | null>(null);
   const [historyPurchase, setHistoryPurchase] = useState<PurchaseV2 | null>(null);
@@ -1512,6 +1514,21 @@ export function SupplyPurchasesPage() {
 
   const states = useMemo(() => [...new Set(purchases.flatMap((purchase) => [...purchase.stores.map((store)=>store.state), ...purchase.items.flatMap((item)=>item.destinations.map((destination)=>destination.state))]).filter(Boolean))].sort(), [purchases]);
   const destinationLabels = useMemo(() => [...new Set(purchases.flatMap((purchase)=>purchase.items.flatMap((item)=>item.destinations.map((destination)=>destination.label))))].sort((a,b)=>a.localeCompare(b,'pt-BR')), [purchases]);
+  const purchaseItemOptions = useMemo<ItemFilterOption[]>(() => {
+    const options = new Map<string, ItemFilterOption>();
+    purchases.forEach((purchase) => purchase.items.forEach((item) => {
+      if (!options.has(item.supplyItemId)) {
+        options.set(item.supplyItemId, {
+          id: item.supplyItemId,
+          code: item.itemCode,
+          name: item.itemName,
+        });
+      }
+    }));
+    return [...options.values()].sort((a, b) =>
+      `${a.code} ${a.name}`.localeCompare(`${b.code} ${b.name}`, 'pt-BR'),
+    );
+  }, [purchases]);
 
   const filtered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
@@ -1520,6 +1537,7 @@ export function SupplyPurchasesPage() {
       const text = [purchase.code,purchase.quoteCode,purchase.supplierName,purchase.originCity,purchase.originState,...purchase.items.flatMap((item)=>[item.itemName,item.itemCode,item.offeredBrandModel,item.productUrl,...item.destinations.map((destination)=>destination.label)])].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');
       if (search && !text.includes(search)) return false;
       if (status && purchase.status !== status) return false;
+      if (!matchesSelectedItems(purchase.items.map((item) => item.supplyItemId), itemFilterIds)) return false;
       if (stateFilter && !purchase.stores.some((store)=>store.state===stateFilter) && !purchase.items.some((item)=>item.destinations.some((destination)=>destination.state===stateFilter))) return false;
       if (destinationFilter && !purchase.items.some((item)=>item.destinations.some((destination)=>destination.label===destinationFilter))) return false;
       if (pendingFilter==='destination' && summary.pendingDestinationDistributions===0) return false;
@@ -1528,7 +1546,7 @@ export function SupplyPurchasesPage() {
       if (pendingFilter==='documents' && purchase.attachments.length>0) return false;
       return true;
     });
-  }, [purchases,query,status,stateFilter,destinationFilter,pendingFilter]);
+  }, [purchases,query,status,stateFilter,destinationFilter,itemFilterIds,pendingFilter]);
 
   const allDetailsVisible =
     filtered.length > 0 && filtered.every((purchase) => expandedIds.has(purchase.id));
@@ -1556,7 +1574,7 @@ export function SupplyPurchasesPage() {
 
   return <section className="page-stack purchase-v2-page">
     <header className="page-header"><div><span className="eyebrow">Suprimentos</span><h2>Compras</h2><p>Execucao do aprovado: registros de compra, pagamentos, historico, destinos, distribuicao fisica e documentos.</p></div><div className="page-heading__actions"><button className="button button--secondary" disabled={!filtered.length} onClick={()=>setPortfolioOpen(true)}><LayoutDashboard size={17}/>Resumo de compras</button><button className="button button--secondary" disabled={!filtered.length} onClick={toggleAllDetails}><ChevronsUpDown size={17}/>{allDetailsVisible ? 'Recolher todas as compras' : 'Expandir todas as compras'}</button><button className="button button--secondary" onClick={()=>void load()}><RefreshCcw size={17}/>Atualizar</button></div></header>
-    <div className="filter-bar purchase-v2-filters"><label className="search-field"><Search size={18}/><input placeholder="Buscar compra, cotacao, fornecedor, item ou destino" value={query} onChange={(event)=>setQuery(event.target.value)}/></label><select aria-label="Status da compra" value={status} onChange={(event)=>setStatus(event.target.value)}><option value="">Todos os status</option><option value="approved">Aprovada</option><option value="in_progress">Em andamento</option><option value="partially_purchased">Parcialmente comprada</option><option value="purchased">Comprada</option><option value="returned">Devolvida</option><option value="cancelled">Cancelada</option></select><select aria-label="UF" value={stateFilter} onChange={(event)=>setStateFilter(event.target.value)}><option value="">Todas as UFs</option>{states.map((state)=><option key={state} value={state}>{state}</option>)}</select><select aria-label="Prospector ou destino" value={destinationFilter} onChange={(event)=>setDestinationFilter(event.target.value)}><option value="">Todos os destinos</option>{destinationLabels.map((label)=><option key={label} value={label}>{label}</option>)}</select><select aria-label="Pendencia operacional" value={pendingFilter} onChange={(event)=>setPendingFilter(event.target.value)}><option value="">Todas as pendencias</option><option value="destination">Distribuicao mestre pendente</option><option value="line">Distribuicao realizada pendente</option><option value="shipping">Frete realizado pendente</option><option value="documents">Sem documento de Compra</option></select></div>
+    <div className="filter-bar purchase-v2-filters"><label className="search-field"><Search size={18}/><input placeholder="Buscar compra, cotacao, fornecedor, item ou destino" value={query} onChange={(event)=>setQuery(event.target.value)}/></label><ItemMultiFilter label="Filtrar itens em compras" options={purchaseItemOptions} selectedIds={itemFilterIds} onChange={setItemFilterIds}/><select aria-label="Status da compra" value={status} onChange={(event)=>setStatus(event.target.value)}><option value="">Todos os status</option><option value="approved">Aprovada</option><option value="in_progress">Em andamento</option><option value="partially_purchased">Parcialmente comprada</option><option value="purchased">Comprada</option><option value="returned">Devolvida</option><option value="cancelled">Cancelada</option></select><select aria-label="UF" value={stateFilter} onChange={(event)=>setStateFilter(event.target.value)}><option value="">Todas as UFs</option>{states.map((state)=><option key={state} value={state}>{state}</option>)}</select><select aria-label="Prospector ou destino" value={destinationFilter} onChange={(event)=>setDestinationFilter(event.target.value)}><option value="">Todos os destinos</option>{destinationLabels.map((label)=><option key={label} value={label}>{label}</option>)}</select><select aria-label="Pendencia operacional" value={pendingFilter} onChange={(event)=>setPendingFilter(event.target.value)}><option value="">Todas as pendencias</option><option value="destination">Distribuicao mestre pendente</option><option value="line">Distribuicao realizada pendente</option><option value="shipping">Frete realizado pendente</option><option value="documents">Sem documento de Compra</option></select></div>
     {loading ? <InlineLoading label="Carregando compras"/> : error ? <ErrorState message={error} onRetry={()=>void load()}/> : filtered.length ? <div className="purchase-v2-list">{filtered.map((purchase)=>{const summary=purchaseExecutionSummary(purchase);const active=purchase.orders.filter((order)=>order.status==='active');const pendingStores=summary.pendingDestinationDistributions+summary.pendingLineDistributions;const expanded=expandedIds.has(purchase.id);const operationSummaries=active.map((order)=>({financial:purchaseOrderFinancialSummary(purchase,order),costs:purchaseOrderStoreCosts(order)}));const linkedPaid=operationSummaries.reduce((sum,entry)=>sum+entry.financial.paidCents,0n);const incompleteOperations=operationSummaries.filter((entry)=>!entry.financial.isReconciled||!entry.costs.isConfirmed).length;const unlinkedPayments=purchaseUnlinkedPayments(purchase).payments.filter((payment)=>payment.status!=='cancelled').length;const cardTone=purchase.status==='purchased'&&incompleteOperations===0?'is-realized':['approved','in_progress','partially_purchased','purchased'].includes(purchase.status)?'is-pending':'';return <article key={purchase.id} className={`purchase-v2-card purchase-v2-card--${purchase.status} ${cardTone}`}>
       <header className="purchase-v2-card__header"><div className="supply-identity"><small>{purchase.code}</small><strong>{purchase.quoteCode}</strong></div><div><strong>{purchase.supplierName}</strong><small>{channelLabel(purchase)}</small></div><div title={purchase.stores.map((store)=>`${store.code} - ${store.city}/${store.state}${store.address?` - ${store.address}`:''}`).join('\n')}><strong>{purchaseStoresLabel(purchase)}</strong><small>{purchase.stores.length===1?`${purchase.stores[0].city}/${purchase.stores[0].state}`:'Passe para ver as lojas'}</small></div><div><strong>{formatBRL(summary.approvedCents)}</strong><small>Comprado {formatBRL(summary.realizedCents)} · pago vinculado {formatBRL(linkedPaid)} · saldo para comprar {formatBRL(summary.balanceCents)}</small></div><div className="purchase-v2-status-spotlight"><small>Status</small><StatusBadge status={purchase.status}/>{incompleteOperations>0&&<span className="purchase-v2-pill is-warning">{incompleteOperations} operacoes incompletas</span>}</div><div className="row-actions purchase-v2-card-actions"><button type="button" aria-label={`Gerenciar compra ${purchase.code}`} className="button button--primary button--small" onClick={()=>setManagement({purchase,tab:'purchase'})}><PackageCheck size={16}/>Gerenciar compra</button>{canEdit&&pendingStores>0&&purchase.status!=='returned'&&purchase.status!=='cancelled'&&<button type="button" aria-label={`Confirmar lojas ${purchase.code} (${pendingStores})`} className="button button--secondary button--small" onClick={()=>setBulkPurchase(purchase)}><CheckCheck size={16}/>Confirmar lojas ({pendingStores})</button>}<IconButton label={expanded ? `Recolher ${purchase.code}` : `Detalhar ${purchase.code}`} onClick={()=>togglePurchaseDetails(purchase.id)}>{expanded ? <ChevronUp size={17}/> : <ChevronDown size={17}/>}</IconButton><IconButton label={`Resumo ${purchase.code}`} onClick={()=>setSummaryPurchase(purchase)}><ShoppingCart size={17}/></IconButton><IconButton label={`Historico ${purchase.code}`} onClick={()=>setHistoryPurchase(purchase)}><History size={17}/></IconButton><Link className="icon-button" aria-label={`Abrir cotacao ${purchase.quoteCode}`} title="Abrir cotacao de origem" to={`/suprimentos/cotacoes?quote=${purchase.quoteId}`}><ArrowLeft size={17}/></Link>{canApprove && purchase.status!=='returned' && purchase.status!=='cancelled' && <IconButton label={`Voltar ${purchase.code} para cotacao`} disabled={returningId===purchase.id} onClick={()=>void returnToQuote(purchase)}><RefreshCcw size={17}/></IconButton>}</div></header>
       {expanded && <><div className="purchase-v2-indicators"><span>{summary.completedItems}/{purchase.items.length} itens comprados</span><span>{active.length} compras realizadas</span>{summary.pendingDestinationDistributions>0 && <span className="is-warning">{summary.pendingDestinationDistributions} destinos para distribuir</span>}{summary.pendingLineDistributions>0 && <span className="is-warning">{summary.pendingLineDistributions} compras sem custo por loja</span>}{summary.pendingShippingLines>0 && <span className="is-warning">{summary.pendingShippingLines} fretes pendentes</span>}{incompleteOperations>0&&<span className="is-warning">{incompleteOperations} operacoes sem conciliacao completa</span>}{unlinkedPayments>0&&<span className="is-warning">{unlinkedPayments} pagamentos sem compra vinculada</span>}<span>{purchase.attachments.length} arquivos</span></div>
