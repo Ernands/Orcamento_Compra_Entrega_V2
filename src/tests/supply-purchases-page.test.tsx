@@ -101,8 +101,9 @@ describe('SupplyPurchasesPage V2', () => {
     });
 
     await screen.findByText('CMP-00001');
-    expect(screen.getByText('Cadeira operacional')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ver produto' })).toHaveAttribute(
+    const collapsedItems = screen.getByLabelText('Itens da compra CMP-00001');
+    expect(within(collapsedItems).getByText('Cadeira operacional')).toBeInTheDocument();
+    expect(within(collapsedItems).getByRole('link', { name: 'Ver produto' })).toHaveAttribute(
       'href',
       'https://example.com/produto',
     );
