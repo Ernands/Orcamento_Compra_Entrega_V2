@@ -94,6 +94,21 @@ describe('SupplyPurchasesPage V2', () => {
     vi.mocked(savePurchasePaymentV2).mockResolvedValue('payment-new');
   });
 
+  it('mostra o item e o link do produto com a compra recolhida', async () => {
+    renderPage({
+      ...purchase,
+      items: [{ ...baseItem, productUrl: 'https://example.com/produto' }],
+    });
+
+    await screen.findByText('CMP-00001');
+    expect(screen.getByText('Cadeira operacional')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver produto' })).toHaveAttribute(
+      'href',
+      'https://example.com/produto',
+    );
+    expect(screen.queryByText('Registros realizados')).not.toBeInTheDocument();
+  });
+
   it('mantem o reembolso fora da operacao e exibe os pagamentos', async () => {
     const user = userEvent.setup();
     renderPage();
