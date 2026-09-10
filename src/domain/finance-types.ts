@@ -57,6 +57,11 @@ export interface SaveFinanceReimbursementInput {
   items: SaveFinanceReimbursementItemInput[];
 }
 
+export type FinancePaymentAllocationStatus =
+  | 'assigned'
+  | 'pending_distribution'
+  | 'unlinked';
+
 export interface FinancePaymentEvent {
   id: string;
   paymentId: string;
@@ -66,6 +71,7 @@ export interface FinancePaymentEvent {
   quoteCode: string;
   supplierName: string;
   itemSummary: string;
+  allocationStatus: FinancePaymentAllocationStatus;
   storeIds: string[];
   states: string[];
   paymentMethod: string;
