@@ -791,8 +791,22 @@ export function FinancePage() {
                             <small>{payment.sourceLabel || 'Origem nao informada'}</small>
                           </td>
                           <td>
-                            <strong>{payment.storeIds.length} loja(s)</strong>
-                            <span>{payment.states.join(', ') || '—'}</span>
+                            {payment.allocationStatus === 'assigned' ? (
+                              <>
+                                <strong>{payment.storeIds.length} loja(s)</strong>
+                                <span>{payment.states.join(', ') || '—'}</span>
+                              </>
+                            ) : payment.allocationStatus === 'pending_distribution' ? (
+                              <>
+                                <strong>Distribuicao pendente</strong>
+                                <span>Pedido vinculado; confirme as lojas</span>
+                              </>
+                            ) : (
+                              <>
+                                <strong>Sem vinculo com pedido</strong>
+                                <span>Distribuicao por loja indisponivel</span>
+                              </>
+                            )}
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(payment.amountCents)}</strong>
