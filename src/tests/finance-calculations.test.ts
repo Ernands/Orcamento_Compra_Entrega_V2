@@ -210,6 +210,95 @@ describe('finance-calculations', () => {
     expect(events.reduce((sum, event) => sum + event.amountCents, 0n)).toBe(10001n);
   });
 
+  it('nao atribui pagamento geral as lojas da compra quando nao ha pedido vinculado', () => {
+    const current = purchase();
+    current.payments = [
+      {
+        id: 'payment-unlinked',
+        purchaseId: current.id,
+        purchaseOrderId: null,
+        paymentMethod: 'pix',
+        sourceLabel: null,
+        amount: '50.00',
+        entryAmount: null,
+        installmentCount: null,
+        firstDueDate: null,
+        status: 'paid',
+        paidAt: '2026-02-10T15:00:00Z',
+        notes: null,
+        createdAt: '2026-02-10T15:00:00Z',
+      },
+    ];
+
+    expect(buildFinancePaymentEvents([current])).toMatchObject([
+      {
+        allocationStatus: 'unlinked',
+        storeIds: [],
+        states: [],
+      },
+    ]);
+  });
+
+  it('marca como pendente o pagamento vinculado a pedido sem distribuicao confirmada', () => {
+    const current = purchase();
+    current.orders[0].lines[0].storeDistributionStatus = 'pending';
+    current.orders[0].lines[0].stores = [];
+    current.payments = [
+      {
+        id: 'payment-pending',
+        purchaseId: current.id,
+        purchaseOrderId: 'order-1',
+        paymentMethod: 'pix',
+        sourceLabel: null,
+        amount: '50.00',
+        entryAmount: null,
+        installmentCount: null,
+        firstDueDate: null,
+        status: 'paid',
+        paidAt: '2026-02-10T15:00:00Z',
+        notes: null,
+        createdAt: '2026-02-10T15:00:00Z',
+      },
+    ];
+
+    expect(buildFinancePaymentEvents([current])).toMatchObject([
+      {
+        allocationStatus: 'pending_distribution',
+        storeIds: [],
+        states: [],
+      },
+    ]);
+  });
+
+  it('mantem lojas e UFs apenas quando a distribuicao do pedido esta confirmada', () => {
+    const current = purchase();
+    current.payments = [
+      {
+        id: 'payment-assigned',
+        purchaseId: current.id,
+        purchaseOrderId: 'order-1',
+        paymentMethod: 'pix',
+        sourceLabel: null,
+        amount: '401.00',
+        entryAmount: null,
+        installmentCount: null,
+        firstDueDate: null,
+        status: 'paid',
+        paidAt: '2026-02-10T15:00:00Z',
+        notes: null,
+        createdAt: '2026-02-10T15:00:00Z',
+      },
+    ];
+
+    expect(buildFinancePaymentEvents([current])).toMatchObject([
+      {
+        allocationStatus: 'assigned',
+        storeIds: ['store-1', 'store-2'],
+        states: ['CE', 'RN'],
+      },
+    ]);
+  });
+
   it('usa a data efetiva e um unico lancamento para pagamento realizado', () => {
     const current = purchase();
     current.payments = [
