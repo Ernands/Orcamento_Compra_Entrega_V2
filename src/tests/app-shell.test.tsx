@@ -57,6 +57,12 @@ describe('AppShell', () => {
     expect(screen.getAllByRole('link', { name: 'Acessos' }).length).toBeGreaterThan(0);
   });
 
+  it('mostra o menu Financeiro somente com a capacidade correspondente', () => {
+    renderShell(['finance.view']);
+    expect(screen.getAllByRole('link', { name: 'Financeiro' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Compras' })).not.toBeInTheDocument();
+  });
+
   it('separa operacao e administracao do checklist por capability', () => {
     renderShell(['stores.view', 'implementation.view', 'checklists.view']);
     expect(screen.getAllByRole('link', { name: 'Pendencias' }).length).toBeGreaterThan(0);

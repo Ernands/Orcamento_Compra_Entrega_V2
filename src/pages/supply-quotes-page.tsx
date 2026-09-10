@@ -1919,7 +1919,7 @@ export function SupplyQuotesPage() {
         quote={statusQuote}
         onClose={() => setStatusQuote(null)}
         onSaved={load}
-        canApprovePurchase={can('purchases.approve' as never)}
+        canApprovePurchase={can('purchases.approve')}
       />
       <Modal
         open={Boolean(deleteQuote)}

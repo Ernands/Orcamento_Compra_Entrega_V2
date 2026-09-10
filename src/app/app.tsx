@@ -4,6 +4,7 @@ import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
+import { FinancePage } from '../pages/finance-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
 import { StoreAttachmentsPage } from '../pages/store-attachments-page';
 import { StoreImplementationPage } from '../pages/store-implementation-page';
@@ -170,8 +171,16 @@ export function App() {
             <Route
               path="suprimentos/compras"
               element={
-                <RequireCapability capability={'purchases.view' as never}>
+                <RequireCapability capability="purchases.view">
                   <SupplyPurchasesPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="financeiro"
+              element={
+                <RequireCapability capability="finance.view">
+                  <FinancePage />
                 </RequireCapability>
               }
             />

@@ -1482,8 +1482,8 @@ function PurchasesPortfolioModal({
 
 export function SupplyPurchasesPage() {
   const { can } = useSession();
-  const canEdit = can('purchases.edit' as never);
-  const canApprove = can('purchases.approve' as never);
+  const canEdit = can('purchases.edit');
+  const canApprove = can('purchases.approve');
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
