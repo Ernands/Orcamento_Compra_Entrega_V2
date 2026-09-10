@@ -86,19 +86,42 @@ function paymentAttachments(
 
 function paymentContext(purchase: PurchaseV2, payment: PurchasePaymentV2) {
   const order = purchase.orders.find((entry) => entry.id === payment.purchaseOrderId);
-  const items = order?.lines.length
-    ? order.lines.map((line) => line.itemName)
-    : purchase.items.map((item) => item.itemName);
-  const storeIds =
-    order?.lines.flatMap((line) => line.stores.map((store) => store.storeId)) ||
-    purchase.stores.map((store) => store.storeId);
-  const states =
-    order?.lines.flatMap((line) => line.stores.map((store) => store.state)) ||
-    purchase.stores.map((store) => store.state);
+
+  if (!order) {
+    return {
+      itemSummary:
+        [...new Set(purchase.items.map((item) => item.itemName))].join(', ') ||
+        'Itens nao informados',
+      allocationStatus: 'unlinked' as const,
+      storeIds: [],
+      states: [],
+    };
+  }
+
+  const itemSummary =
+    [...new Set(order.lines.map((line) => line.itemName))].join(', ') || 'Itens nao informados';
+  const hasPendingDistribution =
+    order.lines.length === 0 ||
+    order.lines.some(
+      (line) => line.storeDistributionStatus !== 'confirmed' || line.stores.length === 0,
+    );
+
+  if (hasPendingDistribution) {
+    return {
+      itemSummary,
+      allocationStatus: 'pending_distribution' as const,
+      storeIds: [],
+      states: [],
+    };
+  }
+
   return {
-    itemSummary: [...new Set(items)].join(', ') || 'Itens nao informados',
-    storeIds: [...new Set(storeIds)],
-    states: [...new Set(states)],
+    itemSummary,
+    allocationStatus: 'assigned' as const,
+    storeIds: [
+      ...new Set(order.lines.flatMap((line) => line.stores.map((store) => store.storeId))),
+    ],
+    states: [...new Set(order.lines.flatMap((line) => line.stores.map((store) => store.state)))],
   };
 }
 
@@ -117,6 +140,7 @@ export function buildFinancePaymentEvents(purchases: PurchaseV2[]): FinancePayme
           quoteCode: purchase.quoteCode,
           supplierName: purchase.supplierName,
           itemSummary: context.itemSummary,
+          allocationStatus: context.allocationStatus,
           storeIds: context.storeIds,
           states: context.states,
           paymentMethod: payment.paymentMethod,
