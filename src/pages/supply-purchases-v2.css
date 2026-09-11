@@ -72,6 +72,14 @@
   font-size: .82rem;
 }
 .purchase-v2-card__collapsed-item small { color: var(--muted); font-size: .68rem; white-space: nowrap; }
+.purchase-v2-card__collapsed-quantities {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.purchase-v2-card__collapsed-quantities small { display: inline-flex; gap: 4px; align-items: baseline; }
+.purchase-v2-card__collapsed-quantities strong { overflow: visible; font-size: .72rem; }
 .purchase-v2-card__collapsed-item a { flex: 0 0 auto; color: var(--primary); font-size: .74rem; font-weight: 800; text-decoration: none; }
 .purchase-v2-card__collapsed-item a:hover { text-decoration: underline; }
 .purchase-v2-status-spotlight { display: grid; gap: 4px; justify-items: start; }
