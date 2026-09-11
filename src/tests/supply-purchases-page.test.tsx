@@ -226,7 +226,7 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    expect(within(dialog).getByText(/Pendente · frete nao informado/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Pendente · revise quantidades e frete/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
     expect(within(dialog).getByText('Informe o frete realizado. Use 0 quando o frete for gratis.')).toBeInTheDocument();
     expect(createSupplyPurchaseOperationV2).not.toHaveBeenCalled();
@@ -286,7 +286,7 @@ describe('SupplyPurchasesPage V2', () => {
 
     await user.click(within(dialog).getByLabelText('Selecionar destino LOJ-001'));
     await user.click(within(dialog).getByLabelText('Selecionar destino LOJ-002'));
-    await user.type(within(dialog).getByLabelText('Frete total realizado'), '1,01');
+    fireEvent.change(within(dialog).getByLabelText('Frete total realizado'), { target: { value: '1,01' } });
 
     await waitFor(() => expect(within(dialog).getByLabelText('Valor total')).toHaveValue('201,01'));
     await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
