@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { ItemMultiFilter, matchesSelectedItems, type ItemFilterOption } from '../components/item-multi-filter';
 import { QuoteAttachmentsModal, QuoteAttachmentsPanel } from '../components/quote-attachments';
 import { QuoteSummaryModal } from '../components/quote-summary-modal';
 import {
@@ -1335,6 +1336,7 @@ export function SupplyQuotesPage() {
   const [storeId, setStoreId] = useState('');
   const [category, setCategory] = useState('');
   const [area, setArea] = useState('');
+  const [itemFilterIds, setItemFilterIds] = useState<string[]>([]);
   const [priceFilter, setPriceFilter] = useState<'all' | 'lowest'>('all');
   const [evaluationMode, setEvaluationMode] = useState<SupplyComparisonMode>('item');
   const [editing, setEditing] = useState<SupplyQuote | null>(null);
@@ -1415,6 +1417,21 @@ export function SupplyQuotesPage() {
         .sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [items],
   );
+  const quoteItemOptions = useMemo<ItemFilterOption[]>(() => {
+    const options = new Map<string, ItemFilterOption>();
+    quotes.forEach((quote) => quote.items.forEach((item) => {
+      if (!options.has(item.supplyItemId)) {
+        options.set(item.supplyItemId, {
+          id: item.supplyItemId,
+          code: item.itemCode,
+          name: item.itemName,
+        });
+      }
+    }));
+    return [...options.values()].sort((a, b) =>
+      `${a.code} ${a.name}`.localeCompare(`${b.code} ${b.name}`, 'pt-BR'),
+    );
+  }, [quotes]);
 
   const baseFiltered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase('pt-BR');
@@ -1427,6 +1444,7 @@ export function SupplyQuotesPage() {
             .includes(search)) &&
         (!status || getEffectiveSupplyQuoteStatus(quote) === status) &&
         (!storeId || quote.stores.some((store) => store.id === storeId)) &&
+        matchesSelectedItems(quote.items.map((item) => item.supplyItemId), itemFilterIds) &&
         ((!category && !area) ||
           quote.items.some((quoteItem) => {
             const catalogItem = itemById.get(quoteItem.supplyItemId);
@@ -1436,7 +1454,7 @@ export function SupplyQuotesPage() {
             );
           })),
     );
-  }, [area, category, itemById, query, quotes, status, storeId]);
+  }, [area, category, itemById, itemFilterIds, query, quotes, status, storeId]);
 
   const lowestPriceSelection = useMemo(
     () => selectLowestPriceQuotesByItem(baseFiltered),
@@ -1610,6 +1628,12 @@ export function SupplyQuotesPage() {
             placeholder="Buscar codigo, fornecedor ou item"
           />
         </label>
+        <ItemMultiFilter
+          label="Filtrar itens em cotacoes"
+          options={quoteItemOptions}
+          selectedIds={itemFilterIds}
+          onChange={setItemFilterIds}
+        />
         <select
           aria-label="Filtrar status"
           value={status}
