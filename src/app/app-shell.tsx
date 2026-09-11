@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   ChartNoAxesCombined,
   KeyRound,
+  Landmark,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -39,6 +40,7 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/cotacoes': 'Cotacoes',
   '/suprimentos/compras': 'Compras',
   '/suprimentos/comparativo': 'Comparativo',
+  '/financeiro': 'Financeiro',
 };
 
 const SECTION_STORAGE = {
@@ -89,7 +91,7 @@ export function AppShell() {
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
   const canViewSupply =
-    can('items.view') || can('suppliers.view') || can('quotes.view') || can('purchases.view' as never);
+    can('items.view') || can('suppliers.view') || can('quotes.view') || can('purchases.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
   const title = location.pathname.startsWith('/suprimentos/itens/')
@@ -292,7 +294,7 @@ export function AppShell() {
                     Comparativo
                   </NavLink>
                 )}
-                {can('purchases.view' as never) && (
+                {can('purchases.view') && (
                   <NavLink to="/suprimentos/compras" onClick={() => setMobileOpen(false)}>
                     <ShoppingCart size={19} />
                     Compras
@@ -300,6 +302,16 @@ export function AppShell() {
                 )}
               </>
             )}
+          </>
+        )}
+
+        {can('finance.view') && (
+          <>
+            {!compact && <span className="nav-section nav-section--spaced">Financeiro</span>}
+            <NavLink to="/financeiro" onClick={() => setMobileOpen(false)}>
+              <Landmark size={19} />
+              Financeiro
+            </NavLink>
           </>
         )}
 

@@ -46,7 +46,12 @@ export type Capability =
   | 'suppliers.manage'
   | 'quotes.view'
   | 'quotes.create'
-  | 'quotes.edit';
+  | 'quotes.edit'
+  | 'purchases.view'
+  | 'purchases.edit'
+  | 'purchases.approve'
+  | 'finance.view'
+  | 'finance.manage';
 
 export interface Profile {
   id: string;
