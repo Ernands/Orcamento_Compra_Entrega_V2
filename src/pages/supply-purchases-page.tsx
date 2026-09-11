@@ -218,6 +218,38 @@ function allocatedCostPreview(totalCents: bigint | null, quantity: bigint, store
   return (totalCents * storeQuantity + quantity / 2n) / quantity;
 }
 
+function allocateCentsByWeights(totalCents: bigint, weights: bigint[]): bigint[] {
+  if (weights.length === 0) return [];
+  const positiveWeights = weights.map((weight) => weight > 0n ? weight : 0n);
+  const totalWeight = positiveWeights.reduce((sum, weight) => sum + weight, 0n);
+  if (totalWeight <= 0n) {
+    const base = totalCents / BigInt(weights.length);
+    let remainder = totalCents - base * BigInt(weights.length);
+    return weights.map(() => {
+      const value = base + (remainder > 0n ? 1n : 0n);
+      if (remainder > 0n) remainder -= 1n;
+      return value;
+    });
+  }
+
+  const rows = positiveWeights.map((weight, index) => {
+    const numerator = totalCents * weight;
+    return {
+      index,
+      base: numerator / totalWeight,
+      remainder: numerator % totalWeight,
+    };
+  });
+  let remaining = totalCents - rows.reduce((sum, row) => sum + row.base, 0n);
+  rows.sort((a, b) => a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1);
+  const result = Array<bigint>(weights.length).fill(0n);
+  for (const row of rows) {
+    result[row.index] = row.base + (remaining > 0n ? 1n : 0n);
+    if (remaining > 0n) remaining -= 1n;
+  }
+  return result;
+}
+
 function RegisterPurchaseModal({
   purchase,
   item,
@@ -233,6 +265,11 @@ function RegisterPurchaseModal({
 }) {
   const [purchasedOn, setPurchasedOn] = useState(todayInput());
   const [destinationId, setDestinationId] = useState('');
+  const [selectedDestinationIds, setSelectedDestinationIds] = useState<string[]>([]);
+  const [destinationQuantities, setDestinationQuantities] = useState<Record<string, string>>({});
+  const [destinationShippings, setDestinationShippings] = useState<Record<string, string>>({});
+  const [destinationStoreAllocations, setDestinationStoreAllocations] = useState<Record<string, Record<string, string>>>({});
+  const [shippingMode, setShippingMode] = useState<'total' | 'individual'>('total');
   const [quantity, setQuantity] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [discount, setDiscount] = useState('');
@@ -255,10 +292,19 @@ function RegisterPurchaseModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const hasMultipleDestinations = Boolean(item && item.destinations.length > 1);
   const destination = item?.destinations.find((entry) => entry.id === destinationId) || null;
   const remainingItem = item && purchase ? remainingItemQuantity(item, purchase) : 0n;
   const remainingDestination = destination && purchase ? remainingDestinationQuantity(destination, purchase) : null;
   const maxQuantity = remainingDestination === null ? remainingItem : remainingDestination < remainingItem ? remainingDestination : remainingItem;
+  const destinationsWithBalance = useMemo(() => {
+    if (!item || !purchase) return [];
+    return item.destinations.filter((entry) => remainingDestinationQuantity(entry, purchase) > 0n);
+  }, [item, purchase]);
+  const selectedDestinations = useMemo(() => {
+    if (!item) return [];
+    return item.destinations.filter((entry) => selectedDestinationIds.includes(entry.id));
+  }, [item, selectedDestinationIds]);
   const eligibleStores = (() => {
     if (!purchase || !item) return [];
     if (destination) return destination.stores;
@@ -266,12 +312,91 @@ function RegisterPurchaseModal({
     return purchase.stores;
   })();
   const requiresMasterDistribution = destination?.destinationType === 'profile' && destination.distributionStatus !== 'confirmed';
+  const selectedPendingMasterDestinations = selectedDestinations.filter(
+    (entry) => entry.destinationType === 'profile' && entry.distributionStatus !== 'confirmed',
+  );
+
+  const defaultAllocationsForDestination = useCallback((entry: PurchaseDestinationV2, selectedQuantity: string) => {
+    if (!purchase) return {};
+    const next: Record<string, string> = {};
+    if (entry.stores.length === 1) {
+      next[entry.stores[0].storeId] = selectedQuantity;
+      return next;
+    }
+    const remaining = remainingDestinationQuantity(entry, purchase);
+    let selected: bigint;
+    try { selected = selectedQuantity.trim() ? quantityToThousandths(selectedQuantity) : 0n; } catch { return next; }
+    if (entry.distributionStatus === 'confirmed' && selected === remaining) {
+      for (const store of entry.stores) {
+        const storeRemaining = remainingStoreQuantity(purchase, entry, store.storeId);
+        next[store.storeId] = storeRemaining > 0n ? decimalFromThousandths(storeRemaining) : '0';
+      }
+    } else {
+      entry.stores.forEach((store) => { next[store.storeId] = ''; });
+    }
+    return next;
+  }, [purchase]);
+
+  const selectDestination = useCallback((entry: PurchaseDestinationV2, checked: boolean) => {
+    if (!purchase) return;
+    if (!checked) {
+      setSelectedDestinationIds((current) => current.filter((id) => id !== entry.id));
+      setDestinationQuantities((current) => {
+        const next = { ...current };
+        delete next[entry.id];
+        return next;
+      });
+      setDestinationShippings((current) => {
+        const next = { ...current };
+        delete next[entry.id];
+        return next;
+      });
+      setDestinationStoreAllocations((current) => {
+        const next = { ...current };
+        delete next[entry.id];
+        return next;
+      });
+      return;
+    }
+    const remaining = decimalFromThousandths(remainingDestinationQuantity(entry, purchase));
+    setSelectedDestinationIds((current) => current.includes(entry.id) ? current : [...current, entry.id]);
+    setDestinationQuantities((current) => ({ ...current, [entry.id]: remaining }));
+    setDestinationShippings((current) => ({ ...current, [entry.id]: current[entry.id] ?? '' }));
+    setDestinationStoreAllocations((current) => ({
+      ...current,
+      [entry.id]: defaultAllocationsForDestination(entry, remaining),
+    }));
+  }, [defaultAllocationsForDestination, purchase]);
+
+  const selectAllDestinationsWithBalance = useCallback(() => {
+    if (!purchase) return;
+    const ids: string[] = [];
+    const quantities: Record<string, string> = {};
+    const shippings: Record<string, string> = {};
+    const allocations: Record<string, Record<string, string>> = {};
+    for (const entry of destinationsWithBalance) {
+      const remaining = decimalFromThousandths(remainingDestinationQuantity(entry, purchase));
+      ids.push(entry.id);
+      quantities[entry.id] = remaining;
+      shippings[entry.id] = destinationShippings[entry.id] ?? '';
+      allocations[entry.id] = defaultAllocationsForDestination(entry, remaining);
+    }
+    setSelectedDestinationIds(ids);
+    setDestinationQuantities(quantities);
+    setDestinationShippings(shippings);
+    setDestinationStoreAllocations(allocations);
+  }, [defaultAllocationsForDestination, destinationShippings, destinationsWithBalance, purchase]);
 
   useEffect(() => {
     if (!item || !purchase || savedOrderId) return;
     const firstDestination = item.destinations.length === 1 ? item.destinations[0] : null;
     setPurchasedOn(todayInput());
     setDestinationId(firstDestination?.id || '');
+    setSelectedDestinationIds([]);
+    setDestinationQuantities({});
+    setDestinationShippings({});
+    setDestinationStoreAllocations({});
+    setShippingMode('total');
     const remaining = firstDestination ? remainingDestinationQuantity(firstDestination, purchase) : remainingItemQuantity(item, purchase);
     setQuantity(decimalFromThousandths(remaining));
     setUnitPrice(item.quotedUnitPrice);
@@ -296,21 +421,18 @@ function RegisterPurchaseModal({
 
   useEffect(() => {
     if (!item || deliveryTouchedRef.current) return;
-    const days = destination ? destination.quotedDeliveryDays : item.quotedDeliveryDays;
-    setExpectedDeliveryDate(suggestedDeliveryDate(purchasedOn, days));
-  }, [purchasedOn, destination, item]);
-
-  const total = useMemo(() => {
-    try {
-      if (!quantity.trim() || !unitPrice.trim() || !shipping.trim()) return null;
-      return calculateRegistrationTotal({ quantity, unitPrice, discountAmount: discount, shippingAmount: shipping, otherCosts });
-    } catch {
-      return null;
+    let days = destination ? destination.quotedDeliveryDays : item.quotedDeliveryDays;
+    if (hasMultipleDestinations && selectedDestinations.length) {
+      const informed = selectedDestinations
+        .map((entry) => entry.quotedDeliveryDays)
+        .filter((value): value is number => value !== null);
+      days = informed.length ? Math.max(...informed) : null;
     }
-  }, [quantity, unitPrice, discount, shipping, otherCosts]);
+    setExpectedDeliveryDate(suggestedDeliveryDate(purchasedOn, days));
+  }, [purchasedOn, destination, hasMultipleDestinations, item, selectedDestinations]);
 
   useEffect(() => {
-    if (!purchase || !item || savedOrderId) return;
+    if (!purchase || !item || savedOrderId || hasMultipleDestinations) return;
     const selectedDestination = item.destinations.find((entry) => entry.id === destinationId) || null;
     const stores = selectedDestination
       ? selectedDestination.stores
@@ -329,7 +451,55 @@ function RegisterPurchaseModal({
       stores.forEach((store) => { next[store.storeId] = ''; });
     }
     setStoreAllocations(next);
-  }, [destinationId, item, purchase, quantity, savedOrderId]);
+  }, [destinationId, hasMultipleDestinations, item, purchase, quantity, savedOrderId]);
+
+  const multiLines = useMemo(() => {
+    if (!hasMultipleDestinations || !item || !purchase || selectedDestinations.length === 0) return [];
+    try {
+      const rows = selectedDestinations.map((entry) => {
+        const quantityInput = destinationQuantities[entry.id] || '';
+        const quantityValue = quantityInput.trim() ? quantityToThousandths(quantityInput) : 0n;
+        const subtotalCents = quantityValue > 0n
+          ? (quantityValue * moneyToCents(unitPrice || '0') + 500n) / 1000n
+          : 0n;
+        return { entry, quantityInput, quantityValue, subtotalCents };
+      });
+      const weights = rows.map((row) => row.subtotalCents > 0n ? row.subtotalCents : row.quantityValue);
+      const discountParts = allocateCentsByWeights(moneyToCents(discount || '0'), weights);
+      const otherCostParts = allocateCentsByWeights(moneyToCents(otherCosts || '0'), weights);
+      const shippingParts = shippingMode === 'total'
+        ? allocateCentsByWeights(moneyToCents(shipping || '0'), weights)
+        : rows.map((row) => moneyToCents(destinationShippings[row.entry.id] || '0'));
+      return rows.map((row, index) => ({
+        ...row,
+        discountCents: discountParts[index] || 0n,
+        shippingCents: shippingParts[index] || 0n,
+        otherCostsCents: otherCostParts[index] || 0n,
+        totalCents: row.subtotalCents - (discountParts[index] || 0n) + (shippingParts[index] || 0n) + (otherCostParts[index] || 0n),
+      }));
+    } catch {
+      return [];
+    }
+  }, [destinationQuantities, destinationShippings, discount, hasMultipleDestinations, item, otherCosts, purchase, selectedDestinations, shipping, shippingMode, unitPrice]);
+
+  const multiQuantity = useMemo(
+    () => multiLines.reduce((sum, line) => sum + line.quantityValue, 0n),
+    [multiLines],
+  );
+  const total = useMemo(() => {
+    try {
+      if (hasMultipleDestinations) {
+        if (!selectedDestinations.length || !unitPrice.trim()) return null;
+        if (shippingMode === 'total' && !shipping.trim()) return null;
+        if (shippingMode === 'individual' && selectedDestinations.some((entry) => !(destinationShippings[entry.id] || '').trim())) return null;
+        return multiLines.reduce((sum, line) => sum + line.totalCents, 0n);
+      }
+      if (!quantity.trim() || !unitPrice.trim() || !shipping.trim()) return null;
+      return calculateRegistrationTotal({ quantity, unitPrice, discountAmount: discount, shippingAmount: shipping, otherCosts });
+    } catch {
+      return null;
+    }
+  }, [destinationShippings, discount, hasMultipleDestinations, multiLines, otherCosts, quantity, selectedDestinations, shipping, shippingMode, unitPrice]);
 
   useEffect(() => {
     const suggested = total === null ? '' : centsToInput(total);
@@ -353,6 +523,41 @@ function RegisterPurchaseModal({
     }
   }, [storeAllocations]);
 
+  const multiAllocatedQuantity = useCallback((destinationIdValue: string) => {
+    try {
+      return Object.values(destinationStoreAllocations[destinationIdValue] || {}).reduce(
+        (sum, value) => sum + (value.trim() ? quantityToThousandths(value) : 0n),
+        0n,
+      );
+    } catch {
+      return null;
+    }
+  }, [destinationStoreAllocations]);
+
+  const updateMultiQuantity = (entry: PurchaseDestinationV2, value: string) => {
+    setDestinationQuantities((current) => ({ ...current, [entry.id]: value }));
+    if (entry.stores.length === 1) {
+      setDestinationStoreAllocations((current) => ({
+        ...current,
+        [entry.id]: { [entry.stores[0].storeId]: value },
+      }));
+      return;
+    }
+    if (!purchase) return;
+    try {
+      const parsed = value.trim() ? quantityToThousandths(value) : 0n;
+      const remaining = remainingDestinationQuantity(entry, purchase);
+      if (entry.distributionStatus === 'confirmed' && parsed === remaining) {
+        setDestinationStoreAllocations((current) => ({
+          ...current,
+          [entry.id]: defaultAllocationsForDestination(entry, value),
+        }));
+      }
+    } catch {
+      // A validacao do formulario exibira o erro depois.
+    }
+  };
+
   const updatePayment = (key: string, change: Partial<PurchasePaymentDraft>) => {
     setPayments((current) => current.map((payment) => payment.key === key ? { ...payment, ...change } : payment));
   };
@@ -369,24 +574,58 @@ function RegisterPurchaseModal({
     event.preventDefault();
     if (!purchase || !item) return;
     setError(null);
+
     try {
-      const qty = quantityToThousandths(quantity);
-      if (qty <= 0n) throw new Error('Informe uma quantidade maior que zero.');
-      if (qty > maxQuantity) throw new Error('A quantidade informada supera o saldo disponivel para este item/destino.');
-      if (item.destinations.length && !destination) throw new Error('Selecione o destino da compra.');
-      if (!shipping.trim()) throw new Error('Informe o frete realizado. Use 0 quando o frete for gratis.');
-      const subtotal = (qty * moneyToCents(unitPrice) + 500n) / 1000n;
-      const discountCents = moneyToCents(discount || '0');
-      if (moneyToCents(unitPrice) < 0n || discountCents < 0n || moneyToCents(shipping || '0') < 0n || moneyToCents(otherCosts || '0') < 0n) {
+      if (moneyToCents(unitPrice || '0') < 0n || moneyToCents(discount || '0') < 0n || moneyToCents(otherCosts || '0') < 0n) {
         throw new Error('Valores negativos nao sao permitidos.');
       }
-      if (discountCents > subtotal) throw new Error('O desconto nao pode superar o subtotal.');
-      const calculated = calculateRegistrationTotal({ quantity, unitPrice, discountAmount: discount, shippingAmount: shipping, otherCosts });
-      if (calculated < 0n) throw new Error('O total do registro nao pode ser negativo.');
+
+      if (hasMultipleDestinations) {
+        if (!selectedDestinations.length) throw new Error('Selecione ao menos um destino da compra.');
+        if (selectedPendingMasterDestinations.length) {
+          throw new Error(`Confirme primeiro as lojas do destino ${selectedPendingMasterDestinations[0].label}.`);
+        }
+        if (shippingMode === 'total' && !shipping.trim()) {
+          throw new Error('Informe o frete total realizado. Use 0 quando o frete for gratis.');
+        }
+        if (shippingMode === 'individual') {
+          const missingShipping = selectedDestinations.find((entry) => !(destinationShippings[entry.id] || '').trim());
+          if (missingShipping) throw new Error(`Informe o frete realizado do destino ${missingShipping.label}. Use 0 quando for gratis.`);
+        }
+        if (!multiLines.length) throw new Error('Revise as quantidades dos destinos selecionados.');
+        if (multiQuantity <= 0n || multiQuantity > remainingItem) {
+          throw new Error('A quantidade total informada supera o saldo disponivel para este item.');
+        }
+        const totalSubtotal = multiLines.reduce((sum, line) => sum + line.subtotalCents, 0n);
+        if (moneyToCents(discount || '0') > totalSubtotal) throw new Error('O desconto nao pode superar o subtotal.');
+        for (const line of multiLines) {
+          const remaining = remainingDestinationQuantity(line.entry, purchase);
+          if (line.quantityValue <= 0n) throw new Error(`Informe uma quantidade maior que zero para ${line.entry.label}.`);
+          if (line.quantityValue > remaining) throw new Error(`A quantidade de ${line.entry.label} supera o saldo do destino.`);
+          const allocated = multiAllocatedQuantity(line.entry.id);
+          if (allocated === null || allocated !== line.quantityValue) {
+            throw new Error(`A quantidade de ${line.entry.label} deve ficar totalmente distribuida entre as lojas.`);
+          }
+          if (line.totalCents < 0n) throw new Error(`O total do destino ${line.entry.label} nao pode ser negativo.`);
+        }
+      } else {
+        const qty = quantityToThousandths(quantity);
+        if (qty <= 0n) throw new Error('Informe uma quantidade maior que zero.');
+        if (qty > maxQuantity) throw new Error('A quantidade informada supera o saldo disponivel para este item/destino.');
+        if (item.destinations.length && !destination) throw new Error('Selecione o destino da compra.');
+        if (!shipping.trim()) throw new Error('Informe o frete realizado. Use 0 quando o frete for gratis.');
+        const subtotal = (qty * moneyToCents(unitPrice) + 500n) / 1000n;
+        const discountCents = moneyToCents(discount || '0');
+        if (moneyToCents(shipping || '0') < 0n) throw new Error('Valores negativos nao sao permitidos.');
+        if (discountCents > subtotal) throw new Error('O desconto nao pode superar o subtotal.');
+        const calculated = calculateRegistrationTotal({ quantity, unitPrice, discountAmount: discount, shippingAmount: shipping, otherCosts });
+        if (calculated < 0n) throw new Error('O total do registro nao pode ser negativo.');
+        if (requiresMasterDistribution) throw new Error(`Confirme primeiro as lojas do destino ${destination?.label}.`);
+        if (!eligibleStores.length) throw new Error('A compra precisa ter ao menos uma loja de destino.');
+        if (allocatedQuantity === null || allocatedQuantity !== qty) throw new Error('A quantidade da compra deve ficar totalmente distribuida entre as lojas.');
+      }
+
       if (expectedDeliveryDate && expectedDeliveryDate < purchasedOn) throw new Error('A previsao de entrega nao pode ser anterior a data da compra.');
-      if (requiresMasterDistribution) throw new Error(`Confirme primeiro as lojas do destino ${destination?.label}.`);
-      if (!eligibleStores.length) throw new Error('A compra precisa ter ao menos uma loja de destino.');
-      if (allocatedQuantity === null || allocatedQuantity !== qty) throw new Error('A quantidade da compra deve ficar totalmente distribuida entre as lojas.');
       if (!payments.length) throw new Error('Informe ao menos um pagamento.');
       for (const payment of payments) {
         const amountCents = moneyToCents(payment.amount);
@@ -394,7 +633,7 @@ function RegisterPurchaseModal({
         if (payment.entry && moneyToCents(payment.entry) > amountCents) throw new Error('A entrada nao pode superar o pagamento.');
         if (payment.installments && Number(payment.installments) < 1) throw new Error('Revise a quantidade de parcelas.');
       }
-      if (paymentTotal === null || paymentTotal !== calculated) throw new Error('A soma dos pagamentos deve ser igual ao total da compra.');
+      if (total === null || paymentTotal === null || paymentTotal !== total) throw new Error('A soma dos pagamentos deve ser igual ao total da compra.');
       if (file) {
         const validation = validatePurchaseAttachmentV2(file);
         if (validation) throw new Error(validation);
@@ -406,27 +645,45 @@ function RegisterPurchaseModal({
 
     setSaving(true);
     try {
+      const lines = hasMultipleDestinations
+        ? multiLines.map((line) => ({
+            purchaseItemId: item.id,
+            purchaseDestinationId: line.entry.id,
+            quantity: line.quantityInput,
+            unitPrice,
+            discountAmount: centsToInput(line.discountCents),
+            shippingAmount: centsToInput(line.shippingCents),
+            otherCosts: centsToInput(line.otherCostsCents),
+            expectedDeliveryDate,
+            notes,
+            storeAllocations: line.entry.stores.map((store) => ({
+              storeId: store.storeId,
+              quantity: destinationStoreAllocations[line.entry.id]?.[store.storeId] || '0',
+            })),
+          }))
+        : [{
+            purchaseItemId: item.id,
+            purchaseDestinationId: destination?.id || null,
+            quantity,
+            unitPrice,
+            discountAmount: discount,
+            shippingAmount: shipping,
+            otherCosts,
+            expectedDeliveryDate,
+            notes,
+            storeAllocations: eligibleStores.map((store) => ({
+              storeId: store.storeId,
+              quantity: storeAllocations[store.storeId] || '0',
+            })),
+          }];
+
       const result = await createSupplyPurchaseOperationV2({
         purchaseId: purchase.id,
         purchasedOn,
         supplierOrderRef,
         expectedDeliveryDate,
         notes,
-        lines: [{
-          purchaseItemId: item.id,
-          purchaseDestinationId: destination?.id || null,
-          quantity,
-          unitPrice,
-          discountAmount: discount,
-          shippingAmount: shipping,
-          otherCosts,
-          expectedDeliveryDate,
-          notes,
-          storeAllocations: eligibleStores.map((store) => ({
-            storeId: store.storeId,
-            quantity: storeAllocations[store.storeId] || '0',
-          })),
-        }],
+        lines,
         payments: payments.map((payment) => ({
           paymentMethod: payment.method,
           sourceLabel: payment.source,
@@ -440,8 +697,23 @@ function RegisterPurchaseModal({
         })),
       });
       setSavedOrderId(result.orderId);
+
       if (file) {
         try {
+          const storeIds = hasMultipleDestinations
+            ? [...new Set(multiLines.flatMap((line) => line.entry.stores
+                .filter((store) => {
+                  const value = destinationStoreAllocations[line.entry.id]?.[store.storeId] || '';
+                  try { return value.trim() && quantityToThousandths(value) > 0n; } catch { return false; }
+                })
+                .map((store) => store.storeId)))]
+            : eligibleStores
+                .filter((store) => {
+                  const value = storeAllocations[store.storeId] || '';
+                  try { return value.trim() && quantityToThousandths(value) > 0n; } catch { return false; }
+                })
+                .map((store) => store.storeId);
+
           await uploadPurchaseAttachmentV3({
             purchaseId: purchase.id,
             purchaseOrderId: result.orderId,
@@ -451,9 +723,7 @@ function RegisterPurchaseModal({
             documentNumber,
             documentDate: purchasedOn,
             documentAmount: total === null ? '' : centsToInput(total),
-            storeIds: eligibleStores
-              .filter((store) => (storeAllocations[store.storeId] || '').trim() && quantityToThousandths(storeAllocations[store.storeId]) > 0n)
-              .map((store) => store.storeId),
+            storeIds,
           });
         } catch (failure) {
           setUploadWarning(errorMessage(failure, 'A compra e o pagamento foram salvos, mas o arquivo nao foi enviado.'));
@@ -475,102 +745,211 @@ function RegisterPurchaseModal({
       <button type="button" className="button button--primary" onClick={onClose}>Concluir</button>
     </div>
   ) : (
-        <form className="stack-form" onSubmit={submit} noValidate>
-          <section className="purchase-v2-operation-section">
-            <header><span>1</span><div><strong>Dados da compra</strong><small>Item, quantidade, valores e pedido do fornecedor.</small></div></header>
-          {item.destinations.length > 0 && (
-            <label className="field">Destino
-              <select value={destinationId} onChange={(event) => {
-                  const nextId = event.target.value;
-                  setDestinationId(nextId);
-                  const nextDestination = item.destinations.find((entry) => entry.id === nextId);
-                  if (nextDestination) setQuantity(decimalFromThousandths(remainingDestinationQuantity(nextDestination, purchase)));
-                }} required>
-                <option value="">Selecione o destino</option>
-                {item.destinations.map((entry) => (
-                  <option key={entry.id} value={entry.id}>{entry.label} · {entry.state} · saldo {formatQuantityV2(decimalFromThousandths(remainingDestinationQuantity(entry, purchase)))} {entry.unit}</option>
-                ))}
-              </select>
-            </label>
-          )}
-          <div className="purchase-v2-hint">
-            <strong>{destination ? destination.label : item.storeCode || 'Sem destino especifico'}</strong>
-            <span>{destination ? quotedShippingLabel(destination) : quotedShippingLabel(item)}{(destination ? destination.quotedDeliveryDays : item.quotedDeliveryDays) !== null ? ` · prazo cotado ${destination ? destination.quotedDeliveryDays : item.quotedDeliveryDays} dias` : ''}</span>
-          </div>
-          <div className="form-grid form-grid--three">
-            <label className="field">Data da compra<input type="date" value={purchasedOn} onChange={(event) => setPurchasedOn(event.target.value)} required /></label>
-            <label className="field">Quantidade<input value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></label>
-            <label className="field">Valor unitario realizado<input value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} required /></label>
-            <label className="field">Desconto<input value={discount} onChange={(event) => setDiscount(event.target.value)} /></label>
-            <label className="field">Frete realizado<input value={shipping} onChange={(event) => setShipping(event.target.value)} placeholder="Informe o valor · 0 = gratis" /></label>
-            <label className="field">Outros custos<input value={otherCosts} onChange={(event) => setOtherCosts(event.target.value)} /></label>
-            <label className="field">Referencia / pedido<input value={supplierOrderRef} onChange={(event) => setSupplierOrderRef(event.target.value)} /></label>
-            <label className="field">Previsao de entrega<input type="date" value={expectedDeliveryDate} onInput={(event) => { deliveryTouchedRef.current = true; setExpectedDeliveryDate(event.currentTarget.value); }} /></label>
-          </div>
-          <label className="field">Observacoes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-          <div className="purchase-v2-total"><span>Total deste registro</span><strong>{!shipping.trim() ? 'Pendente · frete nao informado' : total === null ? 'Revise quantidade e valores' : formatBRL(total)}</strong></div>
-          </section>
+    <form className="stack-form" onSubmit={submit} noValidate>
+      <section className="purchase-v2-operation-section">
+        <header><span>1</span><div><strong>Dados da compra</strong><small>Item, quantidades, valores e pedido do fornecedor.</small></div></header>
 
-          <section className="purchase-v2-operation-section">
-            <header><span>2</span><div><strong>Lojas e custos</strong><small>Cada quantidade e cada centavo precisam ter uma loja de destino.</small></div></header>
-            {requiresMasterDistribution && <div className="form-error">Confirme primeiro a distribuicao mestre do destino {destination?.label}. Depois retorne para registrar a compra.</div>}
-            <div className="purchase-v2-allocation-total">
-              <span>Quantidade comprada</span><strong>{quantity || '0'} {item.unit}</strong>
-              <span>Distribuida</span><strong>{allocatedQuantity === null ? 'Valor invalido' : `${formatQuantityV2(decimalFromThousandths(allocatedQuantity))} ${item.unit}`}</strong>
+        {hasMultipleDestinations ? (
+          <div className="purchase-v2-multi-destinations">
+            <div className="purchase-v2-multi-destinations__toolbar">
+              <div>
+                <strong>Destinos da compra</strong>
+                <small>Selecione uma, algumas ou todas as lojas/destinos com saldo.</small>
+              </div>
+              <div className="row-actions">
+                <button type="button" className="button button--secondary button--small" onClick={selectAllDestinationsWithBalance}>
+                  <CheckCheck size={15}/>Selecionar todos os destinos com saldo
+                </button>
+                {selectedDestinationIds.length > 0 && <button type="button" className="button button--secondary button--small" onClick={() => {
+                  setSelectedDestinationIds([]);
+                  setDestinationQuantities({});
+                  setDestinationShippings({});
+                  setDestinationStoreAllocations({});
+                }}>Limpar selecao</button>}
+              </div>
             </div>
-            <div className="purchase-v2-store-cost-editor">
-              {eligibleStores.map((store) => {
-                const storeQuantity = (() => { try { return quantityToThousandths(storeAllocations[store.storeId] || '0'); } catch { return 0n; } })();
-                const cost = allocatedCostPreview(total, (() => { try { return quantityToThousandths(quantity); } catch { return 0n; } })(), storeQuantity);
-                return <label className="field" key={store.storeId}>
-                  <span>{store.code} · {store.name}<small>{store.city}/{store.state}</small></span>
-                  <input aria-label={`Quantidade da loja ${store.code}`} value={storeAllocations[store.storeId] || ''} onChange={(event) => setStoreAllocations((current) => ({ ...current, [store.storeId]: event.target.value }))} placeholder="Quantidade" />
-                  <small>Custo desta loja: <strong>{cost === null ? 'A calcular' : formatBRL(cost)}</strong></small>
-                </label>;
+            <div className="purchase-v2-multi-destinations__list">
+              {destinationsWithBalance.map((entry) => {
+                const checked = selectedDestinationIds.includes(entry.id);
+                const remaining = remainingDestinationQuantity(entry, purchase);
+                return <div key={entry.id} className={`purchase-v2-multi-destination ${checked ? 'is-selected' : ''}`}>
+                  <label className="purchase-v2-multi-destination__selector">
+                    <input
+                      type="checkbox"
+                      aria-label={`Selecionar destino ${entry.label}`}
+                      checked={checked}
+                      onChange={(event) => selectDestination(entry, event.target.checked)}
+                    />
+                    <span><strong>{entry.label}</strong><small>{entry.state} · saldo {formatQuantityV2(decimalFromThousandths(remaining))} {entry.unit}</small></span>
+                  </label>
+                  {checked && <div className="purchase-v2-multi-destination__details">
+                    <label className="field">Quantidade
+                      <input
+                        aria-label={`Quantidade do destino ${entry.label}`}
+                        value={destinationQuantities[entry.id] || ''}
+                        onChange={(event) => updateMultiQuantity(entry, event.target.value)}
+                      />
+                    </label>
+                    <div className="purchase-v2-multi-destination__quoted">
+                      <span>{quotedShippingLabel(entry)}</span>
+                      <small>{entry.quotedDeliveryDays === null ? 'Prazo nao informado' : `Prazo cotado ${entry.quotedDeliveryDays} dias`}</small>
+                    </div>
+                    {entry.destinationType === 'profile' && entry.distributionStatus !== 'confirmed'
+                      ? <div className="form-error">Confirme primeiro as lojas deste destino.</div>
+                      : <div className="purchase-v2-multi-destination__stores">
+                          {entry.stores.map((store) => <label className="field" key={store.storeId}>
+                            <span>{store.code} · {store.name}<small>{store.city}/{store.state}</small></span>
+                            <input
+                              aria-label={`Quantidade da loja ${store.code} no destino ${entry.label}`}
+                              value={destinationStoreAllocations[entry.id]?.[store.storeId] || ''}
+                              onChange={(event) => setDestinationStoreAllocations((current) => ({
+                                ...current,
+                                [entry.id]: {
+                                  ...(current[entry.id] || {}),
+                                  [store.storeId]: event.target.value,
+                                },
+                              }))}
+                              placeholder="Quantidade"
+                            />
+                          </label>)}
+                        </div>}
+                  </div>}
+                </div>;
               })}
             </div>
-          </section>
-
-          <section className="purchase-v2-operation-section">
-            <header><span>3</span><div><strong>Pagamento</strong><small>Obrigatorio e sempre vinculado a esta compra.</small></div></header>
-            <div className="purchase-v2-payment-drafts">
-              {payments.map((payment, index) => <div className="purchase-v2-payment-draft" key={payment.key}>
-                <header><strong>Pagamento {index + 1}</strong>{payments.length > 1 && <button type="button" className="button button--secondary button--small" onClick={() => setPayments((current) => current.filter((entry) => entry.key !== payment.key))}><XCircle size={15}/>Remover</button>}</header>
-                <div className="form-grid form-grid--three">
-                  <label className="field">Forma de pagamento<select value={payment.method} onChange={(event) => updatePayment(payment.key, { method: event.target.value as PaymentMethod })}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                  <label className="field">Valor total<input value={payment.amount} onChange={(event) => updatePayment(payment.key, { amount: event.target.value })} required /></label>
-                  <label className="field">Situacao<select value={payment.status} onChange={(event) => updatePayment(payment.key, { status: event.target.value as 'planned' | 'paid' })}><option value="paid">Pago</option><option value="planned">A pagar / previsto</option></select></label>
-                  <label className="field">Origem / cartao utilizado<input value={payment.source} onChange={(event) => updatePayment(payment.key, { source: event.target.value })} placeholder="Ex.: Cartao corporativo final 1234" /></label>
-                  <label className="field">Entrada<input value={payment.entry} onChange={(event) => updatePayment(payment.key, { entry: event.target.value })} /></label>
-                  <label className="field">Parcelas<input inputMode="numeric" value={payment.installments} onChange={(event) => updatePayment(payment.key, { installments: event.target.value.replace(/\D/g, '') })} /></label>
-                  {payment.status === 'planned' && <label className="field">Primeiro vencimento<input type="date" value={payment.firstDueDate} onChange={(event) => updatePayment(payment.key, { firstDueDate: event.target.value })} /></label>}
-                </div>
-                <label className="field">Observacoes do pagamento<textarea rows={2} value={payment.notes} onChange={(event) => updatePayment(payment.key, { notes: event.target.value })} /></label>
-              </div>)}
+            <div className="purchase-v2-allocation-total">
+              <span>Destinos selecionados</span><strong>{selectedDestinations.length}</strong>
+              <span>Quantidade total</span><strong>{formatQuantityV2(decimalFromThousandths(multiQuantity))} {item.unit}</strong>
             </div>
-            <div className="purchase-v2-payment-balance"><span>Total da compra <strong>{total === null ? 'A calcular' : formatBRL(total)}</strong></span><span>Pagamentos <strong>{paymentTotal === null ? 'Valor invalido' : formatBRL(paymentTotal)}</strong></span><span className={total !== null && paymentTotal === total ? 'is-ok' : 'is-warning'}>Diferenca <strong>{total === null || paymentTotal === null ? 'A calcular' : formatBRL(total - paymentTotal)}</strong></span></div>
-            <button type="button" className="button button--secondary button--small" onClick={() => {
-              const key = `payment-${nextPaymentKey.current++}`;
-              setPayments((current) => [...current, { ...paymentDraft(purchase, key), amount: '' }]);
-            }}><Plus size={15}/>Adicionar outra forma de pagamento</button>
-          </section>
-
-          <section className="purchase-v2-operation-section">
-            <header><span>4</span><div><strong>Arquivo da compra</strong><small>Opcional. Nota fiscal, recibo ou comprovante ficará na mesma operacao.</small></div></header>
-            <div className="form-grid form-grid--three">
-              <label className="field">Tipo de documento<select value={documentType} onChange={(event) => setDocumentType(event.target.value as PurchaseDocumentType)}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
-              <label className="field">Numero do documento<input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></label>
-              <label className="field">Arquivo<input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
-            </div>
-            <label className="field">Descricao do arquivo<input value={documentDescription} onChange={(event) => setDocumentDescription(event.target.value)} /></label>
-          </section>
-          {error && <div className="form-error">{error}</div>}
-          <div className="modal-actions">
-            <button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button>
-            <button className="button button--primary" disabled={saving || Boolean(requiresMasterDistribution)}>{saving ? 'Salvando compra...' : 'Salvar compra completa'}</button>
           </div>
-        </form>
-      ) : null;
+        ) : item.destinations.length > 0 && (
+          <label className="field">Destino
+            <select value={destinationId} onChange={(event) => {
+                const nextId = event.target.value;
+                setDestinationId(nextId);
+                const nextDestination = item.destinations.find((entry) => entry.id === nextId);
+                if (nextDestination) setQuantity(decimalFromThousandths(remainingDestinationQuantity(nextDestination, purchase)));
+              }} required>
+              <option value="">Selecione o destino</option>
+              {item.destinations.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.label} · {entry.state} · saldo {formatQuantityV2(decimalFromThousandths(remainingDestinationQuantity(entry, purchase)))} {entry.unit}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {!hasMultipleDestinations && <div className="purchase-v2-hint">
+          <strong>{destination ? destination.label : item.storeCode || 'Sem destino especifico'}</strong>
+          <span>{destination ? quotedShippingLabel(destination) : quotedShippingLabel(item)}{(destination ? destination.quotedDeliveryDays : item.quotedDeliveryDays) !== null ? ` · prazo cotado ${destination ? destination.quotedDeliveryDays : item.quotedDeliveryDays} dias` : ''}</span>
+        </div>}
+
+        <div className="form-grid form-grid--three">
+          <label className="field">Data da compra<input type="date" value={purchasedOn} onChange={(event) => setPurchasedOn(event.target.value)} required /></label>
+          {!hasMultipleDestinations && <label className="field">Quantidade<input value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></label>}
+          <label className="field">Valor unitario realizado<input value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} required /></label>
+          <label className="field">{hasMultipleDestinations ? 'Desconto total' : 'Desconto'}<input value={discount} onChange={(event) => setDiscount(event.target.value)} /></label>
+          <label className="field">{hasMultipleDestinations ? 'Outros custos totais' : 'Outros custos'}<input value={otherCosts} onChange={(event) => setOtherCosts(event.target.value)} /></label>
+          <label className="field">Referencia / pedido<input value={supplierOrderRef} onChange={(event) => setSupplierOrderRef(event.target.value)} /></label>
+          <label className="field">Previsao de entrega<input type="date" value={expectedDeliveryDate} onInput={(event) => { deliveryTouchedRef.current = true; setExpectedDeliveryDate(event.currentTarget.value); }} /></label>
+        </div>
+
+        {hasMultipleDestinations ? <div className="purchase-v2-shipping-mode">
+          <strong>Frete realizado</strong>
+          <div className="segmented">
+            <button type="button" className={shippingMode === 'total' ? 'is-active' : ''} onClick={() => setShippingMode('total')}>Frete total da compra</button>
+            <button type="button" className={shippingMode === 'individual' ? 'is-active' : ''} onClick={() => setShippingMode('individual')}>Frete individual por destino</button>
+          </div>
+          {shippingMode === 'total'
+            ? <label className="field">Frete total realizado<input aria-label="Frete total realizado" value={shipping} onChange={(event) => setShipping(event.target.value)} placeholder="Informe o total · 0 = gratis" /></label>
+            : <div className="purchase-v2-individual-shippings">
+                {selectedDestinations.map((entry) => <label className="field" key={entry.id}>
+                  <span>{entry.label}<small>{entry.state}</small></span>
+                  <input
+                    aria-label={`Frete do destino ${entry.label}`}
+                    value={destinationShippings[entry.id] || ''}
+                    onChange={(event) => setDestinationShippings((current) => ({ ...current, [entry.id]: event.target.value }))}
+                    placeholder="0 = gratis"
+                  />
+                </label>)}
+              </div>}
+          {shippingMode === 'total' && selectedDestinations.length > 1 && <small className="purchase-v2-muted">O frete total sera rateado entre os destinos selecionados proporcionalmente ao valor dos itens, fechando os centavos exatamente.</small>}
+        </div> : <label className="field">Frete realizado<input value={shipping} onChange={(event) => setShipping(event.target.value)} placeholder="Informe o valor · 0 = gratis" /></label>}
+
+        <label className="field">Observacoes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+        <div className="purchase-v2-total"><span>Total desta compra</span><strong>{total === null ? 'Pendente · revise quantidades e frete' : formatBRL(total)}</strong></div>
+      </section>
+
+      {!hasMultipleDestinations && <section className="purchase-v2-operation-section">
+        <header><span>2</span><div><strong>Lojas e custos</strong><small>Cada quantidade e cada centavo precisam ter uma loja de destino.</small></div></header>
+        {requiresMasterDistribution && <div className="form-error">Confirme primeiro a distribuicao mestre do destino {destination?.label}. Depois retorne para registrar a compra.</div>}
+        <div className="purchase-v2-allocation-total">
+          <span>Quantidade comprada</span><strong>{quantity || '0'} {item.unit}</strong>
+          <span>Distribuida</span><strong>{allocatedQuantity === null ? 'Valor invalido' : `${formatQuantityV2(decimalFromThousandths(allocatedQuantity))} ${item.unit}`}</strong>
+        </div>
+        <div className="purchase-v2-store-cost-editor">
+          {eligibleStores.map((store) => {
+            const storeQuantity = (() => { try { return quantityToThousandths(storeAllocations[store.storeId] || '0'); } catch { return 0n; } })();
+            const cost = allocatedCostPreview(total, (() => { try { return quantityToThousandths(quantity); } catch { return 0n; } })(), storeQuantity);
+            return <label className="field" key={store.storeId}>
+              <span>{store.code} · {store.name}<small>{store.city}/{store.state}</small></span>
+              <input aria-label={`Quantidade da loja ${store.code}`} value={storeAllocations[store.storeId] || ''} onChange={(event) => setStoreAllocations((current) => ({ ...current, [store.storeId]: event.target.value }))} placeholder="Quantidade" />
+              <small>Custo desta loja: <strong>{cost === null ? 'A calcular' : formatBRL(cost)}</strong></small>
+            </label>;
+          })}
+        </div>
+      </section>}
+
+      {hasMultipleDestinations && selectedDestinations.length > 0 && <section className="purchase-v2-operation-section">
+        <header><span>2</span><div><strong>Resumo dos destinos</strong><small>Uma unica compra/pedido com varias linhas de destino.</small></div></header>
+        <div className="purchase-v2-multi-summary">
+          {multiLines.map((line) => <div key={line.entry.id}>
+            <span><strong>{line.entry.label}</strong><small>{line.entry.state} · {formatQuantityV2(line.quantityInput)} {line.entry.unit}</small></span>
+            <span><small>Frete</small><strong>{formatBRL(line.shippingCents)}</strong></span>
+            <span><small>Total</small><strong>{formatBRL(line.totalCents)}</strong></span>
+          </div>)}
+        </div>
+      </section>}
+
+      <section className="purchase-v2-operation-section">
+        <header><span>3</span><div><strong>Pagamento</strong><small>Obrigatorio e sempre vinculado a esta compra.</small></div></header>
+        <div className="purchase-v2-payment-drafts">
+          {payments.map((payment, index) => <div className="purchase-v2-payment-draft" key={payment.key}>
+            <header><strong>Pagamento {index + 1}</strong>{payments.length > 1 && <button type="button" className="button button--secondary button--small" onClick={() => setPayments((current) => current.filter((entry) => entry.key !== payment.key))}><XCircle size={15}/>Remover</button>}</header>
+            <div className="form-grid form-grid--three">
+              <label className="field">Forma de pagamento<select value={payment.method} onChange={(event) => updatePayment(payment.key, { method: event.target.value as PaymentMethod })}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label className="field">Valor total<input value={payment.amount} onChange={(event) => updatePayment(payment.key, { amount: event.target.value })} required /></label>
+              <label className="field">Situacao<select value={payment.status} onChange={(event) => updatePayment(payment.key, { status: event.target.value as 'planned' | 'paid' })}><option value="paid">Pago</option><option value="planned">A pagar / previsto</option></select></label>
+              <label className="field">Origem / cartao utilizado<input value={payment.source} onChange={(event) => updatePayment(payment.key, { source: event.target.value })} placeholder="Ex.: Cartao corporativo final 1234" /></label>
+              <label className="field">Entrada<input value={payment.entry} onChange={(event) => updatePayment(payment.key, { entry: event.target.value })} /></label>
+              <label className="field">Parcelas<input inputMode="numeric" value={payment.installments} onChange={(event) => updatePayment(payment.key, { installments: event.target.value.replace(/\D/g, '') })} /></label>
+              {payment.status === 'planned' && <label className="field">Primeiro vencimento<input type="date" value={payment.firstDueDate} onChange={(event) => updatePayment(payment.key, { firstDueDate: event.target.value })} /></label>}
+            </div>
+            <label className="field">Observacoes do pagamento<textarea rows={2} value={payment.notes} onChange={(event) => updatePayment(payment.key, { notes: event.target.value })} /></label>
+          </div>)}
+        </div>
+        <div className="purchase-v2-payment-balance"><span>Total da compra <strong>{total === null ? 'A calcular' : formatBRL(total)}</strong></span><span>Pagamentos <strong>{paymentTotal === null ? 'Valor invalido' : formatBRL(paymentTotal)}</strong></span><span className={total !== null && paymentTotal === total ? 'is-ok' : 'is-warning'}>Diferenca <strong>{total === null || paymentTotal === null ? 'A calcular' : formatBRL(total - paymentTotal)}</strong></span></div>
+        <button type="button" className="button button--secondary button--small" onClick={() => {
+          const key = `payment-${nextPaymentKey.current++}`;
+          setPayments((current) => [...current, { ...paymentDraft(purchase, key), amount: '' }]);
+        }}><Plus size={15}/>Adicionar outra forma de pagamento</button>
+      </section>
+
+      <section className="purchase-v2-operation-section">
+        <header><span>4</span><div><strong>Arquivo da compra</strong><small>Opcional. Nota fiscal, recibo ou comprovante ficara na mesma operacao.</small></div></header>
+        <div className="form-grid form-grid--three">
+          <label className="field">Tipo de documento<select value={documentType} onChange={(event) => setDocumentType(event.target.value as PurchaseDocumentType)}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
+          <label className="field">Numero do documento<input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></label>
+          <label className="field">Arquivo<input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+        </div>
+        <label className="field">Descricao do arquivo<input value={documentDescription} onChange={(event) => setDocumentDescription(event.target.value)} /></label>
+      </section>
+      {error && <div className="form-error">{error}</div>}
+      <div className="modal-actions">
+        <button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button>
+        <button className="button button--primary" disabled={saving || Boolean(requiresMasterDistribution) || selectedPendingMasterDestinations.length > 0}>{saving ? 'Salvando compra...' : 'Salvar compra completa'}</button>
+      </div>
+    </form>
+  ) : null;
 
   if (embedded) return content;
   return (

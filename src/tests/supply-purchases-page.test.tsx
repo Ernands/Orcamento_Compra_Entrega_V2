@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,6 +77,52 @@ const purchase: PurchaseV2 = {
   attachments: [],
   quoteAttachments: [{ id: 'qa-1', quoteId: 'quote-1', originalName: 'proposta.pdf', storagePath: 'cotacoes/quote-1/proposta.pdf', mimeType: 'application/pdf', sizeBytes: 1000, description: null, documentType: 'quote', createdAt: '2026-08-31T12:00:00Z' }],
 };
+
+function multiDestinationPurchase(): PurchaseV2 {
+  const multiItem: PurchaseItemV2 = {
+    ...baseItem,
+    quantityApproved: '3',
+    purchasedQuantity: '0',
+    approvedLineTotal: '300',
+    actualTotal: '0',
+    destinations: [
+      {
+        id: 'destination-1', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-1', destinationType: 'store',
+        profileId: null, storeId: 'store-1', label: 'LOJ-001', state: 'CE', destinationCount: 1,
+        quantity: '1', unit: 'un', quotedShippingType: 'free', quotedShippingAmount: '0', quotedDeliveryDays: 5,
+        notes: null, position: 0, distributionStatus: 'confirmed', snapshotSource: 'approval',
+        stores: [{ id: 'ds-1', purchaseDestinationId: 'destination-1', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', allocatedQuantity: '1', allocationSource: 'direct' }],
+      },
+      {
+        id: 'destination-2', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-2', destinationType: 'store',
+        profileId: null, storeId: 'store-2', label: 'LOJ-002', state: 'RN', destinationCount: 1,
+        quantity: '1', unit: 'un', quotedShippingType: 'free', quotedShippingAmount: '0', quotedDeliveryDays: 6,
+        notes: null, position: 1, distributionStatus: 'confirmed', snapshotSource: 'approval',
+        stores: [{ id: 'ds-2', purchaseDestinationId: 'destination-2', storeId: 'store-2', code: 'LOJ-002', name: 'Loja Dois', city: 'Natal', state: 'RN', allocatedQuantity: '1', allocationSource: 'direct' }],
+      },
+      {
+        id: 'destination-3', purchaseItemId: 'item-1', sourceQuoteDestinationId: 'qd-3', destinationType: 'store',
+        profileId: null, storeId: 'store-3', label: 'LOJ-003', state: 'PB', destinationCount: 1,
+        quantity: '1', unit: 'un', quotedShippingType: 'free', quotedShippingAmount: '0', quotedDeliveryDays: 7,
+        notes: null, position: 2, distributionStatus: 'confirmed', snapshotSource: 'approval',
+        stores: [{ id: 'ds-3', purchaseDestinationId: 'destination-3', storeId: 'store-3', code: 'LOJ-003', name: 'Loja Tres', city: 'Joao Pessoa', state: 'PB', allocatedQuantity: '1', allocationSource: 'direct' }],
+      },
+    ],
+  };
+  return {
+    ...purchase,
+    status: 'approved',
+    approvedTotal: '300',
+    items: [multiItem],
+    stores: [
+      { id: 'ps-1', storeId: 'store-1', code: 'LOJ-001', name: 'Loja Um', city: 'Fortaleza', state: 'CE', address: 'Rua A', addressSnapshotSource: 'approval' },
+      { id: 'ps-2', storeId: 'store-2', code: 'LOJ-002', name: 'Loja Dois', city: 'Natal', state: 'RN', address: 'Rua B', addressSnapshotSource: 'approval' },
+      { id: 'ps-3', storeId: 'store-3', code: 'LOJ-003', name: 'Loja Tres', city: 'Joao Pessoa', state: 'PB', address: 'Rua C', addressSnapshotSource: 'approval' },
+    ],
+    orders: [],
+    payments: [],
+  };
+}
 
 function renderPage(current: PurchaseV2 = purchase) {
   vi.mocked(listSupplyPurchasesV2).mockResolvedValue([current]);
@@ -180,7 +226,7 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
-    expect(within(dialog).getByText(/Pendente · frete nao informado/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Pendente · revise quantidades e frete/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
     expect(within(dialog).getByText('Informe o frete realizado. Use 0 quando o frete for gratis.')).toBeInTheDocument();
     expect(createSupplyPurchaseOperationV2).not.toHaveBeenCalled();
@@ -226,6 +272,93 @@ describe('SupplyPurchasesPage V2', () => {
         purchaseDestinationId: 'destination-1',
         storeAllocations: [{ storeId: 'store-1', quantity: '10' }],
       })],
+    }));
+  });
+
+  it('registra dois destinos em uma unica compra e rateia o frete total sem perder centavos', async () => {
+    const user = userEvent.setup();
+    renderPage(multiDestinationPurchase());
+
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+
+    await user.click(within(dialog).getByLabelText('Selecionar destino LOJ-001'));
+    await user.click(within(dialog).getByLabelText('Selecionar destino LOJ-002'));
+    fireEvent.change(within(dialog).getByLabelText('Frete total realizado'), { target: { value: '1,01' } });
+
+    await waitFor(() => expect(within(dialog).getByLabelText('Valor total')).toHaveValue('201,01'));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [
+        expect.objectContaining({
+          purchaseDestinationId: 'destination-1',
+          quantity: '1',
+          shippingAmount: '0,51',
+          storeAllocations: [{ storeId: 'store-1', quantity: '1' }],
+        }),
+        expect.objectContaining({
+          purchaseDestinationId: 'destination-2',
+          quantity: '1',
+          shippingAmount: '0,50',
+          storeAllocations: [{ storeId: 'store-2', quantity: '1' }],
+        }),
+      ],
+      payments: [expect.objectContaining({ amount: '201,01' })],
+    }));
+  });
+
+  it('permite selecionar todos os destinos com saldo em uma unica operacao', async () => {
+    const user = userEvent.setup();
+    renderPage(multiDestinationPurchase());
+
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos os destinos com saldo' }));
+    expect(within(dialog).getByLabelText('Selecionar destino LOJ-001')).toBeChecked();
+    expect(within(dialog).getByLabelText('Selecionar destino LOJ-002')).toBeChecked();
+    expect(within(dialog).getByLabelText('Selecionar destino LOJ-003')).toBeChecked();
+    await user.type(within(dialog).getByLabelText('Frete total realizado'), '0');
+
+    await waitFor(() => expect(within(dialog).getByLabelText('Valor total')).toHaveValue('300'));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+
+    const call = vi.mocked(createSupplyPurchaseOperationV2).mock.calls.at(-1)?.[0];
+    expect(call?.lines).toHaveLength(3);
+    expect(call?.lines.map((line) => line.purchaseDestinationId)).toEqual([
+      'destination-1', 'destination-2', 'destination-3',
+    ]);
+  });
+
+  it('permite informar frete individual para cada destino selecionado', async () => {
+    const user = userEvent.setup();
+    renderPage(multiDestinationPurchase());
+
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+
+    await user.click(within(dialog).getByLabelText('Selecionar destino LOJ-001'));
+    await user.click(within(dialog).getByLabelText('Selecionar destino LOJ-003'));
+    await user.click(within(dialog).getByRole('button', { name: 'Frete individual por destino' }));
+    await user.type(within(dialog).getByLabelText('Frete do destino LOJ-001'), '2');
+    await user.type(within(dialog).getByLabelText('Frete do destino LOJ-003'), '3');
+
+    await waitFor(() => expect(within(dialog).getByLabelText('Valor total')).toHaveValue('205'));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [
+        expect.objectContaining({ purchaseDestinationId: 'destination-1', shippingAmount: '2' }),
+        expect.objectContaining({ purchaseDestinationId: 'destination-3', shippingAmount: '3' }),
+      ],
+      payments: [expect.objectContaining({ amount: '205' })],
     }));
   });
 
