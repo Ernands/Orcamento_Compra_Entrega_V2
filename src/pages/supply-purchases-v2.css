@@ -45,6 +45,43 @@
 .purchase-v2-card__header > div:not(.row-actions) { min-width: 0; display: grid; gap: 3px; }
 .purchase-v2-card__header small { color: var(--muted); font-size: .72rem; }
 .purchase-v2-card-actions { flex-wrap: wrap; justify-content: flex-end; }
+.purchase-v2-card__collapsed-items {
+  display: grid;
+  gap: 6px;
+  padding: 9px 16px 11px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: var(--surface);
+}
+.purchase-v2-card__collapsed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+.purchase-v2-card__collapsed-item > span {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.purchase-v2-card__collapsed-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .82rem;
+}
+.purchase-v2-card__collapsed-item small { color: var(--muted); font-size: .68rem; white-space: nowrap; }
+.purchase-v2-card__collapsed-quantities {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.purchase-v2-card__collapsed-quantities small { display: inline-flex; gap: 4px; align-items: baseline; }
+.purchase-v2-card__collapsed-quantities strong { overflow: visible; font-size: .72rem; }
+.purchase-v2-card__collapsed-item a { flex: 0 0 auto; color: var(--primary); font-size: .74rem; font-weight: 800; text-decoration: none; }
+.purchase-v2-card__collapsed-item a:hover { text-decoration: underline; }
 .purchase-v2-status-spotlight { display: grid; gap: 4px; justify-items: start; }
 .purchase-v2-status-spotlight > small { font-size: .62rem; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
 .purchase-v2-status-spotlight .status-badge { min-height: 32px; padding: 6px 11px; font-size: .76rem; border: 1px solid transparent; }
