@@ -324,7 +324,7 @@ function RegisterPurchaseModal({
       return next;
     }
     const remaining = remainingDestinationQuantity(entry, purchase);
-    let selected = 0n;
+    let selected: bigint;
     try { selected = selectedQuantity.trim() ? quantityToThousandths(selectedQuantity) : 0n; } catch { return next; }
     if (entry.distributionStatus === 'confirmed' && selected === remaining) {
       for (const store of entry.stores) {
