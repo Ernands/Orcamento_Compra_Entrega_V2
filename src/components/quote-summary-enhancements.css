@@ -188,14 +188,26 @@
     background: #fbfcfb;
   }
 
-  /* A lista completa continua nos dados da cotacao, mas nao alonga a linha. */
+  /* Mantem a linha compacta, mas permite conferir toda a lista de lojas rolando dentro da celula. */
   .quote-row > span:nth-child(3) {
-    display: -webkit-box !important;
-    overflow: hidden;
+    display: block !important;
+    max-height: 58px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 6px;
     color: #4f5b56;
     line-height: 1.42;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    scrollbar-width: thin;
+    scrollbar-color: #9aa8a2 transparent;
+  }
+
+  .quote-row > span:nth-child(3)::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .quote-row > span:nth-child(3)::-webkit-scrollbar-thumb {
+    background: #9aa8a2;
+    border-radius: 999px;
   }
 
   .quote-row > span:nth-child(4) {
