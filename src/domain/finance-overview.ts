@@ -21,6 +21,7 @@ export interface FinanceStoreItemDetailRow {
   itemCategory: string | null;
   itemSubcategory?: string | null;
   itemGroupName?: string | null;
+  itemFinancialGroup?: 'equipment' | 'furniture' | 'general' | null;
   unit: string;
   approvedQuantity: bigint;
   budgetCents: bigint;
@@ -161,6 +162,7 @@ export function buildFinanceStoreItemRows(
           itemCategory: item.itemCategory,
           itemSubcategory: item.catalogSubcategory || null,
           itemGroupName: item.catalogGroupName || null,
+          itemFinancialGroup: item.catalogFinancialGroup || null,
           unit: item.unit,
           approvedQuantity,
           budgetCents,
@@ -204,7 +206,9 @@ export function financeItemCompositionGroup(
   subcategory: string | null = null,
   groupName: string | null = null,
   itemName: string | null = null,
+  financialGroup: 'equipment' | 'furniture' | 'general' | null = null,
 ): Exclude<FinanceStoreCompositionKey, 'works'> {
+  if (financialGroup) return financialGroup;
   const normalized = normalizeCategory([subcategory, groupName, category, itemName].filter(Boolean).join(' '));
   if (
     normalized.includes('mobili') ||
@@ -294,6 +298,7 @@ export function buildFinanceStoreCompositionRows(values: {
       item.itemSubcategory,
       item.itemGroupName,
       item.itemName,
+      item.itemFinancialGroup || null,
     );
     const row = rows.get(group)!;
     row.budgetCents += item.budgetCents;
@@ -318,6 +323,7 @@ export function buildFinanceStoreCompositionRows(values: {
         item?.catalogSubcategory || null,
         item?.catalogGroupName || null,
         item?.itemName || line?.itemName || null,
+        item?.catalogFinancialGroup || null,
       );
       groupWeights.set(group, (groupWeights.get(group) || 0n) + costLine.costCents);
     });
