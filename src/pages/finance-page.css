@@ -95,7 +95,7 @@
 
 .finance-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
   gap: 7px;
   padding: 6px;
   background: #e9eeeb;
@@ -127,6 +127,86 @@
   background: #fff;
   border-color: #c9d4cf;
   box-shadow: 0 2px 8px rgb(30 54 46 / 8%);
+}
+
+
+.finance-kpis .finance-kpi--negative {
+  color: #8d3229;
+  background: #fff0ee;
+  border-color: #eac5c0;
+}
+
+.finance-kpis .finance-kpi--negative span,
+.finance-kpis .finance-kpi--negative svg {
+  color: #9c4b43;
+}
+
+.finance-overview-table {
+  min-width: 1780px;
+}
+
+.finance-difference--positive,
+.finance-difference--negative {
+  white-space: nowrap;
+}
+
+.finance-difference--positive {
+  color: #155f45;
+}
+
+.finance-difference--negative {
+  color: #9b342b;
+}
+
+.finance-document-state {
+  width: fit-content;
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 27px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.finance-document-state--complete {
+  color: #155f45 !important;
+  background: #e5f4ed;
+  border-color: #b9ddcf;
+}
+
+.finance-document-state--partial {
+  color: #78560c !important;
+  background: #fff6d8;
+  border-color: #ead28a;
+}
+
+.finance-document-state--pending {
+  color: #8d3229 !important;
+  background: #fff0ee;
+  border-color: #eac5c0;
+}
+
+.finance-document-state--none {
+  color: #53615c !important;
+  background: #edf0ee;
+  border-color: #d4dad6;
+}
+
+.finance-budget-edit {
+  margin-top: 5px;
+  padding: 0;
+  color: var(--brand);
+  background: transparent;
+  border: 0;
+  font-size: 0.66rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.finance-budget-edit:hover {
+  text-decoration: underline;
 }
 
 .finance-panel {
