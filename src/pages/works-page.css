@@ -9,8 +9,61 @@
 
 .works-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
-  gap: 10px;
+  gap: 12px;
+}
+
+.works-kpis--grouped {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.works-kpi-group {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(31 52 68 / 6%);
+}
+
+.works-kpi-group > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.works-kpi-group__title {
+  display: block;
+  margin: 0 0 9px 2px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.works-kpi-group--budget {
+  background: #eaf3fb;
+  border-color: #9ec2e6;
+}
+
+.works-kpi-group--budget .works-kpi-group__title {
+  color: #1e5a8a;
+}
+
+.works-kpi-group--cash {
+  background: #fff4e7;
+  border-color: #e8c38b;
+}
+
+.works-kpi-group--cash .works-kpi-group__title {
+  color: #9a5a0a;
+}
+
+.works-kpi-group--documents {
+  background: #e9f7f0;
+  border-color: #98d5b6;
+}
+
+.works-kpi-group--documents .works-kpi-group__title {
+  color: #177354;
 }
 
 .works-kpis article {
@@ -46,43 +99,26 @@
   white-space: nowrap;
 }
 
-.works-kpis article:nth-child(1),
-.works-kpis article:nth-child(2) {
-  background: #f7faf9;
-  border-color: #dce6e2;
+.works-kpi-group--budget article:last-child {
+  color: #fff;
+  background: #2e78b7;
+  border-color: #2e78b7;
 }
 
-.works-kpis article:nth-child(3),
-.works-kpis article:nth-child(4) {
-  background: #f0f8f5;
-  border-color: #c9e0d7;
-}
-
-.works-kpis article:nth-child(2),
-.works-kpis article:nth-child(4) {
-  position: relative;
-}
-
-.works-kpis article:nth-child(2)::after,
-.works-kpis article:nth-child(4)::after {
-  position: absolute;
-  top: 10px;
-  right: -6px;
-  bottom: 10px;
-  width: 1px;
-  background: #d7dfdc;
-  content: '';
+.works-kpi-group--budget article:last-child span,
+.works-kpi-group--budget article:last-child svg {
+  color: #e8f4ff;
 }
 
 .works-kpis .works-kpi--paid {
   color: #fff;
-  background: var(--brand);
-  border-color: var(--brand);
+  background: #c97a16;
+  border-color: #c97a16;
 }
 
 .works-kpis .works-kpi--paid span,
 .works-kpis .works-kpi--paid svg {
-  color: #d9eee7;
+  color: #fff1dc;
 }
 
 .works-kpis .works-kpi--warning {
@@ -93,6 +129,17 @@
 .works-kpis .works-kpi--warning svg,
 .works-kpis .works-kpi--warning strong {
   color: #8a6514;
+}
+
+.works-kpis .works-kpi--ok {
+  color: #fff;
+  background: #138a63;
+  border-color: #138a63;
+}
+
+.works-kpis .works-kpi--ok span,
+.works-kpis .works-kpi--ok svg {
+  color: #d9eee7;
 }
 
 .works-controls {
@@ -143,9 +190,9 @@
   justify-content: space-between;
   gap: 18px;
   padding: 15px 18px;
-  background: var(--surface-soft);
-  border-bottom: 1px solid var(--line);
-  border-left: 4px solid var(--brand);
+  background: #f0f9f5;
+  border-bottom: 1px solid #c9e0d7;
+  border-left: 4px solid #138a63;
 }
 
 .works-list__heading h3,
@@ -196,8 +243,12 @@
   display: none;
 }
 
+.works-card:nth-of-type(even) > summary {
+  background: #f4f8f6;
+}
+
 .works-card > summary:hover {
-  background: #fbfcfb;
+  background: #eaf3ef;
 }
 
 .works-card > summary > div {
@@ -335,9 +386,15 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  background: #f7faf8;
-  border-bottom: 1px solid var(--line);
-  border-left: 3px solid #c9e0d7;
+  background: #fff8ef;
+  border-bottom: 1px solid #ead7b8;
+  border-left: 3px solid #c97a16;
+}
+
+.works-detail-block + .works-detail-block > header {
+  background: #f0f9f5;
+  border-bottom-color: #c9e0d7;
+  border-left-color: #138a63;
 }
 
 .works-detail-block > header > div {
@@ -481,8 +538,12 @@
     display: none;
   }
 
-  .works-kpis {
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  .works-kpis--grouped {
+    grid-template-columns: 1fr;
+  }
+
+  .works-kpi-group > div {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
   }
 
   .works-card > summary {
@@ -538,7 +599,7 @@
 }
 
 @media (max-width: 620px) {
-  .works-kpis,
+  .works-kpi-group > div,
   .works-controls,
   .works-card__meta {
     grid-template-columns: 1fr;
