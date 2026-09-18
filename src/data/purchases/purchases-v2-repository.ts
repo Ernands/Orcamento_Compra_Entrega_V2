@@ -97,6 +97,12 @@ type PurchaseStoreRow = {
   store_city_snapshot: string; store_state_snapshot: string; store_address_snapshot: string | null;
   store_address_snapshot_source: string | null;
 };
+type SupplyItemCatalogRow = {
+  id: string;
+  subcategory: string | null;
+  group_name: string | null;
+};
+
 type PurchaseItemRow = {
   id: string; purchase_id: string; source_quote_item_id: string | null; supply_item_id: string;
   item_code_snapshot: string; item_name_snapshot: string; item_description_snapshot: string | null;
@@ -178,11 +184,12 @@ function mapAttachmentStore(row: AttachmentStoreRow): PurchaseAttachmentStoreV2 
 }
 
 export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
-  const [purchaseResult, storeResult, itemResult, destinationResult, destinationStoreResult, orderResult,
+  const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult] = await Promise.all([
     supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
     supabase.from('supply_purchase_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
+    supabase.from('supply_items' as never).select('id, subcategory, group_name'),
     supabase.from('supply_purchase_destinations' as never).select('*').order('position'),
     supabase.from('supply_purchase_destination_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
@@ -193,13 +200,15 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
   ]);
-  const resultWithError = [purchaseResult, storeResult, itemResult, destinationResult, destinationStoreResult, orderResult,
+  const resultWithError = [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult].find((result) => result.error);
   if (resultWithError?.error) throw resultWithError.error;
 
   const purchases = purchaseResult.data as unknown as PurchaseRow[];
   const stores = storeResult.data as unknown as PurchaseStoreRow[];
   const items = itemResult.data as unknown as PurchaseItemRow[];
+  const catalogItems = catalogItemResult.data as unknown as SupplyItemCatalogRow[];
+  const catalogItemsById = new Map(catalogItems.map((item) => [item.id, item]));
   const destinations = destinationResult.data as unknown as DestinationRow[];
   const destinationStores = destinationStoreResult.data as unknown as DestinationStoreRow[];
   const orders = orderResult.data as unknown as OrderRow[];
@@ -224,7 +233,10 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     items: items.filter((item) => item.purchase_id === purchase.id).map((item): PurchaseItemV2 => ({
       id: item.id, purchaseId: item.purchase_id, sourceQuoteItemId: item.source_quote_item_id, supplyItemId: item.supply_item_id,
       itemCode: item.item_code_snapshot, itemName: item.item_name_snapshot, itemDescription: item.item_description_snapshot,
-      itemCategory: item.item_category_snapshot, itemArea: item.item_area_snapshot, brandReference: item.brand_reference_snapshot,
+      itemCategory: item.item_category_snapshot,
+      catalogSubcategory: catalogItemsById.get(item.supply_item_id)?.subcategory || null,
+      catalogGroupName: catalogItemsById.get(item.supply_item_id)?.group_name || null,
+      itemArea: item.item_area_snapshot, brandReference: item.brand_reference_snapshot,
       technicalSpecification: item.technical_specification_snapshot, offeredBrandModel: item.offered_brand_model_snapshot,
       productUrl: item.product_url_snapshot, storeId: item.store_id, storeCode: item.store_code_snapshot,
       quantityApproved: stringValue(item.quantity_approved), purchasedQuantity: stringValue(item.purchased_quantity), unit: item.unit,
