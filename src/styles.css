@@ -1757,7 +1757,7 @@ svg {
 .access-list__header,
 .access-row {
   display: grid;
-  grid-template-columns: minmax(210px, 1.3fr) minmax(125px, 0.7fr) minmax(170px, 1fr) 115px 132px;
+  grid-template-columns: minmax(210px, 1.3fr) minmax(125px, 0.7fr) minmax(170px, 1fr) 115px minmax(210px, auto);
   gap: 16px;
   align-items: center;
 }
@@ -1826,7 +1826,21 @@ svg {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 3px;
+  gap: 5px;
+}
+
+.access-password-button {
+  min-height: 34px;
+  padding: 6px 9px;
+  color: var(--brand);
+  border-color: #b9d2c9;
+  white-space: nowrap;
+}
+
+.access-password-button:hover:not(:disabled) {
+  color: var(--brand-dark);
+  background: #edf6f2;
+  border-color: #9fc6b8;
 }
 
 .modal-backdrop {
@@ -1976,7 +1990,7 @@ svg {
   .access-row {
     grid-template-columns:
       minmax(190px, 1.2fr) minmax(110px, 0.7fr) minmax(130px, 0.8fr)
-      102px 120px;
+      102px minmax(200px, auto);
     gap: 10px;
   }
   .filter-bar {
