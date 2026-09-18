@@ -629,6 +629,7 @@ function WorkDocumentModal({
 export function WorksPage() {
   const { can } = useSession();
   const canManage = can('works.manage');
+  const canDocuments = can('works.documents_view');
   const [stores, setStores] = useState<Store[]>([]);
   const [services, setServices] = useState<WorkService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -711,6 +712,7 @@ export function WorksPage() {
   );
 
   const openDocument = async (service: WorkService, documentId: string) => {
+    if (!canDocuments) return;
     const document = service.documents.find((entry) => entry.id === documentId);
     if (!document?.storagePath) return;
     setOpeningDocumentId(document.id);
@@ -963,25 +965,26 @@ export function WorksPage() {
                     )}
                   </section>
 
-                  <section className="works-detail-block">
-                    <header>
-                      <div>
-                        <ReceiptText size={17} />
-                        <strong>Notas / recibos</strong>
-                        <span>Um serviço pode possuir vários documentos.</span>
-                      </div>
-                      {canManage && (
-                        <button
-                          className="button button--secondary button--small"
-                          onClick={() => setDocumentService(service)}
-                        >
-                          <Plus size={15} />
-                          Adicionar documento
-                        </button>
-                      )}
-                    </header>
-                    {service.documents.length ? (
-                      <div className="works-documents">
+                  {canDocuments && (
+                    <section className="works-detail-block">
+                      <header>
+                        <div>
+                          <ReceiptText size={17} />
+                          <strong>Notas / recibos</strong>
+                          <span>Um serviço pode possuir vários documentos.</span>
+                        </div>
+                        {canManage && (
+                          <button
+                            className="button button--secondary button--small"
+                            onClick={() => setDocumentService(service)}
+                          >
+                            <Plus size={15} />
+                            Adicionar documento
+                          </button>
+                        )}
+                      </header>
+                      {service.documents.length ? (
+                        <div className="works-documents">
                         {service.documents.map((document) => (
                           <article key={document.id}>
                             <FileText size={19} />
@@ -1018,8 +1021,9 @@ export function WorksPage() {
                       </div>
                     ) : (
                       <p className="works-empty-line">Nenhuma nota ou recibo cadastrado.</p>
-                    )}
-                  </section>
+                      )}
+                    </section>
+                  )}
                 </div>
               </details>
             );
@@ -1044,7 +1048,7 @@ export function WorksPage() {
           onSaved={load}
         />
       )}
-      {documentService && (
+      {canDocuments && documentService && (
         <WorkDocumentModal
           key={documentService.id}
           service={documentService}
