@@ -14,9 +14,9 @@ export interface AccessAdminData {
   users: AccessUser[];
   profiles: Profile[];
   stores: Pick<Store, 'id' | 'code' | 'name'>[];
-  permissions: AccessPermission[];
-  profilePermissions: Array<{ profileId: string; permissionId: string }>;
-  userPermissionOverrides: Array<{
+  permissions?: AccessPermission[];
+  profilePermissions?: Array<{ profileId: string; permissionId: string }>;
+  userPermissionOverrides?: Array<{
     userId: string;
     permissionId: string;
     effect: PermissionOverrideEffect;
