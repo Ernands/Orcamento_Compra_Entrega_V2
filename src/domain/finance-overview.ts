@@ -19,6 +19,8 @@ export interface FinanceStoreItemDetailRow {
   itemCode: string;
   itemName: string;
   itemCategory: string | null;
+  itemSubcategory: string | null;
+  itemGroupName: string | null;
   unit: string;
   approvedQuantity: bigint;
   budgetCents: bigint;
@@ -157,6 +159,8 @@ export function buildFinanceStoreItemRows(
           itemCode: item.itemCode,
           itemName: item.itemName,
           itemCategory: item.itemCategory,
+          itemSubcategory: item.catalogSubcategory || null,
+          itemGroupName: item.catalogGroupName || null,
           unit: item.unit,
           approvedQuantity,
           budgetCents,
@@ -197,8 +201,11 @@ function normalizeCategory(value: string | null): string {
 
 export function financeItemCompositionGroup(
   category: string | null,
+  subcategory: string | null = null,
+  groupName: string | null = null,
+  itemName: string | null = null,
 ): Exclude<FinanceStoreCompositionKey, 'works'> {
-  const normalized = normalizeCategory(category);
+  const normalized = normalizeCategory([subcategory, groupName, category, itemName].filter(Boolean).join(' '));
   if (
     normalized.includes('mobili') ||
     normalized.includes('moveis') ||
@@ -213,7 +220,13 @@ export function financeItemCompositionGroup(
     normalized.includes('climat') ||
     normalized.includes('eletron') ||
     normalized.includes('seguranca') ||
-    normalized.includes('impress')
+    normalized.includes('impress') ||
+    normalized.includes('notebook') ||
+    normalized.includes('computador') ||
+    normalized.includes('monitor') ||
+    normalized.includes('webcam') ||
+    normalized.includes('headset') ||
+    normalized.includes('nobreak')
   ) {
     return 'equipment';
   }
@@ -276,7 +289,12 @@ export function buildFinanceStoreCompositionRows(values: {
   ]);
 
   buildFinanceStoreItemRows(values.purchases, values.storeId).forEach((item) => {
-    const group = financeItemCompositionGroup(item.itemCategory);
+    const group = financeItemCompositionGroup(
+      item.itemCategory,
+      item.itemSubcategory,
+      item.itemGroupName,
+      item.itemName,
+    );
     const row = rows.get(group)!;
     row.budgetCents += item.budgetCents;
     row.realizedCents += item.realizedCents;
@@ -295,7 +313,12 @@ export function buildFinanceStoreCompositionRows(values: {
       const item = line?.purchaseItemId
         ? purchaseRow.purchase.items.find((entry) => entry.id === line.purchaseItemId)
         : null;
-      const group = financeItemCompositionGroup(item?.itemCategory || null);
+      const group = financeItemCompositionGroup(
+        item?.itemCategory || null,
+        item?.catalogSubcategory || null,
+        item?.catalogGroupName || null,
+        item?.itemName || line?.itemName || null,
+      );
       groupWeights.set(group, (groupWeights.get(group) || 0n) + costLine.costCents);
     });
 
