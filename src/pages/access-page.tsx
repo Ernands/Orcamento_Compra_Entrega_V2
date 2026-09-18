@@ -106,7 +106,7 @@ export function AccessPage() {
 
   const permissionGroups = useMemo(() => {
     if (!data) return [];
-    const grouped = new Map<string, typeof data.permissions>();
+    const grouped = new Map<string, NonNullable<AccessAdminData['permissions']>>();
     (data.permissions || []).forEach((permission) => {
       const current = grouped.get(permission.moduleName) || [];
       current.push(permission);
