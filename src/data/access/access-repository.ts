@@ -50,9 +50,8 @@ export async function loadAccessAdminData(): Promise<AccessAdminData> {
     supabase.from('perfil_permissoes').select('perfil_id, permissao_id'),
     supabase
       .from('usuario_permissoes')
-      .select('usuario_id, permissao_id, efeito')
-      .is('loja_id', null)
-      .is('expires_at', null),
+      .select('usuario_id, permissao_id, efeito, expires_at')
+      .is('loja_id', null),
   ]);
 
   const error =
@@ -145,11 +144,16 @@ export async function loadAccessAdminData(): Promise<AccessAdminData> {
       profileId: row.perfil_id,
       permissionId: row.permissao_id,
     })),
-    userPermissionOverrides: userPermissionsResult.data.map((row) => ({
-      userId: row.usuario_id,
-      permissionId: row.permissao_id,
-      effect: row.efeito as PermissionOverrideEffect,
-    })),
+    userPermissionOverrides: userPermissionsResult.data
+      .filter(
+        (row) =>
+          !row.expires_at || new Date(row.expires_at).getTime() > Date.now(),
+      )
+      .map((row) => ({
+        userId: row.usuario_id,
+        permissionId: row.permissao_id,
+        effect: row.efeito as PermissionOverrideEffect,
+      })),
   };
 }
 
