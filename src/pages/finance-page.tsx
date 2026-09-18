@@ -633,6 +633,9 @@ export function FinancePage() {
     [filteredOverview],
   );
 
+  const availableBbCents = overviewKpis.budgetBbCents - overviewKpis.budgetTotalCents;
+
+
   const filteredPayments = useMemo(
     () =>
       paymentEvents
@@ -806,6 +809,13 @@ export function FinancePage() {
                 <Landmark size={21} />
                 <span>Verba BB</span>
                 <strong>{formatBRL(overviewKpis.budgetBbCents)}</strong>
+                <small
+                  className={`finance-bb-available ${
+                    availableBbCents < 0n ? 'is-negative' : 'is-positive'
+                  }`}
+                >
+                  Disponível BB: {formatBRL(availableBbCents)}
+                </small>
               </article>
               <article>
                 <ReceiptText size={21} />
