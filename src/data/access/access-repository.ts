@@ -3,6 +3,7 @@ import type {
   AccessPermission,
   AccessPermissionOverride,
   AccessUser,
+  PermissionOverrideEffect,
   Profile,
   Store,
 } from '../../domain/types';
