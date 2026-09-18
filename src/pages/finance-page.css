@@ -101,6 +101,23 @@
   white-space: nowrap;
 }
 
+.finance-bb-available {
+  grid-column: 2;
+  margin-top: 1px;
+  font-size: 0.62rem;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.finance-bb-available.is-positive {
+  color: #177354;
+}
+
+.finance-bb-available.is-negative {
+  color: #a33a32;
+}
+
 .finance-kpis .finance-kpi--primary {
   color: #fff;
   background: var(--brand);
