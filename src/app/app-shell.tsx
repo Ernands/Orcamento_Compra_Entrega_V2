@@ -6,6 +6,7 @@ import {
   ChartNoAxesCombined,
   KeyRound,
   Landmark,
+  HardHat,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -40,6 +41,7 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/cotacoes': 'Cotacoes',
   '/suprimentos/compras': 'Compras',
   '/suprimentos/comparativo': 'Comparativo',
+  '/obras': 'Obras e Serviços',
   '/financeiro': 'Financeiro',
 };
 
@@ -94,8 +96,10 @@ export function AppShell() {
     can('items.view') || can('suppliers.view') || can('quotes.view') || can('purchases.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
-  const title = location.pathname.startsWith('/suprimentos/itens/')
-    ? 'Detalhe do item'
+  const title = location.pathname.startsWith('/financeiro/lojas/')
+    ? 'Detalhe financeiro da loja'
+    : location.pathname.startsWith('/suprimentos/itens/')
+      ? 'Detalhe do item'
     : location.pathname.startsWith('/lojas/')
       ? location.pathname.endsWith('/anexos')
         ? 'Anexos da loja'
@@ -302,6 +306,16 @@ export function AppShell() {
                 )}
               </>
             )}
+          </>
+        )}
+
+        {can('works.view') && (
+          <>
+            {!compact && <span className="nav-section nav-section--spaced">Obras</span>}
+            <NavLink to="/obras" onClick={() => setMobileOpen(false)}>
+              <HardHat size={19} />
+              Obras e Serviços
+            </NavLink>
           </>
         )}
 

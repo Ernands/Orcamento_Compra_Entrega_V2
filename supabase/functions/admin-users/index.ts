@@ -15,6 +15,41 @@ function storeIdsFrom(value: unknown): string[] | null {
   return [...new Set(value as string[])];
 }
 
+type PermissionOverride = {
+  permissionId: string;
+  effect: 'grant' | 'deny';
+};
+
+function permissionOverridesFrom(value: unknown): PermissionOverride[] | null {
+  if (!Array.isArray(value) || value.length > 250) return null;
+
+  const result: PermissionOverride[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (
+      typeof entry !== 'object' ||
+      entry === null ||
+      !('permissionId' in entry) ||
+      !('effect' in entry)
+    ) {
+      return null;
+    }
+    const permissionId = (entry as { permissionId?: unknown }).permissionId;
+    const effect = (entry as { effect?: unknown }).effect;
+    if (
+      typeof permissionId !== 'string' ||
+      !isUuid(permissionId) ||
+      (effect !== 'grant' && effect !== 'deny') ||
+      seen.has(permissionId)
+    ) {
+      return null;
+    }
+    seen.add(permissionId);
+    result.push({ permissionId, effect });
+  }
+  return result;
+}
+
 async function hasCapability(request: Request, capability: string): Promise<boolean> {
   const { data, error } = await userClient(request).rpc('get_my_capabilities');
   return !error && Array.isArray(data) && data.includes(capability);
@@ -134,6 +169,43 @@ Deno.serve(async (request) => {
           { code: 'UPDATE_FAILED', message: 'Nao foi possivel atualizar o acesso.' },
           400,
         );
+      return json(request, { ok: true });
+    }
+
+    if (action === 'permissions') {
+      if (!(await hasCapability(request, 'access.permissions_manage'))) {
+        return json(request, { code: 'FORBIDDEN' }, 403);
+      }
+
+      const userId = body?.userId;
+      const overrides = permissionOverridesFrom(body?.overrides);
+      if (!isUuid(userId) || overrides === null) {
+        return json(
+          request,
+          { code: 'INVALID_INPUT', message: 'Permissoes invalidas.' },
+          400,
+        );
+      }
+
+      const { error } = await service.rpc('admin_replace_user_permission_overrides', {
+        p_actor_auth_user_id: actor.id,
+        p_user_id: userId,
+        p_overrides: overrides,
+      });
+      if (error) {
+        const ownPermissionChange = error.message.includes('cannot edit own permission overrides');
+        return json(
+          request,
+          {
+            code: ownPermissionChange ? 'SELF_PERMISSION_CHANGE' : 'PERMISSIONS_FAILED',
+            message: ownPermissionChange
+              ? 'Nao e permitido alterar as proprias permissoes por esta tela.'
+              : 'Nao foi possivel atualizar as permissoes.',
+          },
+          ownPermissionChange ? 409 : 400,
+        );
+      }
+
       return json(request, { ok: true });
     }
 

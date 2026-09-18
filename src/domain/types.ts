@@ -29,6 +29,7 @@ export type Capability =
   | 'access.edit'
   | 'access.disable'
   | 'access.reset_password'
+  | 'access.permissions_manage'
   | 'checklists.view'
   | 'checklists.manage'
   | 'implementation.view'
@@ -51,7 +52,17 @@ export type Capability =
   | 'purchases.edit'
   | 'purchases.approve'
   | 'finance.view'
-  | 'finance.manage';
+  | 'finance.manage'
+  | 'finance.overview_view'
+  | 'finance.store_detail_view'
+  | 'finance.store_detail_documents_view'
+  | 'finance.payments_view'
+  | 'finance.stores_ufs_view'
+  | 'finance.reimbursements_view'
+  | 'finance.budget_edit'
+  | 'works.view'
+  | 'works.manage'
+  | 'works.documents_view';
 
 export interface Profile {
   id: string;
@@ -540,6 +551,23 @@ export interface SupplyDashboard {
   recurringItems: SupplyDashboardBreakdown[];
   quotesByStore: SupplyDashboardBreakdown[];
   quotesByItem: SupplyDashboardBreakdown[];
+}
+
+export type PermissionOverrideEffect = 'grant' | 'deny';
+
+export interface AccessPermission {
+  id: string;
+  key: Capability;
+  description: string;
+  moduleKey: string;
+  moduleName: string;
+  actionKey: string;
+  actionName: string;
+}
+
+export interface AccessPermissionOverride {
+  permissionId: string;
+  effect: PermissionOverrideEffect;
 }
 
 export interface AccessUser {

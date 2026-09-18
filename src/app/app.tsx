@@ -5,6 +5,8 @@ import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
 import { FinancePage } from '../pages/finance-page';
+import { FinanceStoreDetailPage } from '../pages/finance-store-detail-page';
+import { WorksPage } from '../pages/works-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
 import { StoreAttachmentsPage } from '../pages/store-attachments-page';
 import { StoreImplementationPage } from '../pages/store-implementation-page';
@@ -19,7 +21,12 @@ import { SupplyNeedsPage } from '../pages/supply-needs-page';
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
-import { RequireCapability, RequirePasswordChanged, RequireSession } from './guards';
+import {
+  AuthorizedHomeRedirect,
+  RequireCapability,
+  RequirePasswordChanged,
+  RequireSession,
+} from './guards';
 import { SessionProvider } from './session-provider';
 
 export function App() {
@@ -37,7 +44,7 @@ export function App() {
               </RequireSession>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<AuthorizedHomeRedirect />} />
             <Route
               path="dashboard"
               element={
@@ -177,10 +184,28 @@ export function App() {
               }
             />
             <Route
+              path="obras"
+              element={
+                <RequireCapability capability="works.view">
+                  <WorksPage />
+                </RequireCapability>
+              }
+            />
+            <Route
               path="financeiro"
               element={
                 <RequireCapability capability="finance.view">
                   <FinancePage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="financeiro/lojas/:storeId"
+              element={
+                <RequireCapability capability="finance.view">
+                  <RequireCapability capability="finance.store_detail_view">
+                    <FinanceStoreDetailPage />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />

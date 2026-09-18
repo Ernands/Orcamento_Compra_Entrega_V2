@@ -2,7 +2,10 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from '../app/session-provider';
-import { loadAccessAdminData } from '../data/access/access-repository';
+import {
+  loadAccessAdminData,
+  resetAccessUserPassword,
+} from '../data/access/access-repository';
 import { AccessPage } from '../pages/access-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
@@ -88,6 +91,41 @@ describe('AccessPage', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByLabelText('CPF')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Senha inicial/)).toBeInTheDocument();
+  });
+
+  it('permite alterar a senha de outro usuario com confirmacao', async () => {
+    const user = userEvent.setup();
+    sessionWith(['access.view', 'access.reset_password']);
+    vi.mocked(resetAccessUserPassword).mockResolvedValue();
+
+    render(<AccessPage />);
+    await screen.findByText('Joana Consulta');
+
+    await user.click(screen.getByRole('button', { name: 'Alterar senha de Joana Consulta' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const testPassword = 'test-only-password-123';
+    await user.type(screen.getByLabelText('Nova senha'), testPassword);
+    await user.type(screen.getByLabelText('Confirmar nova senha'), testPassword);
+    await user.click(screen.getByRole('button', { name: 'Alterar senha' }));
+
+    expect(resetAccessUserPassword).toHaveBeenCalledWith('user-2', testPassword);
+    expect(await screen.findByText(/Senha alterada/)).toBeInTheDocument();
+  });
+
+  it('impede alteracao quando a confirmacao da senha diverge', async () => {
+    const user = userEvent.setup();
+    sessionWith(['access.view', 'access.reset_password']);
+    render(<AccessPage />);
+    await screen.findByText('Joana Consulta');
+
+    await user.click(screen.getByRole('button', { name: 'Alterar senha de Joana Consulta' }));
+    await user.type(screen.getByLabelText('Nova senha'), 'test-only-password-123');
+    await user.type(screen.getByLabelText('Confirmar nova senha'), 'different-test-value-456');
+    await user.click(screen.getByRole('button', { name: 'Alterar senha' }));
+
+    expect(await screen.findByText('A confirmacao nao corresponde a nova senha.')).toBeInTheDocument();
+    expect(resetAccessUserPassword).not.toHaveBeenCalled();
   });
 
   it('usa estrutura responsiva baseada em lista e nao tabela larga', async () => {

@@ -4,6 +4,27 @@ import type { Capability } from '../domain/types';
 import { LoadingScreen } from '../components/ui';
 import { useSession } from './session-provider';
 
+export function authorizedHomePath(capabilities: Capability[]): string {
+  const has = (capability: Capability) => capabilities.includes(capability);
+  if (has('dashboard.view')) return '/dashboard';
+  if (has('stores.view')) return '/lojas';
+  if (has('implementation.view')) return '/implantacao/pendencias';
+  if (has('items.view')) return '/suprimentos/itens';
+  if (has('needs.view')) return '/suprimentos/necessidades';
+  if (has('suppliers.view')) return '/suprimentos/fornecedores';
+  if (has('quotes.view')) return '/suprimentos/cotacoes';
+  if (has('purchases.view')) return '/suprimentos/compras';
+  if (has('works.view')) return '/obras';
+  if (has('finance.view')) return '/financeiro';
+  if (has('access.view')) return '/acessos';
+  return '/alterar-senha';
+}
+
+export function AuthorizedHomeRedirect() {
+  const { viewer } = useSession();
+  return <Navigate to={authorizedHomePath(viewer?.capabilities || [])} replace />;
+}
+
 export function RequireSession({ children }: { children: ReactNode }) {
   const { session, loading, error } = useSession();
   const location = useLocation();
@@ -22,8 +43,12 @@ export function RequireCapability({
   capability: Capability;
   children: ReactNode;
 }) {
-  const { can } = useSession();
-  return can(capability) ? children : <Navigate to="/lojas" replace />;
+  const { can, viewer } = useSession();
+  return can(capability) ? (
+    children
+  ) : (
+    <Navigate to={authorizedHomePath(viewer?.capabilities || [])} replace />
+  );
 }
 
 export function RequirePasswordChanged({ children }: { children: ReactNode }) {
