@@ -753,32 +753,47 @@ export function WorksPage() {
         </div>
       </header>
 
-      <section className="works-kpis">
-        <article>
-          <HardHat size={21} />
-          <span>Orçado em obras</span>
-          <strong>{formatBRL(totals.budgetCents)}</strong>
-        </article>
-        <article>
-          <Building2 size={21} />
-          <span>Contratado</span>
-          <strong>{formatBRL(totals.contractedCents)}</strong>
-        </article>
-        <article className="works-kpi--paid">
-          <WalletCards size={21} />
-          <span>Pago</span>
-          <strong>{formatBRL(totals.paidCents)}</strong>
-        </article>
-        <article>
-          <CalendarDays size={21} />
-          <span>A pagar</span>
-          <strong>{formatBRL(totals.payableCents)}</strong>
-        </article>
-        <article className={totals.missingDocumentsCents > 0n ? 'works-kpi--warning' : ''}>
-          <ReceiptText size={21} />
-          <span>Falta documentar</span>
-          <strong>{formatBRL(totals.missingDocumentsCents)}</strong>
-        </article>
+      <section className="works-kpis works-kpis--grouped">
+        <div className="works-kpi-group works-kpi-group--budget">
+          <span className="works-kpi-group__title">Planejamento</span>
+          <div>
+            <article>
+              <HardHat size={21} />
+              <span>Orçado em obras</span>
+              <strong>{formatBRL(totals.budgetCents)}</strong>
+            </article>
+            <article>
+              <Building2 size={21} />
+              <span>Contratado</span>
+              <strong>{formatBRL(totals.contractedCents)}</strong>
+            </article>
+          </div>
+        </div>
+        <div className="works-kpi-group works-kpi-group--cash">
+          <span className="works-kpi-group__title">Financeiro</span>
+          <div>
+            <article className="works-kpi--paid">
+              <WalletCards size={21} />
+              <span>Pago</span>
+              <strong>{formatBRL(totals.paidCents)}</strong>
+            </article>
+            <article>
+              <CalendarDays size={21} />
+              <span>A pagar</span>
+              <strong>{formatBRL(totals.payableCents)}</strong>
+            </article>
+          </div>
+        </div>
+        <div className="works-kpi-group works-kpi-group--documents">
+          <span className="works-kpi-group__title">Documentação</span>
+          <div>
+            <article className={totals.missingDocumentsCents > 0n ? 'works-kpi--warning' : 'works-kpi--ok'}>
+              <ReceiptText size={21} />
+              <span>Falta documentar</span>
+              <strong>{formatBRL(totals.missingDocumentsCents)}</strong>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section className="works-controls">
