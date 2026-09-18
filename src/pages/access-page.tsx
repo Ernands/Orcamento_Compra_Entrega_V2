@@ -466,6 +466,7 @@ export function AccessPage() {
             <span>Nova senha</span>
             <input
               type="password"
+              aria-label="Nova senha"
               autoComplete="new-password"
               value={temporaryPassword}
               onChange={(event) => setTemporaryPassword(event.target.value)}
@@ -478,6 +479,7 @@ export function AccessPage() {
             <span>Confirmar nova senha</span>
             <input
               type="password"
+              aria-label="Confirmar nova senha"
               autoComplete="new-password"
               value={temporaryPasswordConfirmation}
               onChange={(event) => setTemporaryPasswordConfirmation(event.target.value)}
