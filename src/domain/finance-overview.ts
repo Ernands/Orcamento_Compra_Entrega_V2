@@ -13,6 +13,7 @@ import { moneyToCents, quantityToThousandths } from './supply-calculations';
 export interface FinanceStoreItemDetailRow {
   id: string;
   purchaseId: string;
+  purchaseItemId: string;
   purchaseCode: string;
   quoteCode: string;
   supplierName: string;
@@ -154,6 +155,7 @@ export function buildFinanceStoreItemRows(
         rows.push({
           id: `${purchase.id}:${item.id}:${storeId}`,
           purchaseId: purchase.id,
+          purchaseItemId: item.id,
           purchaseCode: purchase.code,
           quoteCode: purchase.quoteCode,
           supplierName: purchase.supplierName,
