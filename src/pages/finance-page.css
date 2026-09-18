@@ -242,6 +242,18 @@
   max-width: none;
 }
 
+.finance-overview-table tbody tr:nth-child(even) {
+  background: #eef4f1;
+}
+
+.finance-overview-table tbody tr:nth-child(odd) {
+  background: #fff;
+}
+
+.finance-overview-table tbody tr:hover {
+  background: #e5f1ed;
+}
+
 .finance-overview-table th:first-child,
 .finance-overview-table td:first-child {
   width: 138px;
@@ -313,16 +325,19 @@
   align-items: center;
   gap: 5px;
   margin-top: 7px;
-  padding: 5px 8px;
-  color: var(--brand) !important;
+  padding: 5px 9px;
+  color: #fff !important;
+  background: var(--brand);
+  border-color: var(--brand);
   font-size: 0.66rem !important;
   font-weight: 850;
   text-decoration: none !important;
 }
 
 .finance-overview-details:hover {
-  background: #eef6f3;
-  border-color: #bdd8ce;
+  color: #fff !important;
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
 }
 
 .finance-difference--positive,
