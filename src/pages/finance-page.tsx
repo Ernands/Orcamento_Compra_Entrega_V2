@@ -800,7 +800,7 @@ export function FinancePage() {
           aria-label="Resumo executivo financeiro"
         >
           <div className="finance-kpi-group finance-kpi-group--budget">
-            <span className="finance-kpi-group__title">Orçamento</span>
+            <span className="finance-kpi-group__title">Planejamento / Orçamento</span>
             <div>
               <article>
                 <Landmark size={21} />
@@ -815,7 +815,7 @@ export function FinancePage() {
             </div>
           </div>
           <div className="finance-kpi-group finance-kpi-group--execution">
-            <span className="finance-kpi-group__title">Realização</span>
+            <span className="finance-kpi-group__title">Execução</span>
             <div>
               <article className="finance-kpi finance-kpi--primary">
                 <Building2 size={21} />
@@ -830,7 +830,7 @@ export function FinancePage() {
             </div>
           </div>
           <div className="finance-kpi-group finance-kpi-group--cash">
-            <span className="finance-kpi-group__title">Financeiro</span>
+            <span className="finance-kpi-group__title">Pagamentos / Financeiro</span>
             <div>
               <article>
                 <WalletCards size={21} />
