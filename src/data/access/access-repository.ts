@@ -120,7 +120,7 @@ export async function loadAccessAdminData(): Promise<AccessAdminData> {
       return {
         id: permission.id,
         key: permission.chave as AccessPermission['key'],
-        description: permission.descricao,
+        description: permission.descricao || permission.chave,
         moduleKey: module.chave,
         moduleName: module.nome,
         actionKey: action.chave,
