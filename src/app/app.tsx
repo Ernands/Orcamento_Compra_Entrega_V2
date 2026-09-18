@@ -5,6 +5,7 @@ import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
 import { FinancePage } from '../pages/finance-page';
+import { WorksPage } from '../pages/works-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
 import { StoreAttachmentsPage } from '../pages/store-attachments-page';
 import { StoreImplementationPage } from '../pages/store-implementation-page';
@@ -173,6 +174,14 @@ export function App() {
               element={
                 <RequireCapability capability="purchases.view">
                   <SupplyPurchasesPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="obras"
+              element={
+                <RequireCapability capability="works.view">
+                  <WorksPage />
                 </RequireCapability>
               }
             />
