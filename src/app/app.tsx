@@ -21,7 +21,12 @@ import { SupplyNeedsPage } from '../pages/supply-needs-page';
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
-import { RequireCapability, RequirePasswordChanged, RequireSession } from './guards';
+import {
+  AuthorizedHomeRedirect,
+  RequireCapability,
+  RequirePasswordChanged,
+  RequireSession,
+} from './guards';
 import { SessionProvider } from './session-provider';
 
 export function App() {
@@ -39,7 +44,7 @@ export function App() {
               </RequireSession>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<AuthorizedHomeRedirect />} />
             <Route
               path="dashboard"
               element={
@@ -198,7 +203,9 @@ export function App() {
               path="financeiro/lojas/:storeId"
               element={
                 <RequireCapability capability="finance.view">
-                  <FinanceStoreDetailPage />
+                  <RequireCapability capability="finance.store_detail_view">
+                    <FinanceStoreDetailPage />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />
