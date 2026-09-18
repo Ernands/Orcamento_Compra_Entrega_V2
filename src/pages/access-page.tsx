@@ -6,6 +6,7 @@ import {
   Plus,
   Power,
   Search,
+  Settings2,
   ShieldCheck,
   Store,
   UserRound,
@@ -24,10 +25,16 @@ import {
   createAccessUser,
   loadAccessAdminData,
   resetAccessUserPassword,
+  saveAccessUserPermissions,
   updateAccessUser,
   type AccessAdminData,
 } from '../data/access/access-repository';
-import type { AccessFormValues, AccessUser, UserStatus } from '../domain/types';
+import type {
+  AccessFormValues,
+  AccessPermissionOverride,
+  AccessUser,
+  UserStatus,
+} from '../domain/types';
 import { formatCpfInput, isValidCpf, maskCpfLast4 } from '../../supabase/functions/_shared/cpf';
 
 const emptyForm: AccessFormValues = {
@@ -58,6 +65,10 @@ export function AccessPage() {
   const [editing, setEditing] = useState<AccessUser | 'new' | null>(null);
   const [form, setForm] = useState<AccessFormValues>(emptyForm);
   const [resetting, setResetting] = useState<AccessUser | null>(null);
+  const [permissionUser, setPermissionUser] = useState<AccessUser | null>(null);
+  const [permissionDraft, setPermissionDraft] = useState<
+    Record<string, 'inherit' | 'grant' | 'deny'>
+  >({});
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [temporaryPasswordConfirmation, setTemporaryPasswordConfirmation] = useState('');
   const [saving, setSaving] = useState(false);
@@ -93,6 +104,20 @@ export function AccessPage() {
     );
   }, [data, query]);
 
+  const permissionGroups = useMemo(() => {
+    if (!data) return [];
+    const grouped = new Map<string, typeof data.permissions>();
+    data.permissions.forEach((permission) => {
+      const current = grouped.get(permission.moduleName) || [];
+      current.push(permission);
+      grouped.set(permission.moduleName, current);
+    });
+    return [...grouped.entries()].map(([moduleName, permissions]) => ({
+      moduleName,
+      permissions,
+    }));
+  }, [data]);
+
   const openCreate = () => {
     setForm({ ...emptyForm, profileId: data?.profiles[0]?.id || '' });
     setFormError(null);
@@ -103,6 +128,43 @@ export function AccessPage() {
     setForm(valuesFromUser(user));
     setFormError(null);
     setEditing(user);
+  };
+
+  const openPermissions = (user: AccessUser) => {
+    const overrides = data?.userPermissionOverrides.filter((entry) => entry.userId === user.id) || [];
+    const nextDraft: Record<string, 'inherit' | 'grant' | 'deny'> = {};
+    overrides.forEach((entry) => {
+      nextDraft[entry.permissionId] = entry.effect;
+    });
+    setPermissionDraft(nextDraft);
+    setFormError(null);
+    setPermissionUser(user);
+  };
+
+  const savePermissions = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!permissionUser) return;
+
+    const overrides: AccessPermissionOverride[] = Object.entries(permissionDraft)
+      .filter(([, effect]) => effect !== 'inherit')
+      .map(([permissionId, effect]) => ({
+        permissionId,
+        effect: effect as AccessPermissionOverride['effect'],
+      }));
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      await saveAccessUserPermissions(permissionUser.id, overrides);
+      setPermissionUser(null);
+      setPermissionDraft({});
+      setSuccess('Permissoes do usuario atualizadas.');
+      await load();
+    } catch {
+      setFormError('Nao foi possivel atualizar as permissoes do usuario.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveUser = async (event: FormEvent) => {
@@ -287,6 +349,17 @@ export function AccessPage() {
                     <Power size={18} />
                   </IconButton>
                 )}
+                {can('access.permissions_manage') && user.id !== viewer?.id && (
+                  <button
+                    type="button"
+                    className="button button--secondary button--small access-permissions-button"
+                    aria-label={`Editar permissoes de ${user.name}`}
+                    onClick={() => openPermissions(user)}
+                  >
+                    <Settings2 size={15} />
+                    Permissoes
+                  </button>
+                )}
                 {can('access.reset_password') && (
                   <button
                     type="button"
@@ -445,6 +518,101 @@ export function AccessPage() {
             <button type="submit" className="button button--primary" disabled={saving}>
               {saving ? <LoaderCircle className="spin" size={18} /> : <Check size={18} />}
               {saving ? 'Salvando' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={permissionUser !== null}
+        title="Permissoes do usuario"
+        description={
+          permissionUser
+            ? `${permissionUser.name} · perfil ${permissionUser.profile.name}. Use Herdar para manter a regra do perfil.`
+            : undefined
+        }
+        onClose={() => {
+          setPermissionUser(null);
+          setPermissionDraft({});
+          setFormError(null);
+        }}
+        className="access-permissions-modal"
+      >
+        <form className="stack-form" onSubmit={savePermissions}>
+          <div className="access-permissions-note">
+            <ShieldCheck size={18} />
+            <span>
+              <strong>Herdar</strong> usa o perfil. <strong>Permitir</strong> concede apenas a este
+              usuario. <strong>Bloquear</strong> prevalece sobre o perfil.
+            </span>
+          </div>
+          <div className="access-permissions-groups">
+            {permissionGroups.map((group) => (
+              <section key={group.moduleName} className="access-permissions-group">
+                <header>{group.moduleName}</header>
+                {group.permissions.map((permission) => {
+                  const inherited =
+                    data?.profilePermissions.some(
+                      (entry) =>
+                        entry.profileId === permissionUser?.profile.id &&
+                        entry.permissionId === permission.id,
+                    ) || false;
+                  const value = permissionDraft[permission.id] || 'inherit';
+                  return (
+                    <div className="access-permission-row" key={permission.id}>
+                      <div>
+                        <strong>{permission.description}</strong>
+                        <small>{permission.key}</small>
+                      </div>
+                      <span
+                        className={`access-inherited access-inherited--${
+                          inherited ? 'allowed' : 'blocked'
+                        }`}
+                      >
+                        Perfil: {inherited ? 'permitido' : 'bloqueado'}
+                      </span>
+                      <select
+                        aria-label={`${permission.description} para ${permissionUser?.name || 'usuario'}`}
+                        value={value}
+                        onChange={(event) =>
+                          setPermissionDraft((current) => ({
+                            ...current,
+                            [permission.id]: event.target.value as 'inherit' | 'grant' | 'deny',
+                          }))
+                        }
+                      >
+                        <option value="inherit">
+                          Herdar ({inherited ? 'permitido' : 'bloqueado'})
+                        </option>
+                        <option value="grant">Permitir</option>
+                        <option value="deny">Bloquear</option>
+                      </select>
+                    </div>
+                  );
+                })}
+              </section>
+            ))}
+          </div>
+          {formError && (
+            <div className="form-error" role="alert">
+              {formError}
+            </div>
+          )}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => {
+                setPermissionUser(null);
+                setPermissionDraft({});
+                setFormError(null);
+              }}
+            >
+              Cancelar
+            </button>
+            <button type="submit" className="button button--primary" disabled={saving}>
+              {saving ? <LoaderCircle className="spin" size={18} /> : <Check size={18} />}
+              {saving ? 'Salvando' : 'Salvar permissoes'}
             </button>
           </div>
         </form>
