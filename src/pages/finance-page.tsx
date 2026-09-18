@@ -517,6 +517,24 @@ function FinanceBudgetModal({
 export function FinancePage() {
   const { can } = useSession();
   const canManage = can('finance.manage');
+  const canOverview = can('finance.overview_view');
+  const canPayments = can('finance.payments_view');
+  const canStoresUfs = can('finance.stores_ufs_view');
+  const canReimbursements = can('finance.reimbursements_view');
+  const canStoreDetail = can('finance.store_detail_view');
+  const canDetailDocuments = can('finance.store_detail_documents_view');
+  const canBudgetEdit = can('finance.budget_edit');
+  const canPurchases = can('purchases.view');
+  const firstAllowedTab: FinanceTab = canOverview
+    ? 'overview'
+    : canPayments
+      ? 'payments'
+      : canStoresUfs
+        ? 'stores'
+        : canReimbursements
+          ? 'reimbursements'
+          : 'overview';
+  const hasAnyFinanceView = canOverview || canPayments || canStoresUfs || canReimbursements;
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [reimbursements, setReimbursements] = useState<FinanceReimbursement[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -524,7 +542,7 @@ export function FinancePage() {
   const [budgets, setBudgets] = useState<FinanceStoreBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<FinanceTab>('overview');
+  const [tab, setTab] = useState<FinanceTab>(firstAllowedTab);
   const [month, setMonth] = useState(currentMonth);
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
@@ -564,6 +582,23 @@ export function FinancePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const allowed =
+      (tab === 'overview' && canOverview) ||
+      (tab === 'payments' && canPayments) ||
+      (tab === 'stores' && canStoresUfs) ||
+      (tab === 'reimbursements' && canReimbursements);
+    if (!allowed && hasAnyFinanceView) setTab(firstAllowedTab);
+  }, [
+    canOverview,
+    canPayments,
+    canReimbursements,
+    canStoresUfs,
+    firstAllowedTab,
+    hasAnyFinanceView,
+    tab,
+  ]);
 
   const paymentEvents = useMemo(() => buildFinancePaymentEvents(purchases), [purchases]);
   const storeRows = useMemo(
@@ -781,6 +816,15 @@ export function FinancePage() {
     return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b, 'pt-BR'));
   }, [filteredStores]);
 
+  if (!hasAnyFinanceView) {
+    return (
+      <EmptyState
+        title="Sem visualizacoes financeiras liberadas"
+        detail="Solicite ao administrador uma permissao de visualizacao do Financeiro."
+      />
+    );
+  }
+
   return (
     <div className="page-stack finance-page">
       <header className="page-heading finance-heading">
@@ -946,42 +990,50 @@ export function FinancePage() {
       </section>
 
       <div className="finance-tabs" role="tablist" aria-label="Visoes do Financeiro">
-        <button
-          role="tab"
-          aria-selected={tab === 'overview'}
-          className={tab === 'overview' ? 'is-active' : ''}
-          onClick={() => setTab('overview')}
-        >
-          <Building2 size={18} />
-          Visão Geral
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'payments'}
-          className={tab === 'payments' ? 'is-active' : ''}
-          onClick={() => setTab('payments')}
-        >
-          <WalletCards size={18} />
-          Pagamentos
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'stores'}
-          className={tab === 'stores' ? 'is-active' : ''}
-          onClick={() => setTab('stores')}
-        >
-          <MapPinned size={18} />
-          Lojas e UFs
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'reimbursements'}
-          className={tab === 'reimbursements' ? 'is-active' : ''}
-          onClick={() => setTab('reimbursements')}
-        >
-          <Landmark size={18} />
-          Reembolsos
-        </button>
+        {canOverview && (
+          <button
+            role="tab"
+            aria-selected={tab === 'overview'}
+            className={tab === 'overview' ? 'is-active' : ''}
+            onClick={() => setTab('overview')}
+          >
+            <Building2 size={18} />
+            Visão Geral
+          </button>
+        )}
+        {canPayments && (
+          <button
+            role="tab"
+            aria-selected={tab === 'payments'}
+            className={tab === 'payments' ? 'is-active' : ''}
+            onClick={() => setTab('payments')}
+          >
+            <WalletCards size={18} />
+            Pagamentos
+          </button>
+        )}
+        {canStoresUfs && (
+          <button
+            role="tab"
+            aria-selected={tab === 'stores'}
+            className={tab === 'stores' ? 'is-active' : ''}
+            onClick={() => setTab('stores')}
+          >
+            <MapPinned size={18} />
+            Lojas e UFs
+          </button>
+        )}
+        {canReimbursements && (
+          <button
+            role="tab"
+            aria-selected={tab === 'reimbursements'}
+            className={tab === 'reimbursements' ? 'is-active' : ''}
+            onClick={() => setTab('reimbursements')}
+          >
+            <Landmark size={18} />
+            Reembolsos
+          </button>
+        )}
       </div>
 
       {error && <ErrorState message={error} onRetry={() => void load()} />}
@@ -1052,17 +1104,19 @@ export function FinancePage() {
                             <strong>{row.code}</strong>
                             <span>{row.name}</span>
                             <small>{row.city}/{row.state}</small>
-                            <Link
-                              to={`/financeiro/lojas/${row.storeId}`}
-                              className="button button--secondary button--small finance-overview-details"
-                            >
-                              Abrir detalhes
-                              <ExternalLink size={12} />
-                            </Link>
+                            {canStoreDetail && (
+                              <Link
+                                to={`/financeiro/lojas/${row.storeId}`}
+                                className="button button--secondary button--small finance-overview-details"
+                              >
+                                Abrir detalhes
+                                <ExternalLink size={12} />
+                              </Link>
+                            )}
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.budgetBbCents)}</strong>
-                            {canManage && (
+                            {canBudgetEdit && (
                               <button
                                 type="button"
                                 className="finance-budget-edit"
@@ -1206,11 +1260,15 @@ export function FinancePage() {
                             <strong>{formatBRL(payment.amountCents)}</strong>
                           </td>
                           <td>
-                            <DocumentLinks
-                              attachments={payment.attachments}
-                              openingId={openingId}
-                              onOpen={openAttachment}
-                            />
+                            {canDetailDocuments ? (
+                              <DocumentLinks
+                                attachments={payment.attachments}
+                                openingId={openingId}
+                                onOpen={openAttachment}
+                              />
+                            ) : (
+                              <span className="finance-muted">Sem acesso aos arquivos</span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1301,13 +1359,17 @@ export function FinancePage() {
                                 <strong>{formatBRL(purchase.requestedCents)} solicitado</strong>
                                 <small>{formatBRL(purchase.receivedCents)} recebido</small>
                               </div>
-                              <DocumentLinks
-                                attachments={purchase.attachments}
-                                openingId={openingId}
-                                onOpen={openAttachment}
-                              />
+                              {canDetailDocuments ? (
+                                <DocumentLinks
+                                  attachments={purchase.attachments}
+                                  openingId={openingId}
+                                  onOpen={openAttachment}
+                                />
+                              ) : (
+                                <span className="finance-muted">Sem acesso aos arquivos</span>
+                              )}
                               <div className="finance-store-purchase__actions">
-                                {canManage && purchase.availableCents > 0n && (
+                                {canManage && canReimbursements && purchase.availableCents > 0n && (
                                   <button
                                     type="button"
                                     className="button button--primary button--small"
@@ -1317,13 +1379,15 @@ export function FinancePage() {
                                     Solicitar reembolso
                                   </button>
                                 )}
-                                <Link
-                                  className="button button--secondary button--small"
-                                  to="/suprimentos/compras"
-                                >
-                                  <ExternalLink size={15} />
-                                  Ver compra
-                                </Link>
+                                {canPurchases && (
+                                  <Link
+                                    className="button button--secondary button--small"
+                                    to="/suprimentos/compras"
+                                  >
+                                    <ExternalLink size={15} />
+                                    Ver compra
+                                  </Link>
+                                )}
                               </div>
                             </article>
                           ))}
@@ -1386,7 +1450,7 @@ export function FinancePage() {
                             <strong>{formatBRL(totals.receivedCents)}</strong>
                             <small>{formatDate(reimbursement.receivedAt)}</small>
                           </div>
-                          {canManage && (
+                          {canManage && canReimbursements && (
                             <button
                               type="button"
                               className="button button--secondary button--small"
@@ -1408,11 +1472,15 @@ export function FinancePage() {
                               </small>
                             </div>
                           ))}
-                          <DocumentLinks
-                            attachments={documents}
-                            openingId={openingId}
-                            onOpen={openAttachment}
-                          />
+                          {canDetailDocuments ? (
+                            <DocumentLinks
+                              attachments={documents}
+                              openingId={openingId}
+                              onOpen={openAttachment}
+                            />
+                          ) : (
+                            <span className="finance-muted">Sem acesso aos arquivos</span>
+                          )}
                         </div>
                         {reimbursement.notes && <p>{reimbursement.notes}</p>}
                       </article>
