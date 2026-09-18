@@ -18,6 +18,7 @@ export interface FinanceStoreItemDetailRow {
   supplierName: string;
   itemCode: string;
   itemName: string;
+  itemCategory: string | null;
   unit: string;
   approvedQuantity: bigint;
   budgetCents: bigint;
@@ -155,6 +156,7 @@ export function buildFinanceStoreItemRows(
           supplierName: purchase.supplierName,
           itemCode: item.itemCode,
           itemName: item.itemName,
+          itemCategory: item.itemCategory,
           unit: item.unit,
           approvedQuantity,
           budgetCents,
@@ -170,6 +172,162 @@ export function buildFinanceStoreItemRows(
     (a, b) =>
       a.itemName.localeCompare(b.itemName, 'pt-BR') ||
       a.purchaseCode.localeCompare(b.purchaseCode, 'pt-BR'),
+  );
+}
+
+
+export type FinanceStoreCompositionKey = 'equipment' | 'furniture' | 'general' | 'works';
+
+export interface FinanceStoreCompositionRow {
+  key: FinanceStoreCompositionKey;
+  label: string;
+  budgetCents: bigint;
+  realizedCents: bigint;
+  differenceCents: bigint;
+  paidCents: bigint;
+  payableCents: bigint;
+}
+
+function normalizeCategory(value: string | null): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
+}
+
+export function financeItemCompositionGroup(
+  category: string | null,
+): Exclude<FinanceStoreCompositionKey, 'works'> {
+  const normalized = normalizeCategory(category);
+  if (
+    normalized.includes('mobili') ||
+    normalized.includes('moveis') ||
+    normalized.includes('movel')
+  ) {
+    return 'furniture';
+  }
+  if (
+    normalized.includes('equip') ||
+    normalized.includes('informat') ||
+    normalized.includes('tecnolog') ||
+    normalized.includes('climat') ||
+    normalized.includes('eletron') ||
+    normalized.includes('seguranca') ||
+    normalized.includes('impress')
+  ) {
+    return 'equipment';
+  }
+  return 'general';
+}
+
+function allocateCompositionCents(
+  totalCents: bigint,
+  weights: Array<{ key: Exclude<FinanceStoreCompositionKey, 'works'>; weight: bigint }>,
+) {
+  const positive = weights.filter((entry) => entry.weight > 0n);
+  const result = new Map<Exclude<FinanceStoreCompositionKey, 'works'>, bigint>();
+  if (!positive.length || totalCents <= 0n) return result;
+
+  const totalWeight = positive.reduce((sum, entry) => sum + entry.weight, 0n);
+  const remainders: Array<{
+    key: Exclude<FinanceStoreCompositionKey, 'works'>;
+    remainder: bigint;
+  }> = [];
+  let allocated = 0n;
+
+  positive.forEach((entry) => {
+    const numerator = totalCents * entry.weight;
+    const base = numerator / totalWeight;
+    result.set(entry.key, base);
+    allocated += base;
+    remainders.push({ key: entry.key, remainder: numerator % totalWeight });
+  });
+
+  remainders.sort((a, b) =>
+    a.remainder === b.remainder
+      ? a.key.localeCompare(b.key)
+      : a.remainder > b.remainder
+        ? -1
+        : 1,
+  );
+
+  let remaining = totalCents - allocated;
+  let index = 0;
+  while (remaining > 0n && remainders.length) {
+    const key = remainders[index % remainders.length].key;
+    result.set(key, (result.get(key) || 0n) + 1n);
+    remaining -= 1n;
+    index += 1;
+  }
+  return result;
+}
+
+export function buildFinanceStoreCompositionRows(values: {
+  storeId: string;
+  purchases: PurchaseV2[];
+  purchaseStoreRows: FinanceStoreRow[];
+  works: WorkService[];
+}): FinanceStoreCompositionRow[] {
+  const rows = new Map<FinanceStoreCompositionKey, Omit<FinanceStoreCompositionRow, 'differenceCents' | 'payableCents'>>([
+    ['equipment', { key: 'equipment', label: 'Equipamentos', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
+    ['furniture', { key: 'furniture', label: 'Mobiliário', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
+    ['general', { key: 'general', label: 'Itens gerais', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
+    ['works', { key: 'works', label: 'Obras e Serviços', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
+  ]);
+
+  buildFinanceStoreItemRows(values.purchases, values.storeId).forEach((item) => {
+    const group = financeItemCompositionGroup(item.itemCategory);
+    const row = rows.get(group)!;
+    row.budgetCents += item.budgetCents;
+    row.realizedCents += item.realizedCents;
+  });
+
+  const financeStore = values.purchaseStoreRows.find((row) => row.storeId === values.storeId);
+  financeStore?.purchases.forEach((purchaseRow) => {
+    const order = purchaseRow.purchase.orders.find((entry) => entry.id === purchaseRow.purchaseOrderId);
+    if (!order || purchaseRow.paidCents <= 0n) return;
+    const storeCost = purchaseOrderStoreCosts(order).rows.find((entry) => entry.storeId === values.storeId);
+    if (!storeCost || storeCost.costCents <= 0n) return;
+
+    const groupWeights = new Map<Exclude<FinanceStoreCompositionKey, 'works'>, bigint>();
+    storeCost.lines.forEach((costLine) => {
+      const line = order.lines.find((entry) => entry.id === costLine.lineId);
+      const item = line?.purchaseItemId
+        ? purchaseRow.purchase.items.find((entry) => entry.id === line.purchaseItemId)
+        : null;
+      const group = financeItemCompositionGroup(item?.itemCategory || null);
+      groupWeights.set(group, (groupWeights.get(group) || 0n) + costLine.costCents);
+    });
+
+    const allocations = allocateCompositionCents(
+      purchaseRow.paidCents,
+      [...groupWeights.entries()].map(([key, weight]) => ({ key, weight })),
+    );
+    allocations.forEach((amount, key) => {
+      rows.get(key)!.paidCents += amount;
+    });
+  });
+
+  values.works
+    .filter((work) => work.storeId === values.storeId && work.status !== 'cancelled')
+    .forEach((work) => {
+      const row = rows.get('works')!;
+      row.budgetCents += moneyToCents(work.budgetAmount);
+      row.realizedCents += moneyToCents(work.contractedAmount);
+      row.paidCents += work.payments
+        .filter((payment) => payment.status === 'paid')
+        .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
+    });
+
+  return (['equipment', 'furniture', 'general', 'works'] as FinanceStoreCompositionKey[]).map(
+    (key) => {
+      const row = rows.get(key)!;
+      return {
+        ...row,
+        differenceCents: row.budgetCents - row.realizedCents,
+        payableCents: row.realizedCents > row.paidCents ? row.realizedCents - row.paidCents : 0n,
+      };
+    },
   );
 }
 
