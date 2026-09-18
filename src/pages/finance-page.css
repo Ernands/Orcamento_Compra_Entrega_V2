@@ -242,16 +242,33 @@
   max-width: none;
 }
 
-.finance-overview-table tbody tr:nth-child(even) {
-  background: #eef4f1;
-}
-
-.finance-overview-table tbody tr:nth-child(odd) {
+.finance-overview-table tbody tr:nth-child(odd) td {
   background: #fff;
 }
 
-.finance-overview-table tbody tr:hover {
-  background: #e5f1ed;
+/* Zebra fixa por grupo: mantém a leitura das cores do cabeçalho sem depender de hover. */
+.finance-overview-table tbody tr:nth-child(even) td:first-child {
+  background: #f5f7f6;
+}
+
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 2):nth-child(-n + 5) {
+  background: #f1f7fd;
+}
+
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 6):nth-child(-n + 9) {
+  background: #f0f9f5;
+}
+
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 10):nth-child(-n + 11) {
+  background: #fff8ef;
+}
+
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(12) {
+  background: #f7f7f5;
+}
+
+.finance-overview-table tbody tr:hover td {
+  filter: none;
 }
 
 .finance-overview-table th:first-child,
@@ -318,7 +335,8 @@
   border-right: 2px solid #d8dfdc;
 }
 
-.finance-overview-details {
+.finance-overview-table .finance-overview-details,
+.finance-overview-table .finance-overview-details.button--secondary {
   width: fit-content;
   min-height: 30px;
   display: inline-flex !important;
@@ -327,17 +345,18 @@
   margin-top: 7px;
   padding: 5px 9px;
   color: #fff !important;
-  background: var(--brand);
-  border-color: var(--brand);
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
   font-size: 0.66rem !important;
   font-weight: 850;
   text-decoration: none !important;
 }
 
-.finance-overview-details:hover {
+.finance-overview-table .finance-overview-details:hover,
+.finance-overview-table .finance-overview-details.button--secondary:hover {
   color: #fff !important;
-  background: var(--brand-dark);
-  border-color: var(--brand-dark);
+  background: var(--brand-dark) !important;
+  border-color: var(--brand-dark) !important;
 }
 
 .finance-difference--positive,
