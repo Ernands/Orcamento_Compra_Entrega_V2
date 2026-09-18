@@ -107,7 +107,7 @@ export function AccessPage() {
   const permissionGroups = useMemo(() => {
     if (!data) return [];
     const grouped = new Map<string, typeof data.permissions>();
-    data.permissions.forEach((permission) => {
+    (data.permissions || []).forEach((permission) => {
       const current = grouped.get(permission.moduleName) || [];
       current.push(permission);
       grouped.set(permission.moduleName, current);
@@ -131,7 +131,7 @@ export function AccessPage() {
   };
 
   const openPermissions = (user: AccessUser) => {
-    const overrides = data?.userPermissionOverrides.filter((entry) => entry.userId === user.id) || [];
+    const overrides = data?.userPermissionOverrides?.filter((entry) => entry.userId === user.id) || [];
     const nextDraft: Record<string, 'inherit' | 'grant' | 'deny'> = {};
     overrides.forEach((entry) => {
       nextDraft[entry.permissionId] = entry.effect;
@@ -552,7 +552,7 @@ export function AccessPage() {
                 <header>{group.moduleName}</header>
                 {group.permissions.map((permission) => {
                   const inherited =
-                    data?.profilePermissions.some(
+                    data?.profilePermissions?.some(
                       (entry) =>
                         entry.profileId === permissionUser?.profile.id &&
                         entry.permissionId === permission.id,
