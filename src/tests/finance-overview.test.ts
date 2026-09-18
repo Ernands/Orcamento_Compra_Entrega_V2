@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildFinanceOverviewRows,
+  buildFinanceStoreCompositionRows,
   buildFinanceStoreItemRows,
   purchaseApprovedBudgetByStore,
 } from '../domain/finance-overview';
@@ -236,6 +237,42 @@ describe('finance overview', () => {
     expect(rows[0].purchasedQuantity).toBe(0n);
     expect(rows[0].realizedCents).toBe(0n);
     expect(rows[0].purchaseStatus).toBe('not_purchased');
+  });
+
+  it('separa a composição da loja por grupo e fecha os totais sem resíduos', () => {
+    const rows = buildFinanceStoreCompositionRows({
+      storeId: 'store-1',
+      purchases: [approvedPurchase()],
+      purchaseStoreRows: [],
+      works: [work()],
+    });
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'equipment',
+          label: 'Equipamentos',
+          budgetCents: 5001n,
+          realizedCents: 0n,
+          paidCents: 0n,
+          payableCents: 0n,
+        }),
+        expect.objectContaining({
+          key: 'works',
+          label: 'Obras e Serviços',
+          budgetCents: 650000n,
+          realizedCents: 620000n,
+          differenceCents: 30000n,
+          paidCents: 310000n,
+          payableCents: 310000n,
+        }),
+      ]),
+    );
+
+    expect(rows.reduce((sum, row) => sum + row.budgetCents, 0n)).toBe(655001n);
+    expect(rows.reduce((sum, row) => sum + row.realizedCents, 0n)).toBe(620000n);
+    expect(rows.reduce((sum, row) => sum + row.paidCents, 0n)).toBe(310000n);
+    expect(rows.reduce((sum, row) => sum + row.payableCents, 0n)).toBe(310000n);
   });
 
   it('consolida itens, obra, pagamentos, verba e documentação por loja', () => {
