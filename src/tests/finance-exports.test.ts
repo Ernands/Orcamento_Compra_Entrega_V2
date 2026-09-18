@@ -41,6 +41,7 @@ const itemRow: FinanceStoreItemDetailRow = {
   supplierName: 'Fornecedor Teste',
   itemCode: 'ITM-0001',
   itemName: 'Notebook',
+  itemCategory: 'Equipamentos',
   unit: 'un',
   approvedQuantity: 1000n,
   budgetCents: 300_000n,
