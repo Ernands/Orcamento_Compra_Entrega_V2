@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceStoreDetailExcel,
@@ -126,6 +127,9 @@ function workTotals(work: WorkService) {
 
 export function FinanceStoreDetailPage() {
   const { storeId } = useParams();
+  const { can } = useSession();
+  const canDocuments = can('finance.store_detail_documents_view');
+  const canWorks = can('works.view');
   const [stores, setStores] = useState<Store[]>([]);
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
@@ -285,6 +289,7 @@ export function FinanceStoreDetailPage() {
   }, [itemStatusFilter, query, workCategoryFilter, workStatusFilter]);
 
   const openPurchaseDocument = async (attachment: PurchaseAttachmentV2) => {
+    if (!canDocuments) return;
     setOpeningDocumentId(attachment.id);
     setDocumentError(null);
     try {
@@ -304,7 +309,7 @@ export function FinanceStoreDetailPage() {
     work: WorkService,
     document: WorkService['documents'][number],
   ) => {
-    if (!document.storagePath) return;
+    if (!canDocuments || !document.storagePath) return;
     setOpeningDocumentId(document.id);
     setDocumentError(null);
     try {
@@ -563,7 +568,7 @@ export function FinanceStoreDetailPage() {
                   <th colSpan={3}>Realização</th>
                   <th rowSpan={2}>Origem</th>
                   <th rowSpan={2}>Situação</th>
-                  <th rowSpan={2}>Documentos</th>
+                  {canDocuments && <th rowSpan={2}>Documentos</th>}
                 </tr>
                 <tr>
                   <th>Qtd. aprovada</th>
@@ -604,19 +609,21 @@ export function FinanceStoreDetailPage() {
                         {ITEM_STATUS_LABELS[row.purchaseStatus]}
                       </span>
                     </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="finance-store-detail__document-link"
-                        onClick={() => {
-                          setDocumentError(null);
-                          setDocumentPopup({ kind: 'item', row });
-                        }}
-                      >
-                        <FileText size={14} />
-                        Documentos ({itemDocuments(row).length})
-                      </button>
-                    </td>
+                    {canDocuments && (
+                      <td>
+                        <button
+                          type="button"
+                          className="finance-store-detail__document-link"
+                          onClick={() => {
+                            setDocumentError(null);
+                            setDocumentPopup({ kind: 'item', row });
+                          }}
+                        >
+                          <FileText size={14} />
+                          Documentos ({itemDocuments(row).length})
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -639,9 +646,11 @@ export function FinanceStoreDetailPage() {
               <p>Orçado, contratado, pago e documentação por serviço.</p>
             </div>
           </div>
-          <Link to="/obras" className="button button--secondary button--small">
-            Abrir Obras e Serviços
-          </Link>
+          {canWorks && (
+            <Link to="/obras" className="button button--secondary button--small">
+              Abrir Obras e Serviços
+            </Link>
+          )}
         </header>
         {filteredStoreWorks.length ? (
           <div className="finance-store-detail__table-scroll">
@@ -653,7 +662,7 @@ export function FinanceStoreDetailPage() {
                   <th colSpan={2}>Financeiro</th>
                   <th colSpan={1}>Documentação</th>
                   <th colSpan={2}>Execução</th>
-                  <th rowSpan={2}>Documentos</th>
+                  {canDocuments && <th rowSpan={2}>Documentos</th>}
                 </tr>
                 <tr>
                   <th>Orçado</th>
@@ -697,19 +706,21 @@ export function FinanceStoreDetailPage() {
                           {WORK_STATUS_LABELS[work.status]}
                         </span>
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="finance-store-detail__document-link"
-                          onClick={() => {
-                            setDocumentError(null);
-                            setDocumentPopup({ kind: 'work', work });
-                          }}
-                        >
-                          <FileText size={14} />
-                          Documentos ({work.documents.length})
-                        </button>
-                      </td>
+                      {canDocuments && (
+                        <td>
+                          <button
+                            type="button"
+                            className="finance-store-detail__document-link"
+                            onClick={() => {
+                              setDocumentError(null);
+                              setDocumentPopup({ kind: 'work', work });
+                            }}
+                          >
+                            <FileText size={14} />
+                            Documentos ({work.documents.length})
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -724,7 +735,7 @@ export function FinanceStoreDetailPage() {
         )}
       </section>
 
-      {documentPopup && (
+      {canDocuments && documentPopup && (
         <Modal
           open
           title={
