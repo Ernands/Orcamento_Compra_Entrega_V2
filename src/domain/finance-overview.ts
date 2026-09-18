@@ -48,42 +48,6 @@ export interface FinanceOverviewStoreRow {
   documentationStatus: 'complete' | 'partial' | 'pending' | 'none';
 }
 
-function allocateCents(
-  totalCents: bigint,
-  entries: Array<{ key: string; weight: bigint }>,
-): Map<string, bigint> {
-  const positive = entries.filter((entry) => entry.weight > 0n);
-  const result = new Map<string, bigint>();
-  if (!positive.length || totalCents === 0n) return result;
-
-  const totalWeight = positive.reduce((sum, entry) => sum + entry.weight, 0n);
-  const remainders: Array<{ key: string; value: bigint }> = [];
-  let allocated = 0n;
-
-  positive.forEach((entry) => {
-    const numerator = totalCents * entry.weight;
-    const base = numerator / totalWeight;
-    result.set(entry.key, base);
-    allocated += base;
-    remainders.push({ key: entry.key, value: numerator % totalWeight });
-  });
-
-  remainders.sort((a, b) =>
-    a.value === b.value ? a.key.localeCompare(b.key) : a.value > b.value ? -1 : 1,
-  );
-
-  let remaining = totalCents - allocated;
-  let index = 0;
-  while (remaining > 0n && remainders.length) {
-    const key = remainders[index % remainders.length].key;
-    result.set(key, (result.get(key) || 0n) + 1n);
-    remaining -= 1n;
-    index += 1;
-  }
-
-  return result;
-}
-
 export function purchaseApprovedBudgetByStore(purchases: PurchaseV2[]): Map<string, bigint> {
   const totals = new Map<string, bigint>();
 
