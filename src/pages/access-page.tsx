@@ -59,6 +59,7 @@ export function AccessPage() {
   const [form, setForm] = useState<AccessFormValues>(emptyForm);
   const [resetting, setResetting] = useState<AccessUser | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [temporaryPasswordConfirmation, setTemporaryPasswordConfirmation] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -158,7 +159,11 @@ export function AccessPage() {
     event.preventDefault();
     setFormError(null);
     if (temporaryPassword.length < 10) {
-      setFormError('A senha temporaria deve ter pelo menos 10 caracteres.');
+      setFormError('A nova senha deve ter pelo menos 10 caracteres.');
+      return;
+    }
+    if (temporaryPassword !== temporaryPasswordConfirmation) {
+      setFormError('A confirmacao nao corresponde a nova senha.');
       return;
     }
     if (!resetting) return;
@@ -167,7 +172,8 @@ export function AccessPage() {
       await resetAccessUserPassword(resetting.id, temporaryPassword);
       setResetting(null);
       setTemporaryPassword('');
-      setSuccess('Senha redefinida. A troca sera obrigatoria no proximo acesso.');
+      setTemporaryPasswordConfirmation('');
+      setSuccess('Senha alterada. A troca sera obrigatoria no proximo acesso.');
       await load();
     } catch {
       setFormError('Nao foi possivel redefinir a senha.');
@@ -282,16 +288,20 @@ export function AccessPage() {
                   </IconButton>
                 )}
                 {can('access.reset_password') && (
-                  <IconButton
-                    label={`Redefinir senha de ${user.name}`}
+                  <button
+                    type="button"
+                    className="button button--secondary button--small access-password-button"
+                    aria-label={`Alterar senha de ${user.name}`}
                     onClick={() => {
                       setFormError(null);
                       setTemporaryPassword('');
+                      setTemporaryPasswordConfirmation('');
                       setResetting(user);
                     }}
                   >
-                    <KeyRound size={18} />
-                  </IconButton>
+                    <KeyRound size={15} />
+                    Alterar senha
+                  </button>
                 )}
               </div>
             </article>
@@ -442,13 +452,18 @@ export function AccessPage() {
 
       <Modal
         open={resetting !== null}
-        title="Redefinir senha"
-        description={`Defina uma senha temporaria para ${resetting?.name || 'o usuario'}.`}
-        onClose={() => setResetting(null)}
+        title="Alterar senha do usuario"
+        description={`Defina uma nova senha temporaria para ${resetting?.name || 'o usuario'}.`}
+        onClose={() => {
+          setResetting(null);
+          setTemporaryPassword('');
+          setTemporaryPasswordConfirmation('');
+          setFormError(null);
+        }}
       >
         <form className="stack-form" onSubmit={resetPassword}>
           <label className="field">
-            <span>Nova senha temporaria</span>
+            <span>Nova senha</span>
             <input
               type="password"
               autoComplete="new-password"
@@ -458,6 +473,18 @@ export function AccessPage() {
               required
             />
             <small>A troca sera obrigatoria no proximo acesso.</small>
+          </label>
+          <label className="field">
+            <span>Confirmar nova senha</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={temporaryPasswordConfirmation}
+              onChange={(event) => setTemporaryPasswordConfirmation(event.target.value)}
+              minLength={10}
+              required
+            />
+            <small>A senha nao e armazenada na tabela de negocio.</small>
           </label>
           {formError && (
             <div className="form-error" role="alert">
@@ -474,7 +501,7 @@ export function AccessPage() {
             </button>
             <button className="button button--primary" type="submit" disabled={saving}>
               {saving ? <LoaderCircle className="spin" size={18} /> : <KeyRound size={18} />}
-              {saving ? 'Redefinindo' : 'Redefinir senha'}
+              {saving ? 'Alterando' : 'Alterar senha'}
             </button>
           </div>
         </form>
