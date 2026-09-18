@@ -60,6 +60,12 @@ const ITEM_STATUS_LABELS = {
   purchased: 'Comprado',
 } as const;
 
+const FINANCIAL_GROUP_LABELS = {
+  equipment: 'Equipamentos',
+  furniture: 'Mobiliário',
+  general: 'Itens gerais',
+} as const;
+
 const PURCHASE_DOCUMENT_LABELS: Record<string, string> = {
   invoice: 'Nota fiscal',
   receipt: 'Recibo',
@@ -698,7 +704,9 @@ export function FinanceStoreDetailPage() {
                       <strong>{row.itemCode}</strong>
                       <span>{row.itemName}</span>
                       <small>
-                        {row.itemSubcategory || row.itemGroupName || row.itemCategory || 'Sem categoria'}
+                        {row.itemFinancialGroup
+                          ? FINANCIAL_GROUP_LABELS[row.itemFinancialGroup]
+                          : row.itemSubcategory || row.itemGroupName || row.itemCategory || 'Sem categoria'}
                       </small>
                     </td>
                     <td>{quantityLabel(row.approvedQuantity, row.unit)}</td>
