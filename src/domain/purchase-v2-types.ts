@@ -95,6 +95,8 @@ export interface PurchaseItemV2 {
   itemName: string;
   itemDescription: string | null;
   itemCategory: string | null;
+  catalogSubcategory?: string | null;
+  catalogGroupName?: string | null;
   itemArea: string | null;
   brandReference: string | null;
   technicalSpecification: string | null;
