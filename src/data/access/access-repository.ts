@@ -1,4 +1,12 @@
-import type { AccessFormValues, AccessUser, Profile, Store } from '../../domain/types';
+import type {
+  AccessFormValues,
+  AccessPermission,
+  AccessPermissionOverride,
+  AccessUser,
+  PermissionOverrideEffect,
+  Profile,
+  Store,
+} from '../../domain/types';
 import { invokeEdgeFunction } from '../../lib/edge-function';
 import { supabase } from '../supabase/client';
 
@@ -6,10 +14,27 @@ export interface AccessAdminData {
   users: AccessUser[];
   profiles: Profile[];
   stores: Pick<Store, 'id' | 'code' | 'name'>[];
+  permissions: AccessPermission[];
+  profilePermissions: Array<{ profileId: string; permissionId: string }>;
+  userPermissionOverrides: Array<{
+    userId: string;
+    permissionId: string;
+    effect: PermissionOverrideEffect;
+  }>;
 }
 
 export async function loadAccessAdminData(): Promise<AccessAdminData> {
-  const [usersResult, profilesResult, storesResult, linksResult] = await Promise.all([
+  const [
+    usersResult,
+    profilesResult,
+    storesResult,
+    linksResult,
+    permissionsResult,
+    modulesResult,
+    actionsResult,
+    profilePermissionsResult,
+    userPermissionsResult,
+  ] = await Promise.all([
     supabase
       .from('usuarios')
       .select(
@@ -19,10 +44,27 @@ export async function loadAccessAdminData(): Promise<AccessAdminData> {
     supabase.from('perfis').select('id, chave, nome').eq('ativo', true).order('nome'),
     supabase.from('lojas').select('id, codigo_negocio, nome').order('nome'),
     supabase.from('usuario_lojas').select('usuario_id, loja_id'),
+    supabase.from('permissoes').select('id, modulo_id, acao_id, chave, descricao').eq('ativo', true),
+    supabase.from('modulos').select('id, chave, nome').eq('ativo', true).order('nome'),
+    supabase.from('acoes').select('id, chave, nome').order('nome'),
+    supabase.from('perfil_permissoes').select('perfil_id, permissao_id'),
+    supabase
+      .from('usuario_permissoes')
+      .select('usuario_id, permissao_id, efeito')
+      .is('loja_id', null)
+      .is('expires_at', null),
   ]);
 
   const error =
-    usersResult.error || profilesResult.error || storesResult.error || linksResult.error;
+    usersResult.error ||
+    profilesResult.error ||
+    storesResult.error ||
+    linksResult.error ||
+    permissionsResult.error ||
+    modulesResult.error ||
+    actionsResult.error ||
+    profilePermissionsResult.error ||
+    userPermissionsResult.error;
   if (error) {
     throw error;
   }
@@ -69,7 +111,46 @@ export async function loadAccessAdminData(): Promise<AccessAdminData> {
     };
   });
 
-  return { users, profiles, stores };
+  const moduleById = new Map(modulesResult.data.map((module) => [module.id, module]));
+  const actionById = new Map(actionsResult.data.map((action) => [action.id, action]));
+  const permissions = permissionsResult.data
+    .map((permission): AccessPermission | null => {
+      const module = moduleById.get(permission.modulo_id);
+      const action = actionById.get(permission.acao_id);
+      if (!module || !action) return null;
+      return {
+        id: permission.id,
+        key: permission.chave as AccessPermission['key'],
+        description: permission.descricao,
+        moduleKey: module.chave,
+        moduleName: module.nome,
+        actionKey: action.chave,
+        actionName: action.nome,
+      };
+    })
+    .filter((permission): permission is AccessPermission => permission !== null)
+    .sort(
+      (a, b) =>
+        a.moduleName.localeCompare(b.moduleName, 'pt-BR') ||
+        a.actionName.localeCompare(b.actionName, 'pt-BR') ||
+        a.description.localeCompare(b.description, 'pt-BR'),
+    );
+
+  return {
+    users,
+    profiles,
+    stores,
+    permissions,
+    profilePermissions: profilePermissionsResult.data.map((row) => ({
+      profileId: row.perfil_id,
+      permissionId: row.permissao_id,
+    })),
+    userPermissionOverrides: userPermissionsResult.data.map((row) => ({
+      userId: row.usuario_id,
+      permissionId: row.permissao_id,
+      effect: row.efeito as PermissionOverrideEffect,
+    })),
+  };
 }
 
 export async function createAccessUser(values: AccessFormValues): Promise<void> {
@@ -105,5 +186,17 @@ export async function resetAccessUserPassword(
     action: 'reset-password',
     userId,
     temporaryPassword,
+  });
+}
+
+
+export async function saveAccessUserPermissions(
+  userId: string,
+  overrides: AccessPermissionOverride[],
+): Promise<void> {
+  await invokeEdgeFunction<{ ok: true }>('admin-users', {
+    action: 'permissions',
+    userId,
+    overrides,
   });
 }
