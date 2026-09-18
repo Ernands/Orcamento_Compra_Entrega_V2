@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  ExternalLink,
   FileSpreadsheet,
   FileText,
   HardHat,
@@ -21,17 +22,22 @@ import {
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import {
   buildFinanceOverviewRows,
+  buildFinanceStoreCompositionRows,
   buildFinanceStoreItemRows,
   type FinanceOverviewStoreRow,
 } from '../domain/finance-overview';
 import { formatQuantityV2 } from '../domain/purchase-v2-calculations';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
-import type { PurchaseV2 } from '../domain/purchase-v2-types';
+import type { PurchaseAttachmentV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
 import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
-import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
+import {
+  createPurchaseAttachmentSignedUrlV2,
+  listSupplyPurchasesV2,
+} from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
 import {
+  createWorkDocumentSignedUrl,
   listFinanceStoreBudgets,
   listWorkServices,
 } from '../data/works/works-repository';
@@ -53,6 +59,39 @@ const ITEM_STATUS_LABELS = {
   partial: 'Compra parcial',
   purchased: 'Comprado',
 } as const;
+
+const PURCHASE_DOCUMENT_LABELS: Record<string, string> = {
+  invoice: 'Nota fiscal',
+  receipt: 'Recibo',
+  payment_proof: 'Comprovante',
+  boleto: 'Boleto',
+  purchase_order: 'Pedido',
+  reimbursement: 'Reembolso',
+  photo: 'Foto',
+  other: 'Arquivo',
+};
+
+const WORK_DOCUMENT_LABELS: Record<string, string> = {
+  invoice: 'Nota fiscal',
+  receipt: 'Recibo',
+  rpa: 'RPA',
+  contract: 'Contrato',
+  quote: 'Orçamento',
+  payment_proof: 'Comprovante',
+  other: 'Outro',
+};
+
+function purchaseDocumentCoverage(attachments: PurchaseAttachmentV2[]) {
+  const hasFiscal = attachments.some((attachment) =>
+    ['invoice', 'receipt'].includes(attachment.documentType),
+  );
+  const hasFinancial = attachments.some((attachment) =>
+    ['payment_proof', 'boleto'].includes(attachment.documentType),
+  );
+  if (hasFiscal && hasFinancial) return 'complete' as const;
+  if (attachments.length) return 'partial' as const;
+  return 'pending' as const;
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -103,6 +142,8 @@ export function FinanceStoreDetailPage() {
   const [workStatusFilter, setWorkStatusFilter] = useState('');
   const [workCategoryFilter, setWorkCategoryFilter] = useState('');
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,10 +184,52 @@ export function FinanceStoreDetailPage() {
       })[0] || null
     );
   }, [budgets, purchaseStoreRows, purchases, store, works]);
+  const financeStore = useMemo(
+    () => purchaseStoreRows.find((entry) => entry.storeId === storeId) || null,
+    [purchaseStoreRows, storeId],
+  );
   const itemRows = useMemo(
     () => (storeId ? buildFinanceStoreItemRows(purchases, storeId) : []),
     [purchases, storeId],
   );
+  const compositionRows = useMemo(
+    () =>
+      storeId
+        ? buildFinanceStoreCompositionRows({
+            storeId,
+            purchases,
+            purchaseStoreRows,
+            works,
+          })
+        : [],
+    [purchaseStoreRows, purchases, storeId, works],
+  );
+  const purchaseDocumentGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        purchaseCode: string;
+        supplierName: string;
+        attachments: PurchaseAttachmentV2[];
+      }
+    >();
+    financeStore?.purchases.forEach((purchase) => {
+      const current = groups.get(purchase.purchaseId) || {
+        purchaseCode: purchase.purchaseCode,
+        supplierName: purchase.supplierName,
+        attachments: [],
+      };
+      purchase.attachments.forEach((attachment) => {
+        if (!current.attachments.some((entry) => entry.id === attachment.id)) {
+          current.attachments.push(attachment);
+        }
+      });
+      groups.set(purchase.purchaseId, current);
+    });
+    return [...groups.entries()]
+      .map(([purchaseId, group]) => ({ purchaseId, ...group }))
+      .sort((a, b) => a.purchaseCode.localeCompare(b.purchaseCode, 'pt-BR'));
+  }, [financeStore]);
   const storeWorks = useMemo(
     () =>
       works
@@ -202,6 +285,42 @@ export function FinanceStoreDetailPage() {
     if (workCategoryFilter) parts.push(`Categoria: ${workCategoryFilter}`);
     return parts.length ? parts.join(' | ') : 'Sem filtros';
   }, [itemStatusFilter, query, workCategoryFilter, workStatusFilter]);
+
+  const openPurchaseDocument = async (attachment: PurchaseAttachmentV2) => {
+    setOpeningDocumentId(attachment.id);
+    setDocumentError(null);
+    try {
+      window.open(
+        await createPurchaseAttachmentSignedUrlV2(attachment.storagePath),
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } catch {
+      setDocumentError('Não foi possível abrir o documento da compra.');
+    } finally {
+      setOpeningDocumentId(null);
+    }
+  };
+
+  const openWorkDocument = async (
+    work: WorkService,
+    document: WorkService['documents'][number],
+  ) => {
+    if (!document.storagePath) return;
+    setOpeningDocumentId(document.id);
+    setDocumentError(null);
+    try {
+      window.open(
+        await createWorkDocumentSignedUrl(document.storagePath),
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } catch {
+      setDocumentError(`Não foi possível abrir o documento de ${work.code}.`);
+    } finally {
+      setOpeningDocumentId(null);
+    }
+  };
 
   const exportDetail = async (format: 'pdf' | 'excel') => {
     if (!store || !overview) return;
@@ -307,23 +426,197 @@ export function FinanceStoreDetailPage() {
         <header>
           <div>
             <h3>Composição do orçamento</h3>
-            <p>Itens e obras são cadastrados separadamente e consolidados nesta loja.</p>
+            <p>Leitura por grupo, mantendo o fechamento exato com o total financeiro da loja.</p>
           </div>
         </header>
-        <div className="finance-store-detail__group-grid">
-          <article>
-            <ShoppingCart size={19} />
-            <strong>Itens / equipamentos / mobiliário</strong>
-            <span>Orçado {formatBRL(overview.itemsBudgetCents)}</span>
-            <span>Comprado {formatBRL(overview.itemsRealizedCents)}</span>
-            <b>{formatBRL(overview.itemsBudgetCents - overview.itemsRealizedCents)} de diferença atual</b>
+        <div className="finance-store-detail__composition-scroll">
+          <table className="finance-store-detail__composition-table">
+            <thead>
+              <tr>
+                <th>Grupo</th>
+                <th>Orçado</th>
+                <th>Realizado</th>
+                <th>Diferença</th>
+                <th>Pago</th>
+                <th>A pagar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {compositionRows.map((row) => (
+                <tr key={row.key}>
+                  <td>
+                    <strong>{row.label}</strong>
+                    {row.key === 'works' ? (
+                      <small>Serviços, mão de obra e execução</small>
+                    ) : (
+                      <small>Itens conforme categoria histórica da compra</small>
+                    )}
+                  </td>
+                  <td><strong>{formatBRL(row.budgetCents)}</strong></td>
+                  <td>{formatBRL(row.realizedCents)}</td>
+                  <td>
+                    <strong className={row.differenceCents < 0n ? 'value-negative' : 'value-positive'}>
+                      {formatBRL(row.differenceCents)}
+                    </strong>
+                  </td>
+                  <td>{formatBRL(row.paidCents)}</td>
+                  <td>{formatBRL(row.payableCents)}</td>
+                </tr>
+              ))}
+              <tr className="finance-store-detail__composition-total">
+                <td><strong>Total da loja</strong></td>
+                <td><strong>{formatBRL(overview.budgetTotalCents)}</strong></td>
+                <td><strong>{formatBRL(overview.realizedTotalCents)}</strong></td>
+                <td>
+                  <strong className={overview.differenceCents < 0n ? 'value-negative' : 'value-positive'}>
+                    {formatBRL(overview.differenceCents)}
+                  </strong>
+                </td>
+                <td><strong>{formatBRL(overview.paidCents)}</strong></td>
+                <td><strong>{formatBRL(overview.payableCents)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="finance-store-detail__panel finance-store-detail__documents-panel">
+        <header>
+          <div>
+            <ReceiptText size={19} />
+            <div>
+              <h3>Documentos da loja</h3>
+              <p>Compras e obras reunidas em um único ponto para conferência.</p>
+            </div>
+          </div>
+          <span>
+            {purchaseDocumentGroups.reduce((sum, group) => sum + group.attachments.length, 0) +
+              storeWorks.reduce((sum, work) => sum + work.documents.length, 0)} arquivo(s)
+          </span>
+        </header>
+        {documentError && <div className="finance-store-detail__document-error">{documentError}</div>}
+        <div className="finance-store-detail__documents-grid">
+          <article className="finance-store-detail__document-block">
+            <header>
+              <ShoppingCart size={17} />
+              <div>
+                <strong>Compras / itens</strong>
+                <small>
+                  Completo = documento fiscal/recibo + boleto ou comprovante de pagamento.
+                </small>
+              </div>
+            </header>
+            {purchaseDocumentGroups.length ? (
+              <div className="finance-store-detail__document-list">
+                {purchaseDocumentGroups.map((group) => {
+                  const coverage = purchaseDocumentCoverage(group.attachments);
+                  return (
+                    <div className="finance-store-detail__document-row" key={group.purchaseId}>
+                      <div>
+                        <strong>{group.purchaseCode}</strong>
+                        <small>{group.supplierName}</small>
+                      </div>
+                      <span className={`finance-store-document-status finance-store-document-status--${coverage}`}>
+                        {coverage === 'complete' ? 'Completo' : coverage === 'partial' ? 'Parcial' : 'Pendente'}
+                      </span>
+                      <div className="finance-store-detail__document-actions">
+                        {group.attachments.length ? (
+                          group.attachments.map((attachment) => (
+                            <button
+                              type="button"
+                              className="button button--secondary button--small"
+                              key={attachment.id}
+                              disabled={openingDocumentId === attachment.id}
+                              onClick={() => void openPurchaseDocument(attachment)}
+                              title={attachment.originalName}
+                            >
+                              <FileText size={14} />
+                              {openingDocumentId === attachment.id
+                                ? 'Abrindo...'
+                                : PURCHASE_DOCUMENT_LABELS[attachment.documentType] || 'Arquivo'}
+                              <ExternalLink size={12} />
+                            </button>
+                          ))
+                        ) : (
+                          <small>Sem documento anexado.</small>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="finance-store-detail__document-empty">
+                Nenhuma compra realizada com documentos para esta loja.
+              </p>
+            )}
           </article>
-          <article>
-            <HardHat size={19} />
-            <strong>Obras e Serviços</strong>
-            <span>Orçado {formatBRL(overview.worksBudgetCents)}</span>
-            <span>Contratado {formatBRL(overview.worksContractedCents)}</span>
-            <b>{formatBRL(overview.worksBudgetCents - overview.worksContractedCents)} de diferença</b>
+
+          <article className="finance-store-detail__document-block">
+            <header>
+              <HardHat size={17} />
+              <div>
+                <strong>Obras e Serviços</strong>
+                <small>Status calculado pelo valor contratado x valor documentado.</small>
+              </div>
+            </header>
+            {storeWorks.length ? (
+              <div className="finance-store-detail__document-list">
+                {storeWorks.map((work) => {
+                  const totals = workTotals(work);
+                  const coverage =
+                    totals.missingDocumentsCents <= 0n && totals.contractedCents > 0n
+                      ? 'complete'
+                      : totals.documentedCents > 0n
+                        ? 'partial'
+                        : 'pending';
+                  return (
+                    <div className="finance-store-detail__document-row" key={work.id}>
+                      <div>
+                        <strong>{work.code} · {work.category}</strong>
+                        <small>
+                          {formatBRL(totals.documentedCents)} documentado de {formatBRL(totals.contractedCents)}
+                        </small>
+                      </div>
+                      <span className={`finance-store-document-status finance-store-document-status--${coverage}`}>
+                        {coverage === 'complete' ? 'Completo' : coverage === 'partial' ? 'Parcial' : 'Pendente'}
+                      </span>
+                      <div className="finance-store-detail__document-actions">
+                        {work.documents.length ? (
+                          work.documents.map((document) =>
+                            document.storagePath ? (
+                              <button
+                                type="button"
+                                className="button button--secondary button--small"
+                                key={document.id}
+                                disabled={openingDocumentId === document.id}
+                                onClick={() => void openWorkDocument(work, document)}
+                              >
+                                <FileText size={14} />
+                                {openingDocumentId === document.id
+                                  ? 'Abrindo...'
+                                  : WORK_DOCUMENT_LABELS[document.documentType] || 'Documento'}
+                                <ExternalLink size={12} />
+                              </button>
+                            ) : (
+                              <span className="finance-store-detail__document-no-file" key={document.id}>
+                                {WORK_DOCUMENT_LABELS[document.documentType] || 'Documento'} sem arquivo
+                              </span>
+                            ),
+                          )
+                        ) : (
+                          <small>Sem documento cadastrado.</small>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="finance-store-detail__document-empty">
+                Nenhuma obra ou serviço cadastrado para esta loja.
+              </p>
+            )}
           </article>
         </div>
       </section>
@@ -404,6 +697,7 @@ export function FinanceStoreDetailPage() {
                     <td>
                       <strong>{row.itemCode}</strong>
                       <span>{row.itemName}</span>
+                      <small>{row.itemCategory || 'Itens gerais'}</small>
                     </td>
                     <td>{quantityLabel(row.approvedQuantity, row.unit)}</td>
                     <td><strong>{formatBRL(row.budgetCents)}</strong></td>
