@@ -3,7 +3,6 @@ import type {
   AccessPermission,
   AccessPermissionOverride,
   AccessUser,
-  PermissionOverrideEffect,
   Profile,
   Store,
 } from '../../domain/types';
@@ -152,7 +151,7 @@ export async function loadAccessAdminData(): Promise<AccessAdminData> {
       .map((row) => ({
         userId: row.usuario_id,
         permissionId: row.permissao_id,
-        effect: row.efeito as PermissionOverrideEffect,
+        effect: row.efeito,
       })),
   };
 }
