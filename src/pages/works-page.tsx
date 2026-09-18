@@ -48,6 +48,7 @@ const CATEGORIES = [
   'CFTV / Segurança',
   'Internet / Cabeamento',
   'Acessibilidade',
+  'Serviços Diversos de Obra',
   'Outros',
 ];
 
