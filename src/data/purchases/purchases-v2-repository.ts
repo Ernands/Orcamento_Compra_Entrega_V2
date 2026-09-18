@@ -101,6 +101,7 @@ type SupplyItemCatalogRow = {
   id: string;
   subcategory: string | null;
   group_name: string | null;
+  financial_group: 'equipment' | 'furniture' | 'general' | null;
 };
 
 type PurchaseItemRow = {
@@ -189,7 +190,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
     supabase.from('supply_purchase_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
-    supabase.from('supply_items' as never).select('id, subcategory, group_name'),
+    supabase.from('supply_items' as never).select('id, subcategory, group_name, financial_group'),
     supabase.from('supply_purchase_destinations' as never).select('*').order('position'),
     supabase.from('supply_purchase_destination_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
@@ -236,6 +237,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
       itemCategory: item.item_category_snapshot,
       catalogSubcategory: catalogItemsById.get(item.supply_item_id)?.subcategory || null,
       catalogGroupName: catalogItemsById.get(item.supply_item_id)?.group_name || null,
+      catalogFinancialGroup: catalogItemsById.get(item.supply_item_id)?.financial_group || null,
       itemArea: item.item_area_snapshot, brandReference: item.brand_reference_snapshot,
       technicalSpecification: item.technical_specification_snapshot, offeredBrandModel: item.offered_brand_model_snapshot,
       productUrl: item.product_url_snapshot, storeId: item.store_id, storeCode: item.store_code_snapshot,
