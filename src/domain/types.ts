@@ -51,7 +51,9 @@ export type Capability =
   | 'purchases.edit'
   | 'purchases.approve'
   | 'finance.view'
-  | 'finance.manage';
+  | 'finance.manage'
+  | 'works.view'
+  | 'works.manage';
 
 export interface Profile {
   id: string;
