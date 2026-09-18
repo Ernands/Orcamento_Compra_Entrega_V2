@@ -353,6 +353,8 @@ export function FinanceStoreDetailPage() {
     );
   }
 
+  const availableBbCents = overview.budgetBbCents - overview.budgetTotalCents;
+
   return (
     <div className="page-stack finance-store-detail">
       <header className="finance-store-detail__heading">
@@ -395,6 +397,13 @@ export function FinanceStoreDetailPage() {
               <Landmark size={20} />
               <span>Verba BB</span>
               <strong>{formatBRL(overview.budgetBbCents)}</strong>
+              <small
+                className={`finance-store-bb-available ${
+                  availableBbCents < 0n ? 'is-negative' : 'is-positive'
+                }`}
+              >
+                Disponível BB: {formatBRL(availableBbCents)}
+              </small>
             </article>
             <article>
               <ReceiptText size={20} />
