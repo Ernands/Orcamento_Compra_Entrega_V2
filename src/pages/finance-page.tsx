@@ -27,6 +27,7 @@ import { listStores } from '../data/stores/stores-repository';
 import {
   listFinanceStoreBudgets,
   listWorkServices,
+  saveFinanceStoreBudget,
 } from '../data/works/works-repository';
 import {
   createPurchaseAttachmentSignedUrlV2,
@@ -37,7 +38,10 @@ import {
   buildFinanceStoreRows,
   reimbursementTotals,
 } from '../domain/finance-calculations';
-import { buildFinanceOverviewRows } from '../domain/finance-overview';
+import {
+  buildFinanceOverviewRows,
+  type FinanceOverviewStoreRow,
+} from '../domain/finance-overview';
 import type {
   FinanceReimbursement,
   FinanceReimbursementStatus,
@@ -430,6 +434,81 @@ function ReimbursementModal({
   );
 }
 
+function FinanceBudgetModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: FinanceOverviewStoreRow;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(decimalFromCents(row.budgetBbCents));
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (moneyToCents(amount || '0') < 0n) {
+      setError('A verba não pode ser negativa.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      await saveFinanceStoreBudget(row.storeId, amount || '0', notes);
+      await onSaved();
+      onClose();
+    } catch (saveError) {
+      setError(errorMessage(saveError, 'Não foi possível salvar a verba da loja.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      title="Verba BB da loja"
+      description={`${row.code} · ${row.name} · ${row.city}/${row.state}`}
+      onClose={onClose}
+    >
+      <form className="stack-form" onSubmit={submit}>
+        <label className="field">
+          Verba / teto BB
+          <input
+            autoFocus
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="0,00"
+          />
+        </label>
+        <label className="field">
+          Observação
+          <textarea
+            rows={3}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Opcional"
+          />
+        </label>
+        {error && <div className="form-error">{error}</div>}
+        <div className="modal-actions">
+          <button type="button" className="button button--secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="button button--primary" disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar verba'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function FinancePage() {
   const { can } = useSession();
   const canManage = can('finance.manage');
@@ -446,6 +525,7 @@ export function FinancePage() {
   const [storeFilter, setStoreFilter] = useState('');
   const [query, setQuery] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [budgetStore, setBudgetStore] = useState<FinanceOverviewStoreRow | null>(null);
   const [candidate, setCandidate] = useState<FinanceStorePurchaseRow | null>(null);
   const [editingReimbursement, setEditingReimbursement] = useState<FinanceReimbursement | null>(
     null,
@@ -886,6 +966,15 @@ export function FinancePage() {
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.budgetBbCents)}</strong>
+                            {canManage && (
+                              <button
+                                type="button"
+                                className="finance-budget-edit"
+                                onClick={() => setBudgetStore(row)}
+                              >
+                                Editar verba
+                              </button>
+                            )}
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.itemsBudgetCents)}</strong>
@@ -1253,6 +1342,15 @@ export function FinancePage() {
           são controlados separadamente no novo módulo.
         </span>
       </footer>
+
+      {budgetStore && (
+        <FinanceBudgetModal
+          key={budgetStore.storeId}
+          row={budgetStore}
+          onClose={() => setBudgetStore(null)}
+          onSaved={load}
+        />
+      )}
 
       <ReimbursementModal
         key={candidate?.id || editingReimbursement?.id || 'closed'}
