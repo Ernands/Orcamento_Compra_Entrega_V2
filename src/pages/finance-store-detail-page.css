@@ -138,6 +138,23 @@
   white-space: nowrap;
 }
 
+.finance-store-bb-available {
+  grid-column: 2;
+  margin-top: 1px;
+  font-size: 0.62rem;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.finance-store-bb-available.is-positive {
+  color: #177354;
+}
+
+.finance-store-bb-available.is-negative {
+  color: #a33a32;
+}
+
 .finance-store-detail__kpi-group--budget article:last-child {
   color: #fff;
   background: #2e78b7;
