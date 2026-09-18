@@ -39,10 +39,10 @@ export interface WorkServiceDocument {
   documentNumber: string | null;
   documentDate: string | null;
   documentAmount: string | null;
-  originalName: string;
-  storagePath: string;
-  mimeType: string;
-  sizeBytes: number;
+  originalName: string | null;
+  storagePath: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
   status: WorkDocumentStatus;
   notes: string | null;
   createdAt: string;
@@ -115,7 +115,7 @@ export interface WorkDocumentValues {
   documentAmount: string;
   status: WorkDocumentStatus;
   notes: string;
-  file: File;
+  file: File | null;
 }
 
 export interface FinanceStoreBudget {
