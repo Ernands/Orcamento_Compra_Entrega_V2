@@ -954,6 +954,7 @@ export function FinancePage() {
                         <th>Pago</th>
                         <th>Saldo a pagar</th>
                         <th>Documentação obra</th>
+                        <th>Ação</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1018,6 +1019,14 @@ export function FinancePage() {
                             {row.worksMissingDocumentsCents > 0n && (
                               <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
                             )}
+                          </td>
+                          <td>
+                            <Link
+                              className="button button--secondary button--small"
+                              to={`/financeiro/lojas/${row.storeId}`}
+                            >
+                              Ver detalhes
+                            </Link>
                           </td>
                         </tr>
                       ))}
