@@ -120,7 +120,7 @@ function approvedPurchase(): PurchaseV2 {
     originState: null,
     contact: null,
     quoteContextSnapshotSource: 'approval',
-  } as PurchaseV2;
+  } as unknown as PurchaseV2;
 }
 
 function work(): WorkService {
