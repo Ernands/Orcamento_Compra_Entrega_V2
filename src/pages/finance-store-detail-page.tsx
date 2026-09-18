@@ -2,15 +2,22 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  FileSpreadsheet,
+  FileText,
   HardHat,
   Landmark,
   ReceiptText,
+  Search,
   ShoppingCart,
   WalletCards,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { EmptyState, ErrorState, InlineLoading } from '../components/ui';
+import {
+  downloadFinanceStoreDetailExcel,
+  downloadFinanceStoreDetailPdf,
+} from '../data/exports/finance-exports';
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import {
   buildFinanceOverviewRows,
@@ -51,6 +58,10 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function normalized(value: string): string {
+  return value.trim().toLocaleLowerCase('pt-BR');
+}
+
 function quantityLabel(value: bigint, unit: string): string {
   return `${formatQuantityV2((Number(value) / 1000).toFixed(3))} ${unit}`;
 }
@@ -87,6 +98,11 @@ export function FinanceStoreDetailPage() {
   const [budgets, setBudgets] = useState<FinanceStoreBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [itemStatusFilter, setItemStatusFilter] = useState('');
+  const [workStatusFilter, setWorkStatusFilter] = useState('');
+  const [workCategoryFilter, setWorkCategoryFilter] = useState('');
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,6 +154,76 @@ export function FinanceStoreDetailPage() {
         .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR')),
     [storeId, works],
   );
+  const workCategories = useMemo(
+    () => [...new Set(storeWorks.map((work) => work.category))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [storeWorks],
+  );
+  const detailSearch = normalized(query);
+  const filteredItemRows = useMemo(
+    () =>
+      itemRows
+        .filter((row) => !itemStatusFilter || row.purchaseStatus === itemStatusFilter)
+        .filter(
+          (row) =>
+            !detailSearch ||
+            normalized(
+              [
+                row.itemCode,
+                row.itemName,
+                row.purchaseCode,
+                row.quoteCode,
+                row.supplierName,
+              ].join(' '),
+            ).includes(detailSearch),
+        ),
+    [detailSearch, itemRows, itemStatusFilter],
+  );
+  const filteredStoreWorks = useMemo(
+    () =>
+      storeWorks
+        .filter((work) => !workStatusFilter || work.status === workStatusFilter)
+        .filter((work) => !workCategoryFilter || work.category === workCategoryFilter)
+        .filter(
+          (work) =>
+            !detailSearch ||
+            normalized(
+              [work.code, work.category, work.description, work.providerName || ''].join(' '),
+            ).includes(detailSearch),
+        ),
+    [detailSearch, storeWorks, workCategoryFilter, workStatusFilter],
+  );
+  const filtersText = useMemo(() => {
+    const parts: string[] = [];
+    if (query.trim()) parts.push(`Busca: ${query.trim()}`);
+    if (itemStatusFilter)
+      parts.push(`Itens: ${ITEM_STATUS_LABELS[itemStatusFilter as keyof typeof ITEM_STATUS_LABELS]}`);
+    if (workStatusFilter)
+      parts.push(`Obras: ${WORK_STATUS_LABELS[workStatusFilter as WorkService['status']]}`);
+    if (workCategoryFilter) parts.push(`Categoria: ${workCategoryFilter}`);
+    return parts.length ? parts.join(' | ') : 'Sem filtros';
+  }, [itemStatusFilter, query, workCategoryFilter, workStatusFilter]);
+
+  const exportDetail = async (format: 'pdf' | 'excel') => {
+    if (!store || !overview) return;
+    setExporting(format);
+    setError(null);
+    try {
+      const input = {
+        store,
+        overview,
+        items: filteredItemRows,
+        works: filteredStoreWorks,
+        generatedAt: new Date(),
+        filtersText,
+      };
+      if (format === 'pdf') await downloadFinanceStoreDetailPdf(input);
+      else await downloadFinanceStoreDetailExcel(input);
+    } catch (exportError) {
+      setError(errorMessage(exportError, 'Não foi possível gerar a exportação da loja.'));
+    } finally {
+      setExporting(null);
+    }
+  };
 
   if (loading) return <InlineLoading label="Carregando detalhe financeiro da loja" />;
   if (error) return <ErrorState message={error} onRetry={() => void load()} />;
@@ -161,6 +247,26 @@ export function FinanceStoreDetailPage() {
           <span className="eyebrow">Financeiro · Detalhe da loja</span>
           <h2>{store.code} · {store.name}</h2>
           <p>{store.city}/{store.state}</p>
+        </div>
+        <div className="finance-store-detail__actions">
+          <button
+            type="button"
+            className="button button--secondary button--small"
+            disabled={Boolean(exporting)}
+            onClick={() => void exportDetail('pdf')}
+          >
+            <FileText size={15} />
+            {exporting === 'pdf' ? 'Gerando...' : 'PDF'}
+          </button>
+          <button
+            type="button"
+            className="button button--secondary button--small"
+            disabled={Boolean(exporting)}
+            onClick={() => void exportDetail('excel')}
+          >
+            <FileSpreadsheet size={15} />
+            {exporting === 'excel' ? 'Gerando...' : 'Excel'}
+          </button>
         </div>
       </header>
 
@@ -222,16 +328,44 @@ export function FinanceStoreDetailPage() {
         </div>
       </section>
 
-      <section className="finance-store-detail__source-note">
-        <ReceiptText size={20} />
-        <div>
-          <strong>De onde vem o Orçado Itens?</strong>
-          <p>
-            Do valor da <b>cotação aprovada</b>. No momento da aprovação, o sistema cria o CMP e
-            grava um snapshot do valor, quantidade e destinos aprovados. Por isso, o orçamento
-            aparece aqui mesmo antes de existir pedido ou compra efetivamente realizada.
-          </p>
-        </div>
+      <section className="finance-store-detail__filters" aria-label="Filtros do detalhe da loja">
+        <label className="search-field">
+          <Search size={18} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar item, compra, fornecedor, serviço ou responsável"
+          />
+        </label>
+        <label>
+          Situação dos itens
+          <select value={itemStatusFilter} onChange={(event) => setItemStatusFilter(event.target.value)}>
+            <option value="">Todas</option>
+            {Object.entries(ITEM_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Situação das obras
+          <select value={workStatusFilter} onChange={(event) => setWorkStatusFilter(event.target.value)}>
+            <option value="">Todas</option>
+            {Object.entries(WORK_STATUS_LABELS)
+              .filter(([value]) => value !== 'cancelled')
+              .map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+          </select>
+        </label>
+        <label>
+          Categoria da obra
+          <select value={workCategoryFilter} onChange={(event) => setWorkCategoryFilter(event.target.value)}>
+            <option value="">Todas</option>
+            {workCategories.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+        </label>
       </section>
 
       <section className="finance-store-detail__panel">
@@ -243,25 +377,29 @@ export function FinanceStoreDetailPage() {
               <p>Orçamento aprovado x compra efetivamente registrada.</p>
             </div>
           </div>
-          <span>{itemRows.length} linha(s)</span>
+          <span>{filteredItemRows.length} linha(s)</span>
         </header>
-        {itemRows.length ? (
+        {filteredItemRows.length ? (
           <div className="finance-store-detail__table-scroll">
             <table className="finance-store-detail__table">
               <thead>
+                <tr className="finance-store-detail__table-groups">
+                  <th rowSpan={2}>Item</th>
+                  <th colSpan={2}>Orçamento</th>
+                  <th colSpan={3}>Realização</th>
+                  <th rowSpan={2}>Origem</th>
+                  <th rowSpan={2}>Situação</th>
+                </tr>
                 <tr>
-                  <th>Item</th>
                   <th>Qtd. aprovada</th>
                   <th>Orçado</th>
                   <th>Qtd. comprada</th>
                   <th>Comprado</th>
                   <th>Diferença atual</th>
-                  <th>Origem</th>
-                  <th>Situação</th>
                 </tr>
               </thead>
               <tbody>
-                {itemRows.map((row) => (
+                {filteredItemRows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <strong>{row.itemCode}</strong>
@@ -312,12 +450,18 @@ export function FinanceStoreDetailPage() {
             Abrir Obras e Serviços
           </Link>
         </header>
-        {storeWorks.length ? (
+        {filteredStoreWorks.length ? (
           <div className="finance-store-detail__table-scroll">
             <table className="finance-store-detail__table finance-store-detail__table--works">
               <thead>
+                <tr className="finance-store-detail__table-groups">
+                  <th rowSpan={2}>Serviço</th>
+                  <th colSpan={3}>Orçamento e contratação</th>
+                  <th colSpan={2}>Financeiro</th>
+                  <th colSpan={2}>Documentação</th>
+                  <th colSpan={2}>Execução</th>
+                </tr>
                 <tr>
-                  <th>Serviço</th>
                   <th>Orçado</th>
                   <th>Contratado</th>
                   <th>Diferença</th>
@@ -330,7 +474,7 @@ export function FinanceStoreDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {storeWorks.map((work) => {
+                {filteredStoreWorks.map((work) => {
                   const totals = workTotals(work);
                   return (
                     <tr key={work.id}>
