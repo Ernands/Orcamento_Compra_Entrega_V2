@@ -19,8 +19,8 @@ export interface FinanceStoreItemDetailRow {
   itemCode: string;
   itemName: string;
   itemCategory: string | null;
-  itemSubcategory: string | null;
-  itemGroupName: string | null;
+  itemSubcategory?: string | null;
+  itemGroupName?: string | null;
   unit: string;
   approvedQuantity: bigint;
   budgetCents: bigint;
