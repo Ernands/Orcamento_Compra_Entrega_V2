@@ -96,8 +96,10 @@ export function AppShell() {
     can('items.view') || can('suppliers.view') || can('quotes.view') || can('purchases.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
-  const title = location.pathname.startsWith('/suprimentos/itens/')
-    ? 'Detalhe do item'
+  const title = location.pathname.startsWith('/financeiro/lojas/')
+    ? 'Detalhe financeiro da loja'
+    : location.pathname.startsWith('/suprimentos/itens/')
+      ? 'Detalhe do item'
     : location.pathname.startsWith('/lojas/')
       ? location.pathname.endsWith('/anexos')
         ? 'Anexos da loja'
