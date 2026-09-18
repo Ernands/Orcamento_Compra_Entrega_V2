@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { EmptyState, ErrorState, InlineLoading } from '../components/ui';
+import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceStoreDetailExcel,
   downloadFinanceStoreDetailPdf,
@@ -25,6 +25,7 @@ import {
   buildFinanceStoreCompositionRows,
   buildFinanceStoreItemRows,
   type FinanceOverviewStoreRow,
+  type FinanceStoreItemDetailRow,
 } from '../domain/finance-overview';
 import { formatQuantityV2 } from '../domain/purchase-v2-calculations';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
@@ -87,18 +88,6 @@ const WORK_DOCUMENT_LABELS: Record<string, string> = {
   other: 'Outro',
 };
 
-function purchaseDocumentCoverage(attachments: PurchaseAttachmentV2[]) {
-  const hasFiscal = attachments.some((attachment) =>
-    ['invoice', 'receipt'].includes(attachment.documentType),
-  );
-  const hasFinancial = attachments.some((attachment) =>
-    ['payment_proof', 'boleto'].includes(attachment.documentType),
-  );
-  if (hasFiscal && hasFinancial) return 'complete' as const;
-  if (attachments.length) return 'partial' as const;
-  return 'pending' as const;
-}
-
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -150,6 +139,11 @@ export function FinanceStoreDetailPage() {
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documentPopup, setDocumentPopup] = useState<
+    | { kind: 'item'; row: FinanceStoreItemDetailRow }
+    | { kind: 'work'; work: WorkService }
+    | null
+  >(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,10 +184,6 @@ export function FinanceStoreDetailPage() {
       })[0] || null
     );
   }, [budgets, purchaseStoreRows, purchases, store, works]);
-  const financeStore = useMemo(
-    () => purchaseStoreRows.find((entry) => entry.storeId === storeId) || null,
-    [purchaseStoreRows, storeId],
-  );
   const itemRows = useMemo(
     () => (storeId ? buildFinanceStoreItemRows(purchases, storeId) : []),
     [purchases, storeId],
@@ -210,32 +200,6 @@ export function FinanceStoreDetailPage() {
         : [],
     [purchaseStoreRows, purchases, storeId, works],
   );
-  const purchaseDocumentGroups = useMemo(() => {
-    const groups = new Map<
-      string,
-      {
-        purchaseCode: string;
-        supplierName: string;
-        attachments: PurchaseAttachmentV2[];
-      }
-    >();
-    financeStore?.purchases.forEach((purchase) => {
-      const current = groups.get(purchase.purchaseId) || {
-        purchaseCode: purchase.purchaseCode,
-        supplierName: purchase.supplierName,
-        attachments: [],
-      };
-      purchase.attachments.forEach((attachment) => {
-        if (!current.attachments.some((entry) => entry.id === attachment.id)) {
-          current.attachments.push(attachment);
-        }
-      });
-      groups.set(purchase.purchaseId, current);
-    });
-    return [...groups.entries()]
-      .map(([purchaseId, group]) => ({ purchaseId, ...group }))
-      .sort((a, b) => a.purchaseCode.localeCompare(b.purchaseCode, 'pt-BR'));
-  }, [financeStore]);
   const storeWorks = useMemo(
     () =>
       works
@@ -281,6 +245,34 @@ export function FinanceStoreDetailPage() {
         ),
     [detailSearch, storeWorks, workCategoryFilter, workStatusFilter],
   );
+  const itemDocuments = (row: FinanceStoreItemDetailRow): PurchaseAttachmentV2[] => {
+    const purchase = purchases.find((entry) => entry.id === row.purchaseId);
+    if (!purchase || !storeId) return [];
+
+    const orderIds = new Set(
+      purchase.orders
+        .filter(
+          (order) =>
+            order.status === 'active' &&
+            order.lines.some(
+              (line) =>
+                line.purchaseItemId === row.purchaseItemId &&
+                line.stores.some((entry) => entry.storeId === storeId),
+            ),
+        )
+        .map((order) => order.id),
+    );
+
+    return purchase.attachments.filter((attachment) => {
+      const appliesToStore =
+        attachment.stores.length === 0 ||
+        attachment.stores.some((entry) => entry.storeId === storeId);
+      const appliesToOrder =
+        attachment.purchaseOrderId === null || orderIds.has(attachment.purchaseOrderId);
+      return appliesToStore && appliesToOrder;
+    });
+  };
+
   const filtersText = useMemo(() => {
     const parts: string[] = [];
     if (query.trim()) parts.push(`Busca: ${query.trim()}`);
@@ -395,37 +387,52 @@ export function FinanceStoreDetailPage() {
         </div>
       </header>
 
-      <section className="finance-store-detail__kpis" aria-label="Resumo da loja">
-        <article>
-          <Landmark size={20} />
-          <span>Verba BB</span>
-          <strong>{formatBRL(overview.budgetBbCents)}</strong>
-        </article>
-        <article>
-          <ReceiptText size={20} />
-          <span>Orçado total</span>
-          <strong>{formatBRL(overview.budgetTotalCents)}</strong>
-        </article>
-        <article className="is-primary">
-          <Building2 size={20} />
-          <span>Realizado</span>
-          <strong>{formatBRL(overview.realizedTotalCents)}</strong>
-        </article>
-        <article className={overview.differenceCents < 0n ? 'is-negative' : 'is-positive'}>
-          <CheckCircle2 size={20} />
-          <span>Diferença</span>
-          <strong>{formatBRL(overview.differenceCents)}</strong>
-        </article>
-        <article>
-          <WalletCards size={20} />
-          <span>Pago</span>
-          <strong>{formatBRL(overview.paidCents)}</strong>
-        </article>
-        <article>
-          <WalletCards size={20} />
-          <span>A pagar</span>
-          <strong>{formatBRL(overview.payableCents)}</strong>
-        </article>
+      <section className="finance-store-detail__kpis finance-store-detail__kpis--grouped" aria-label="Resumo da loja">
+        <div className="finance-store-detail__kpi-group finance-store-detail__kpi-group--budget">
+          <span className="finance-store-detail__kpi-group-title">Planejamento</span>
+          <div>
+            <article>
+              <Landmark size={20} />
+              <span>Verba BB</span>
+              <strong>{formatBRL(overview.budgetBbCents)}</strong>
+            </article>
+            <article>
+              <ReceiptText size={20} />
+              <span>Orçado total</span>
+              <strong>{formatBRL(overview.budgetTotalCents)}</strong>
+            </article>
+          </div>
+        </div>
+        <div className="finance-store-detail__kpi-group finance-store-detail__kpi-group--execution">
+          <span className="finance-store-detail__kpi-group-title">Execução</span>
+          <div>
+            <article className="is-primary">
+              <Building2 size={20} />
+              <span>Realizado</span>
+              <strong>{formatBRL(overview.realizedTotalCents)}</strong>
+            </article>
+            <article className={overview.differenceCents < 0n ? 'is-negative' : 'is-positive'}>
+              <CheckCircle2 size={20} />
+              <span>Diferença</span>
+              <strong>{formatBRL(overview.differenceCents)}</strong>
+            </article>
+          </div>
+        </div>
+        <div className="finance-store-detail__kpi-group finance-store-detail__kpi-group--cash">
+          <span className="finance-store-detail__kpi-group-title">Financeiro</span>
+          <div>
+            <article>
+              <WalletCards size={20} />
+              <span>Pago</span>
+              <strong>{formatBRL(overview.paidCents)}</strong>
+            </article>
+            <article>
+              <WalletCards size={20} />
+              <span>A pagar</span>
+              <strong>{formatBRL(overview.payableCents)}</strong>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section className="finance-store-detail__group-summary">
@@ -486,147 +493,6 @@ export function FinanceStoreDetailPage() {
         </div>
       </section>
 
-      <section className="finance-store-detail__panel finance-store-detail__documents-panel">
-        <header>
-          <div>
-            <ReceiptText size={19} />
-            <div>
-              <h3>Documentos da loja</h3>
-              <p>Compras e obras reunidas em um único ponto para conferência.</p>
-            </div>
-          </div>
-          <span>
-            {purchaseDocumentGroups.reduce((sum, group) => sum + group.attachments.length, 0) +
-              storeWorks.reduce((sum, work) => sum + work.documents.length, 0)} arquivo(s)
-          </span>
-        </header>
-        {documentError && <div className="finance-store-detail__document-error">{documentError}</div>}
-        <div className="finance-store-detail__documents-grid">
-          <article className="finance-store-detail__document-block">
-            <header>
-              <ShoppingCart size={17} />
-              <div>
-                <strong>Compras / itens</strong>
-                <small>
-                  Completo = documento fiscal/recibo + boleto ou comprovante de pagamento.
-                </small>
-              </div>
-            </header>
-            {purchaseDocumentGroups.length ? (
-              <div className="finance-store-detail__document-list">
-                {purchaseDocumentGroups.map((group) => {
-                  const coverage = purchaseDocumentCoverage(group.attachments);
-                  return (
-                    <div className="finance-store-detail__document-row" key={group.purchaseId}>
-                      <div>
-                        <strong>{group.purchaseCode}</strong>
-                        <small>{group.supplierName}</small>
-                      </div>
-                      <span className={`finance-store-document-status finance-store-document-status--${coverage}`}>
-                        {coverage === 'complete' ? 'Completo' : coverage === 'partial' ? 'Parcial' : 'Pendente'}
-                      </span>
-                      <div className="finance-store-detail__document-actions">
-                        {group.attachments.length ? (
-                          group.attachments.map((attachment) => (
-                            <button
-                              type="button"
-                              className="button button--secondary button--small"
-                              key={attachment.id}
-                              disabled={openingDocumentId === attachment.id}
-                              onClick={() => void openPurchaseDocument(attachment)}
-                              title={attachment.originalName}
-                            >
-                              <FileText size={14} />
-                              {openingDocumentId === attachment.id
-                                ? 'Abrindo...'
-                                : PURCHASE_DOCUMENT_LABELS[attachment.documentType] || 'Arquivo'}
-                              <ExternalLink size={12} />
-                            </button>
-                          ))
-                        ) : (
-                          <small>Sem documento anexado.</small>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="finance-store-detail__document-empty">
-                Nenhuma compra realizada com documentos para esta loja.
-              </p>
-            )}
-          </article>
-
-          <article className="finance-store-detail__document-block">
-            <header>
-              <HardHat size={17} />
-              <div>
-                <strong>Obras e Serviços</strong>
-                <small>Status calculado pelo valor contratado x valor documentado.</small>
-              </div>
-            </header>
-            {storeWorks.length ? (
-              <div className="finance-store-detail__document-list">
-                {storeWorks.map((work) => {
-                  const totals = workTotals(work);
-                  const coverage =
-                    totals.missingDocumentsCents <= 0n && totals.contractedCents > 0n
-                      ? 'complete'
-                      : totals.documentedCents > 0n
-                        ? 'partial'
-                        : 'pending';
-                  return (
-                    <div className="finance-store-detail__document-row" key={work.id}>
-                      <div>
-                        <strong>{work.code} · {work.category}</strong>
-                        <small>
-                          {formatBRL(totals.documentedCents)} documentado de {formatBRL(totals.contractedCents)}
-                        </small>
-                      </div>
-                      <span className={`finance-store-document-status finance-store-document-status--${coverage}`}>
-                        {coverage === 'complete' ? 'Completo' : coverage === 'partial' ? 'Parcial' : 'Pendente'}
-                      </span>
-                      <div className="finance-store-detail__document-actions">
-                        {work.documents.length ? (
-                          work.documents.map((document) =>
-                            document.storagePath ? (
-                              <button
-                                type="button"
-                                className="button button--secondary button--small"
-                                key={document.id}
-                                disabled={openingDocumentId === document.id}
-                                onClick={() => void openWorkDocument(work, document)}
-                              >
-                                <FileText size={14} />
-                                {openingDocumentId === document.id
-                                  ? 'Abrindo...'
-                                  : WORK_DOCUMENT_LABELS[document.documentType] || 'Documento'}
-                                <ExternalLink size={12} />
-                              </button>
-                            ) : (
-                              <span className="finance-store-detail__document-no-file" key={document.id}>
-                                {WORK_DOCUMENT_LABELS[document.documentType] || 'Documento'} sem arquivo
-                              </span>
-                            ),
-                          )
-                        ) : (
-                          <small>Sem documento cadastrado.</small>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="finance-store-detail__document-empty">
-                Nenhuma obra ou serviço cadastrado para esta loja.
-              </p>
-            )}
-          </article>
-        </div>
-      </section>
-
       <section className="finance-store-detail__filters" aria-label="Filtros do detalhe da loja">
         <label className="search-field">
           <Search size={18} />
@@ -667,7 +533,7 @@ export function FinanceStoreDetailPage() {
         </label>
       </section>
 
-      <section className="finance-store-detail__panel">
+      <section className="finance-store-detail__panel finance-store-detail__panel--items">
         <header>
           <div>
             <ShoppingCart size={19} />
@@ -688,6 +554,7 @@ export function FinanceStoreDetailPage() {
                   <th colSpan={3}>Realização</th>
                   <th rowSpan={2}>Origem</th>
                   <th rowSpan={2}>Situação</th>
+                  <th rowSpan={2}>Documentos</th>
                 </tr>
                 <tr>
                   <th>Qtd. aprovada</th>
@@ -728,6 +595,19 @@ export function FinanceStoreDetailPage() {
                         {ITEM_STATUS_LABELS[row.purchaseStatus]}
                       </span>
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="finance-store-detail__document-link"
+                        onClick={() => {
+                          setDocumentError(null);
+                          setDocumentPopup({ kind: 'item', row });
+                        }}
+                      >
+                        <FileText size={14} />
+                        Documentos ({itemDocuments(row).length})
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -741,7 +621,7 @@ export function FinanceStoreDetailPage() {
         )}
       </section>
 
-      <section className="finance-store-detail__panel">
+      <section className="finance-store-detail__panel finance-store-detail__panel--works">
         <header>
           <div>
             <HardHat size={19} />
@@ -762,8 +642,9 @@ export function FinanceStoreDetailPage() {
                   <th rowSpan={2}>Serviço</th>
                   <th colSpan={3}>Orçamento e contratação</th>
                   <th colSpan={2}>Financeiro</th>
-                  <th colSpan={2}>Documentação</th>
+                  <th colSpan={1}>Documentação</th>
                   <th colSpan={2}>Execução</th>
+                  <th rowSpan={2}>Documentos</th>
                 </tr>
                 <tr>
                   <th>Orçado</th>
@@ -772,7 +653,6 @@ export function FinanceStoreDetailPage() {
                   <th>Pago</th>
                   <th>A pagar</th>
                   <th>Documentado</th>
-                  <th>Docs</th>
                   <th>Execução</th>
                   <th>Situação</th>
                 </tr>
@@ -802,12 +682,24 @@ export function FinanceStoreDetailPage() {
                           <small>{formatBRL(totals.missingDocumentsCents)} pendente</small>
                         )}
                       </td>
-                      <td>{work.documents.length}</td>
                       <td>{work.progressPercent}%</td>
                       <td>
                         <span className={`finance-store-work-status finance-store-work-status--${work.status}`}>
                           {WORK_STATUS_LABELS[work.status]}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="finance-store-detail__document-link"
+                          onClick={() => {
+                            setDocumentError(null);
+                            setDocumentPopup({ kind: 'work', work });
+                          }}
+                        >
+                          <FileText size={14} />
+                          Documentos ({work.documents.length})
+                        </button>
                       </td>
                     </tr>
                   );
@@ -822,6 +714,86 @@ export function FinanceStoreDetailPage() {
           />
         )}
       </section>
+
+      {documentPopup && (
+        <Modal
+          open
+          title={
+            documentPopup.kind === 'item'
+              ? `Documentos · ${documentPopup.row.itemCode}`
+              : `Documentos · ${documentPopup.work.code}`
+          }
+          description={
+            documentPopup.kind === 'item'
+              ? `${documentPopup.row.itemName} · ${documentPopup.row.purchaseCode}`
+              : documentPopup.work.description
+          }
+          onClose={() => {
+            setDocumentPopup(null);
+            setDocumentError(null);
+          }}
+          className="finance-store-documents-modal"
+        >
+          {documentError && <div className="finance-store-detail__document-error">{documentError}</div>}
+          <div className="finance-store-detail__popup-documents">
+            {documentPopup.kind === 'item' ? (
+              itemDocuments(documentPopup.row).length ? (
+                itemDocuments(documentPopup.row).map((attachment) => (
+                  <article key={attachment.id}>
+                    <FileText size={18} />
+                    <div>
+                      <strong>{PURCHASE_DOCUMENT_LABELS[attachment.documentType] || 'Arquivo'}</strong>
+                      <span>{attachment.originalName}</span>
+                      {attachment.documentNumber && <small>Nº {attachment.documentNumber}</small>}
+                    </div>
+                    <button
+                      type="button"
+                      className="button button--secondary button--small"
+                      disabled={openingDocumentId === attachment.id}
+                      onClick={() => void openPurchaseDocument(attachment)}
+                    >
+                      {openingDocumentId === attachment.id ? 'Abrindo...' : 'Abrir'}
+                      <ExternalLink size={12} />
+                    </button>
+                  </article>
+                ))
+              ) : (
+                <p className="finance-store-detail__document-empty">
+                  Nenhum documento anexado a esta compra/ordem para a loja.
+                </p>
+              )
+            ) : documentPopup.work.documents.length ? (
+              documentPopup.work.documents.map((document) => (
+                <article key={document.id}>
+                  <FileText size={18} />
+                  <div>
+                    <strong>{WORK_DOCUMENT_LABELS[document.documentType] || 'Documento'}</strong>
+                    <span>{document.originalName || document.documentNumber || 'Documento cadastrado'}</span>
+                    {document.documentAmount && <small>{formatBRL(moneyToCents(document.documentAmount))}</small>}
+                  </div>
+                  {document.storagePath ? (
+                    <button
+                      type="button"
+                      className="button button--secondary button--small"
+                      disabled={openingDocumentId === document.id}
+                      onClick={() => void openWorkDocument(documentPopup.work, document)}
+                    >
+                      {openingDocumentId === document.id ? 'Abrindo...' : 'Abrir'}
+                      <ExternalLink size={12} />
+                    </button>
+                  ) : (
+                    <span className="finance-store-detail__document-no-file">Sem arquivo anexado</span>
+                  )}
+                </article>
+              ))
+            ) : (
+              <p className="finance-store-detail__document-empty">
+                Nenhum documento anexado a este serviço.
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
