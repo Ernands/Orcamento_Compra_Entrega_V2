@@ -697,7 +697,9 @@ export function FinanceStoreDetailPage() {
                     <td>
                       <strong>{row.itemCode}</strong>
                       <span>{row.itemName}</span>
-                      <small>{row.itemCategory || 'Itens gerais'}</small>
+                      <small>
+                        {row.itemSubcategory || row.itemGroupName || row.itemCategory || 'Sem categoria'}
+                      </small>
                     </td>
                     <td>{quantityLabel(row.approvedQuantity, row.unit)}</td>
                     <td><strong>{formatBRL(row.budgetCents)}</strong></td>
