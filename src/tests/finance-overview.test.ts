@@ -226,6 +226,18 @@ describe('finance overview', () => {
     ).toBe('equipment');
   });
 
+  it('prioriza o grupo financeiro explícito sobre nome e categoria do item', () => {
+    expect(
+      financeItemCompositionGroup('Equipamentos', null, null, 'Suporte para Notebook', 'general'),
+    ).toBe('general');
+    expect(
+      financeItemCompositionGroup('Material Escritório', null, null, 'Calculadora de mesa', 'equipment'),
+    ).toBe('equipment');
+    expect(
+      financeItemCompositionGroup('Mobiliário', null, null, 'Capa preferencial com braços', 'general'),
+    ).toBe('general');
+  });
+
   it('distribui o orçamento aprovado dos itens por loja conservando os centavos', () => {
     const result = purchaseApprovedBudgetByStore([approvedPurchase()]);
     expect(result.get('store-1')).toBe(5001n);
