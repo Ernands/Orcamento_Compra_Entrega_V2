@@ -97,6 +97,7 @@ export interface PurchaseItemV2 {
   itemCategory: string | null;
   catalogSubcategory?: string | null;
   catalogGroupName?: string | null;
+  catalogFinancialGroup?: 'equipment' | 'furniture' | 'general' | null;
   itemArea: string | null;
   brandReference: string | null;
   technicalSpecification: string | null;
