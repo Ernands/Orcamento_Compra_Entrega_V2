@@ -1042,7 +1042,13 @@ export function FinancePage() {
                             <strong>{row.code}</strong>
                             <span>{row.name}</span>
                             <small>{row.city}/{row.state}</small>
-                            <Link to={`/financeiro/lojas/${row.storeId}`}>Ver detalhes</Link>
+                            <Link
+                              to={`/financeiro/lojas/${row.storeId}`}
+                              className="button button--secondary button--small finance-overview-details"
+                            >
+                              Abrir detalhes
+                              <ExternalLink size={12} />
+                            </Link>
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.budgetBbCents)}</strong>
