@@ -36,6 +36,7 @@ const overviewRow: FinanceOverviewStoreRow = {
 const itemRow: FinanceStoreItemDetailRow = {
   id: 'purchase:item:store',
   purchaseId: 'purchase-1',
+  purchaseItemId: 'purchase-item-1',
   purchaseCode: 'CMP-00001',
   quoteCode: 'COT-00001',
   supplierName: 'Fornecedor Teste',
