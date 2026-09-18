@@ -6,6 +6,7 @@ import {
   ChartNoAxesCombined,
   KeyRound,
   Landmark,
+  HardHat,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -40,6 +41,7 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/cotacoes': 'Cotacoes',
   '/suprimentos/compras': 'Compras',
   '/suprimentos/comparativo': 'Comparativo',
+  '/obras': 'Obras e Serviços',
   '/financeiro': 'Financeiro',
 };
 
@@ -302,6 +304,16 @@ export function AppShell() {
                 )}
               </>
             )}
+          </>
+        )}
+
+        {can('works.view') && (
+          <>
+            {!compact && <span className="nav-section nav-section--spaced">Obras</span>}
+            <NavLink to="/obras" onClick={() => setMobileOpen(false)}>
+              <HardHat size={19} />
+              Obras e Serviços
+            </NavLink>
           </>
         )}
 
