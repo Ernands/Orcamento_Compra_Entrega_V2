@@ -1,8 +1,31 @@
 import type { FinanceStoreRow } from './finance-types';
+import {
+  activeOrders,
+  purchaseDestinationStoreCosts,
+  purchaseOrderStoreCosts,
+  purchaseStoreCosts,
+} from './purchase-v2-calculations';
 import type { PurchaseV2 } from './purchase-v2-types';
 import type { Store } from './types';
 import type { FinanceStoreBudget, WorkService } from './works-types';
 import { moneyToCents, quantityToThousandths } from './supply-calculations';
+
+export interface FinanceStoreItemDetailRow {
+  id: string;
+  purchaseId: string;
+  purchaseCode: string;
+  quoteCode: string;
+  supplierName: string;
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  approvedQuantity: bigint;
+  budgetCents: bigint;
+  purchasedQuantity: bigint;
+  realizedCents: bigint;
+  differenceCents: bigint;
+  purchaseStatus: 'not_purchased' | 'partial' | 'purchased';
+}
 
 export interface FinanceOverviewStoreRow {
   storeId: string;
@@ -67,52 +90,123 @@ export function purchaseApprovedBudgetByStore(purchases: PurchaseV2[]): Map<stri
   purchases
     .filter((purchase) => !['returned', 'cancelled'].includes(purchase.status))
     .forEach((purchase) => {
-      purchase.items.forEach((item) => {
-        const lineCents = moneyToCents(item.approvedLineTotal);
-        if (lineCents <= 0n) return;
-
-        const weights = new Map<string, bigint>();
-        item.destinations.forEach((destination) => {
-          const destinationQuantity = quantityToThousandths(destination.quantity);
-          const storeAllocations = destination.stores
-            .map((store) => ({
-              storeId: store.storeId,
-              weight: store.allocatedQuantity
-                ? quantityToThousandths(store.allocatedQuantity)
-                : 0n,
-            }))
-            .filter((entry) => entry.weight > 0n);
-
-          if (storeAllocations.length) {
-            storeAllocations.forEach((entry) =>
-              weights.set(entry.storeId, (weights.get(entry.storeId) || 0n) + entry.weight),
-            );
-          } else if (destination.storeId && destinationQuantity > 0n) {
-            weights.set(
-              destination.storeId,
-              (weights.get(destination.storeId) || 0n) + destinationQuantity,
-            );
-          }
-        });
-
-        if (!weights.size && item.storeId) {
-          weights.set(item.storeId, quantityToThousandths(item.quantityApproved) || 1n);
-        }
-
-        if (!weights.size && purchase.stores.length) {
-          purchase.stores.forEach((store) => weights.set(store.storeId, 1n));
-        }
-
-        allocateCents(
-          lineCents,
-          [...weights.entries()].map(([key, weight]) => ({ key, weight })),
-        ).forEach((amount, storeId) =>
-          totals.set(storeId, (totals.get(storeId) || 0n) + amount),
-        );
+      purchaseStoreCosts(purchase).rows.forEach((row) => {
+        totals.set(row.storeId, (totals.get(row.storeId) || 0n) + row.approvedCents);
       });
     });
 
   return totals;
+}
+
+function equalQuantityShare(total: bigint, count: number, index: number): bigint {
+  if (count <= 0) return 0n;
+  const divisor = BigInt(count);
+  const base = total / divisor;
+  const remainder = total % divisor;
+  return base + (BigInt(index) < remainder ? 1n : 0n);
+}
+
+export function buildFinanceStoreItemRows(
+  purchases: PurchaseV2[],
+  storeId: string,
+): FinanceStoreItemDetailRow[] {
+  const rows: FinanceStoreItemDetailRow[] = [];
+
+  purchases
+    .filter((purchase) => !['returned', 'cancelled'].includes(purchase.status))
+    .forEach((purchase) => {
+      purchase.items.forEach((item) => {
+        let approvedQuantity = 0n;
+        let budgetCents = 0n;
+
+        if (item.destinations.length) {
+          item.destinations.forEach((destination) => {
+            const allocation = purchaseDestinationStoreCosts(purchase, destination).rows.find(
+              (entry) => entry.storeId === storeId,
+            );
+            if (!allocation) return;
+            approvedQuantity += allocation.approvedQuantity
+              ? quantityToThousandths(allocation.approvedQuantity)
+              : 0n;
+            budgetCents += allocation.approvedCents;
+          });
+        } else if (item.storeId === storeId) {
+          approvedQuantity = quantityToThousandths(item.quantityApproved);
+          budgetCents = moneyToCents(item.approvedLineTotal);
+        } else if (item.sourceQuoteItemId === null) {
+          const storeIndex = purchase.stores.findIndex((store) => store.storeId === storeId);
+          if (storeIndex >= 0) {
+            approvedQuantity = equalQuantityShare(
+              quantityToThousandths(item.quantityApproved),
+              purchase.stores.length,
+              storeIndex,
+            );
+            const purchaseCosts = purchaseStoreCosts({
+              ...purchase,
+              items: [item],
+            }).rows.find((entry) => entry.storeId === storeId);
+            budgetCents = purchaseCosts?.approvedCents || 0n;
+          }
+        }
+
+        let purchasedQuantity = 0n;
+        let realizedCents = 0n;
+
+        activeOrders(purchase).forEach((order) => {
+          order.lines
+            .filter((line) => line.purchaseItemId === item.id)
+            .forEach((line) => {
+              const lineStore = line.stores.find((entry) => entry.storeId === storeId);
+              if (!lineStore) return;
+              purchasedQuantity += quantityToThousandths(lineStore.quantity);
+              const storeCost = purchaseOrderStoreCosts({
+                ...order,
+                lines: [line],
+              }).rows.find((entry) => entry.storeId === storeId);
+              realizedCents += storeCost?.costCents || 0n;
+            });
+        });
+
+        if (
+          approvedQuantity <= 0n &&
+          budgetCents <= 0n &&
+          purchasedQuantity <= 0n &&
+          realizedCents <= 0n
+        ) {
+          return;
+        }
+
+        const purchaseStatus: FinanceStoreItemDetailRow['purchaseStatus'] =
+          purchasedQuantity <= 0n
+            ? 'not_purchased'
+            : purchasedQuantity < approvedQuantity
+              ? 'partial'
+              : 'purchased';
+
+        rows.push({
+          id: `${purchase.id}:${item.id}:${storeId}`,
+          purchaseId: purchase.id,
+          purchaseCode: purchase.code,
+          quoteCode: purchase.quoteCode,
+          supplierName: purchase.supplierName,
+          itemCode: item.itemCode,
+          itemName: item.itemName,
+          unit: item.unit,
+          approvedQuantity,
+          budgetCents,
+          purchasedQuantity,
+          realizedCents,
+          differenceCents: budgetCents - realizedCents,
+          purchaseStatus,
+        });
+      });
+    });
+
+  return rows.sort(
+    (a, b) =>
+      a.itemName.localeCompare(b.itemName, 'pt-BR') ||
+      a.purchaseCode.localeCompare(b.purchaseCode, 'pt-BR'),
+  );
 }
 
 function worksByStore(works: WorkService[]) {
