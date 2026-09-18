@@ -3,6 +3,7 @@ import {
   buildFinanceOverviewRows,
   buildFinanceStoreCompositionRows,
   buildFinanceStoreItemRows,
+  financeItemCompositionGroup,
   purchaseApprovedBudgetByStore,
 } from '../domain/finance-overview';
 import type { FinanceStoreRow } from '../domain/finance-types';
@@ -219,6 +220,12 @@ function work(): WorkService {
 }
 
 describe('finance overview', () => {
+  it('classifica notebook como equipamento mesmo quando a categoria histórica é genérica', () => {
+    expect(
+      financeItemCompositionGroup('Teste QA', 'Equipamentos', 'Tecnologia', 'Notebook Operacional'),
+    ).toBe('equipment');
+  });
+
   it('distribui o orçamento aprovado dos itens por loja conservando os centavos', () => {
     const result = purchaseApprovedBudgetByStore([approvedPurchase()]);
     expect(result.get('store-1')).toBe(5001n);
