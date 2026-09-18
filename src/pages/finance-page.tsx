@@ -23,6 +23,11 @@ import {
   listFinanceReimbursements,
   saveFinanceReimbursement,
 } from '../data/finance/finance-repository';
+import { listStores } from '../data/stores/stores-repository';
+import {
+  listFinanceStoreBudgets,
+  listWorkServices,
+} from '../data/works/works-repository';
 import {
   createPurchaseAttachmentSignedUrlV2,
   listSupplyPurchasesV2,
@@ -32,6 +37,7 @@ import {
   buildFinanceStoreRows,
   reimbursementTotals,
 } from '../domain/finance-calculations';
+import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import type {
   FinanceReimbursement,
   FinanceReimbursementStatus,
@@ -40,9 +46,11 @@ import type {
 } from '../domain/finance-types';
 import type { PurchaseAttachmentV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
+import type { Store } from '../domain/types';
+import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
 import './finance-page.css';
 
-type FinanceTab = 'payments' | 'stores' | 'reimbursements';
+type FinanceTab = 'overview' | 'payments' | 'stores' | 'reimbursements';
 
 const PAYMENT_LABELS: Record<string, string> = {
   pix: 'PIX',
@@ -427,9 +435,12 @@ export function FinancePage() {
   const canManage = can('finance.manage');
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [reimbursements, setReimbursements] = useState<FinanceReimbursement[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [works, setWorks] = useState<WorkService[]>([]);
+  const [budgets, setBudgets] = useState<FinanceStoreBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<FinanceTab>('payments');
+  const [tab, setTab] = useState<FinanceTab>('overview');
   const [month, setMonth] = useState(currentMonth);
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
@@ -444,12 +455,19 @@ export function FinancePage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextPurchases, nextReimbursements] = await Promise.all([
-        listSupplyPurchasesV2(),
-        listFinanceReimbursements(),
-      ]);
+      const [nextPurchases, nextReimbursements, nextStores, nextWorks, nextBudgets] =
+        await Promise.all([
+          listSupplyPurchasesV2(),
+          listFinanceReimbursements(),
+          listStores(),
+          listWorkServices(),
+          listFinanceStoreBudgets(),
+        ]);
       setPurchases(nextPurchases);
       setReimbursements(nextReimbursements);
+      setStores(nextStores);
+      setWorks(nextWorks);
+      setBudgets(nextBudgets);
     } catch (loadError) {
       setError(errorMessage(loadError, 'Nao foi possivel carregar o Financeiro.'));
     } finally {
@@ -467,19 +485,66 @@ export function FinancePage() {
     [purchases, reimbursements],
   );
   const states = useMemo(
-    () => [...new Set(storeRows.map((store) => store.state))].sort(),
-    [storeRows],
+    () => [...new Set(stores.map((store) => store.state))].sort(),
+    [stores],
+  );
+  const overviewRows = useMemo(
+    () =>
+      buildFinanceOverviewRows({
+        stores,
+        purchases,
+        purchaseStoreRows: storeRows,
+        works,
+        budgets,
+      }),
+    [budgets, purchases, storeRows, stores, works],
   );
   const search = normalized(query);
   const allowedStoreIds = useMemo(
     () =>
       new Set(
-        storeRows
+        stores
           .filter((store) => !stateFilter || store.state === stateFilter)
-          .filter((store) => !storeFilter || store.storeId === storeFilter)
-          .map((store) => store.storeId),
+          .filter((store) => !storeFilter || store.id === storeFilter)
+          .map((store) => store.id),
       ),
-    [stateFilter, storeFilter, storeRows],
+    [stateFilter, storeFilter, stores],
+  );
+
+  const filteredOverview = useMemo(
+    () =>
+      overviewRows
+        .filter((store) => allowedStoreIds.has(store.storeId))
+        .filter(
+          (store) =>
+            !search ||
+            normalized([store.code, store.name, store.city, store.state].join(' ')).includes(search),
+        ),
+    [allowedStoreIds, overviewRows, search],
+  );
+
+  const overviewKpis = useMemo(
+    () =>
+      filteredOverview.reduce(
+        (totals, row) => {
+          totals.budgetBbCents += row.budgetBbCents;
+          totals.budgetTotalCents += row.budgetTotalCents;
+          totals.realizedCents += row.realizedTotalCents;
+          totals.differenceCents += row.differenceCents;
+          totals.paidCents += row.paidCents;
+          totals.payableCents += row.payableCents;
+          return totals;
+        },
+        {
+          budgetBbCents: 0n,
+          budgetTotalCents: 0n,
+          realizedCents: 0n,
+          differenceCents: 0n,
+          paidCents: 0n,
+          payableCents: 0n,
+        },
+      ),
+    [filteredOverview],
   );
 
   const filteredPayments = useMemo(
@@ -603,10 +668,10 @@ export function FinancePage() {
       <header className="page-heading finance-heading">
         <div>
           <span className="eyebrow">Financeiro</span>
-          <h2>Pagamentos, custos e reembolsos</h2>
+          <h2>Visão geral, pagamentos, custos e reembolsos</h2>
           <p>
-            Uma leitura unica das compras realizadas, com valores exatos por loja e documentos no
-            mesmo lugar.
+            Consolide orçamento x realizado de itens e obras, fluxo de pagamentos e reembolsos por
+            loja.
           </p>
         </div>
         <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
@@ -614,38 +679,73 @@ export function FinancePage() {
         </button>
       </header>
 
-      <section className="finance-kpis" aria-label="Resumo financeiro">
-        <article className="finance-kpi finance-kpi--primary">
-          <CheckCircle2 size={21} />
-          <span>Pago em {formatMonth(month)}</span>
-          <strong>{formatBRL(kpis.paidCents)}</strong>
-        </article>
-        <article>
-          <CalendarDays size={21} />
-          <span>A pagar em {formatMonth(month)}</span>
-          <strong>{formatBRL(kpis.plannedCents)}</strong>
-        </article>
-        <article>
-          <WalletCards size={21} />
-          <span>Custo realizado</span>
-          <strong>{formatBRL(kpis.realizedCents)}</strong>
-        </article>
-        <article>
-          <Landmark size={21} />
-          <span>Disponivel para solicitar</span>
-          <strong>{formatBRL(kpis.availableCents)}</strong>
-        </article>
-        <article>
-          <ReceiptText size={21} />
-          <span>Reembolso solicitado</span>
-          <strong>{formatBRL(kpis.requestedCents)}</strong>
-        </article>
-        <article>
-          <BanknoteArrowDown size={21} />
-          <span>Reembolso recebido</span>
-          <strong>{formatBRL(kpis.receivedCents)}</strong>
-        </article>
-      </section>
+      {tab === 'overview' ? (
+        <section className="finance-kpis" aria-label="Resumo executivo financeiro">
+          <article>
+            <Landmark size={21} />
+            <span>Verba BB</span>
+            <strong>{formatBRL(overviewKpis.budgetBbCents)}</strong>
+          </article>
+          <article>
+            <ReceiptText size={21} />
+            <span>Orçado total</span>
+            <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
+          </article>
+          <article className="finance-kpi finance-kpi--primary">
+            <Building2 size={21} />
+            <span>Realizado total</span>
+            <strong>{formatBRL(overviewKpis.realizedCents)}</strong>
+          </article>
+          <article className={overviewKpis.differenceCents < 0n ? 'finance-kpi--negative' : ''}>
+            <CheckCircle2 size={21} />
+            <span>Diferença orçamento</span>
+            <strong>{formatBRL(overviewKpis.differenceCents)}</strong>
+          </article>
+          <article>
+            <WalletCards size={21} />
+            <span>Pago</span>
+            <strong>{formatBRL(overviewKpis.paidCents)}</strong>
+          </article>
+          <article>
+            <CalendarDays size={21} />
+            <span>Saldo a pagar</span>
+            <strong>{formatBRL(overviewKpis.payableCents)}</strong>
+          </article>
+        </section>
+      ) : (
+        <section className="finance-kpis" aria-label="Resumo financeiro">
+          <article className="finance-kpi finance-kpi--primary">
+            <CheckCircle2 size={21} />
+            <span>Pago em {formatMonth(month)}</span>
+            <strong>{formatBRL(kpis.paidCents)}</strong>
+          </article>
+          <article>
+            <CalendarDays size={21} />
+            <span>A pagar em {formatMonth(month)}</span>
+            <strong>{formatBRL(kpis.plannedCents)}</strong>
+          </article>
+          <article>
+            <WalletCards size={21} />
+            <span>Custo realizado</span>
+            <strong>{formatBRL(kpis.realizedCents)}</strong>
+          </article>
+          <article>
+            <Landmark size={21} />
+            <span>Disponivel para solicitar</span>
+            <strong>{formatBRL(kpis.availableCents)}</strong>
+          </article>
+          <article>
+            <ReceiptText size={21} />
+            <span>Reembolso solicitado</span>
+            <strong>{formatBRL(kpis.requestedCents)}</strong>
+          </article>
+          <article>
+            <BanknoteArrowDown size={21} />
+            <span>Reembolso recebido</span>
+            <strong>{formatBRL(kpis.receivedCents)}</strong>
+          </article>
+        </section>
+      )}
 
       <section className="finance-controls">
         <label className="search-field">
@@ -656,15 +756,17 @@ export function FinancePage() {
             placeholder="Buscar compra, item, fornecedor, loja ou protocolo"
           />
         </label>
-        <label className="finance-filter">
-          Mes
-          <input
-            aria-label="Mes financeiro"
-            type="month"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-        </label>
+        {tab === 'payments' && (
+          <label className="finance-filter">
+            Mês
+            <input
+              aria-label="Mes financeiro"
+              type="month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+            />
+          </label>
+        )}
         <label className="finance-filter">
           UF
           <select
@@ -689,10 +791,10 @@ export function FinancePage() {
             onChange={(event) => setStoreFilter(event.target.value)}
           >
             <option value="">Todas as lojas</option>
-            {storeRows
+            {stores
               .filter((store) => !stateFilter || store.state === stateFilter)
               .map((store) => (
-                <option key={store.storeId} value={store.storeId}>
+                <option key={store.id} value={store.id}>
                   {store.code} · {store.name}
                 </option>
               ))}
@@ -701,6 +803,15 @@ export function FinancePage() {
       </section>
 
       <div className="finance-tabs" role="tablist" aria-label="Visoes do Financeiro">
+        <button
+          role="tab"
+          aria-selected={tab === 'overview'}
+          className={tab === 'overview' ? 'is-active' : ''}
+          onClick={() => setTab('overview')}
+        >
+          <Building2 size={18} />
+          Visão Geral
+        </button>
         <button
           role="tab"
           aria-selected={tab === 'payments'}
@@ -735,6 +846,104 @@ export function FinancePage() {
         <InlineLoading label="Carregando Financeiro" />
       ) : (
         <>
+          {tab === 'overview' && (
+            <section className="finance-panel">
+              <header className="finance-panel__heading">
+                <div>
+                  <h3>Orçamento x realizado por loja</h3>
+                  <p>
+                    Itens e obras permanecem em módulos separados, mas são consolidados nesta visão.
+                  </p>
+                </div>
+                <span>{filteredOverview.length} lojas</span>
+              </header>
+              {filteredOverview.length ? (
+                <div className="finance-table-scroll">
+                  <table className="finance-table finance-overview-table">
+                    <thead>
+                      <tr>
+                        <th>Loja</th>
+                        <th>Verba BB</th>
+                        <th>Orçado itens</th>
+                        <th>Orçado obra</th>
+                        <th>Orçado total</th>
+                        <th>Comprado itens</th>
+                        <th>Obra contratada</th>
+                        <th>Realizado</th>
+                        <th>Diferença</th>
+                        <th>Pago</th>
+                        <th>Saldo a pagar</th>
+                        <th>Documentação obra</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOverview.map((row) => (
+                        <tr key={row.storeId}>
+                          <td>
+                            <strong>{row.code}</strong>
+                            <span>{row.name}</span>
+                            <small>{row.city}/{row.state}</small>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.budgetBbCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.itemsBudgetCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.worksBudgetCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.budgetTotalCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.itemsRealizedCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.worksContractedCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.realizedTotalCents)}</strong>
+                          </td>
+                          <td>
+                            <strong className={row.differenceCents < 0n ? 'finance-difference--negative' : 'finance-difference--positive'}>
+                              {formatBRL(row.differenceCents)}
+                            </strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.paidCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.payableCents)}</strong>
+                          </td>
+                          <td>
+                            <span className={`finance-document-state finance-document-state--${row.documentationStatus}`}>
+                              {row.documentationStatus === 'complete'
+                                ? 'Completa'
+                                : row.documentationStatus === 'partial'
+                                  ? 'Parcial'
+                                  : row.documentationStatus === 'pending'
+                                    ? 'Pendente'
+                                    : 'Sem obra'}
+                            </span>
+                            {row.worksMissingDocumentsCents > 0n && (
+                              <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState
+                  title="Nenhuma loja encontrada"
+                  detail="Ajuste os filtros para consultar outra unidade."
+                />
+              )}
+            </section>
+          )}
+
           {tab === 'payments' && (
             <section className="finance-panel">
               <header className="finance-panel__heading">
@@ -1039,8 +1248,9 @@ export function FinancePage() {
       <footer className="finance-note">
         <Building2 size={18} />
         <span>
-          O custo por loja usa o mesmo rateio confirmado em Compras. Pagamentos sem vinculo com um
-          pedido continuam visiveis, mas nao viram valor elegivel automaticamente.
+          A Visão Geral consolida os itens de Compras e os contratos de Obras e Serviços. O custo
+          por loja continua usando o rateio confirmado em Compras; documentos e pagamentos de obra
+          são controlados separadamente no novo módulo.
         </span>
       </footer>
 
