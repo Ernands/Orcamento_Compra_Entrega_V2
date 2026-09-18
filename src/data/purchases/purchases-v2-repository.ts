@@ -190,7 +190,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
     supabase.from('supply_purchase_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
-    supabase.rpc('get_purchase_item_catalog_metadata' as never),
+    supabase.from('supply_items' as never).select('id, subcategory, group_name, financial_group'),
     supabase.from('supply_purchase_destinations' as never).select('*').order('position'),
     supabase.from('supply_purchase_destination_stores' as never).select('*').order('store_code_snapshot'),
     supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
