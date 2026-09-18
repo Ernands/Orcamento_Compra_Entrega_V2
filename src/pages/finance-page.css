@@ -13,6 +13,60 @@
   gap: 10px;
 }
 
+.finance-kpis--grouped {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.finance-kpi-group {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.finance-kpi-group > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.finance-kpi-group__title {
+  display: block;
+  margin: 0 0 7px 2px;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.finance-kpi-group--budget {
+  background: #f7faf9;
+  border-color: #dce6e2;
+}
+
+.finance-kpi-group--budget .finance-kpi-group__title {
+  color: #5e746c;
+}
+
+.finance-kpi-group--execution {
+  background: #f0f8f5;
+  border-color: #c9e0d7;
+}
+
+.finance-kpi-group--execution .finance-kpi-group__title {
+  color: var(--brand-dark);
+}
+
+.finance-kpi-group--cash {
+  background: #f8f8f6;
+  border-color: #e3e1d8;
+}
+
+.finance-kpi-group--cash .finance-kpi-group__title {
+  color: #6f6a56;
+}
+
 .finance-kpis article {
   min-width: 0;
   display: grid;
@@ -142,7 +196,79 @@
 }
 
 .finance-overview-table {
-  min-width: 1780px;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.finance-overview-table th,
+.finance-overview-table td {
+  padding: 9px 7px;
+}
+
+.finance-overview-table th {
+  white-space: normal;
+  line-height: 1.18;
+}
+
+.finance-overview-table td {
+  max-width: none;
+}
+
+.finance-overview-table th:first-child,
+.finance-overview-table td:first-child {
+  width: 138px;
+}
+
+.finance-overview-groups th {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  color: #415b52;
+  background: #eef4f1;
+  border-right: 1px solid #d5dfdb;
+  text-align: center;
+}
+
+.finance-overview-groups th:first-child {
+  text-align: left;
+}
+
+.finance-overview-groups th:nth-child(2) {
+  background: #f4f7f6;
+}
+
+.finance-overview-groups th:nth-child(3) {
+  color: var(--brand-dark);
+  background: #eaf5f1;
+}
+
+.finance-overview-groups th:nth-child(4) {
+  background: #f5f3ec;
+}
+
+.finance-overview-groups th:nth-child(5) {
+  background: #f7f7f5;
+}
+
+.finance-overview-table thead tr:nth-child(2) th:nth-child(4),
+.finance-overview-table thead tr:nth-child(2) th:nth-child(8),
+.finance-overview-table thead tr:nth-child(2) th:nth-child(10),
+.finance-overview-table tbody td:nth-child(5),
+.finance-overview-table tbody td:nth-child(9),
+.finance-overview-table tbody td:nth-child(11) {
+  border-right: 2px solid #d8dfdc;
+}
+
+.finance-overview-store a {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--brand);
+  font-size: 0.67rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.finance-overview-store a:hover {
+  text-decoration: underline;
 }
 
 .finance-difference--positive,
@@ -210,6 +336,8 @@
 }
 
 .finance-panel {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -242,7 +370,8 @@
   font-size: 0.75rem;
 }
 
-.finance-panel__heading > span {
+.finance-panel__heading > span,
+.finance-panel__tools > span {
   min-width: fit-content;
   padding: 5px 9px;
   color: var(--brand-dark);
@@ -253,8 +382,20 @@
   font-weight: 800;
 }
 
+.finance-panel__tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .finance-table-scroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .finance-table {
@@ -676,6 +817,19 @@
   .finance-kpis {
     grid-template-columns: repeat(3, minmax(150px, 1fr));
   }
+
+  .finance-kpis--grouped {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-kpi-group > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-overview-table {
+    min-width: 1120px;
+    table-layout: auto;
+  }
   .finance-store-purchases > article {
     grid-template-columns: repeat(4, minmax(145px, 1fr));
   }
@@ -741,6 +895,12 @@
   }
   .finance-panel__heading {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .finance-panel__tools {
+    width: 100%;
+    justify-content: flex-start;
   }
   .finance-store-card > summary {
     grid-template-columns: 1fr 24px;
