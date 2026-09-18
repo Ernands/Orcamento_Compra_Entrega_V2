@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ExternalLink,
+  FileSpreadsheet,
   FileText,
   Landmark,
   MapPinned,
@@ -19,6 +20,10 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
+import {
+  downloadFinanceOverviewExcel,
+  downloadFinanceOverviewPdf,
+} from '../data/exports/finance-exports';
 import {
   listFinanceReimbursements,
   saveFinanceReimbursement,
@@ -525,6 +530,7 @@ export function FinancePage() {
   const [storeFilter, setStoreFilter] = useState('');
   const [query, setQuery] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [overviewExporting, setOverviewExporting] = useState<'pdf' | 'excel' | null>(null);
   const [budgetStore, setBudgetStore] = useState<FinanceOverviewStoreRow | null>(null);
   const [candidate, setCandidate] = useState<FinanceStorePurchaseRow | null>(null);
   const [editingReimbursement, setEditingReimbursement] = useState<FinanceReimbursement | null>(
@@ -735,6 +741,35 @@ export function FinancePage() {
     }
   };
 
+  const overviewFiltersText = useMemo(() => {
+    const parts: string[] = [];
+    if (query.trim()) parts.push(`Busca: ${query.trim()}`);
+    if (stateFilter) parts.push(`UF: ${stateFilter}`);
+    if (storeFilter) {
+      const selectedStore = stores.find((store) => store.id === storeFilter);
+      if (selectedStore) parts.push(`Loja: ${selectedStore.code} · ${selectedStore.name}`);
+    }
+    return parts.length ? parts.join(' | ') : 'Todas as lojas';
+  }, [query, stateFilter, storeFilter, stores]);
+
+  const exportOverview = async (format: 'pdf' | 'excel') => {
+    setOverviewExporting(format);
+    setError(null);
+    try {
+      const input = {
+        rows: filteredOverview,
+        generatedAt: new Date(),
+        filtersText: overviewFiltersText,
+      };
+      if (format === 'pdf') await downloadFinanceOverviewPdf(input);
+      else await downloadFinanceOverviewExcel(input);
+    } catch (exportError) {
+      setError(errorMessage(exportError, 'Não foi possível gerar a exportação da Visão Geral.'));
+    } finally {
+      setOverviewExporting(null);
+    }
+  };
+
   const storesByState = useMemo(() => {
     const grouped = new Map<string, FinanceStoreRow[]>();
     filteredStores.forEach((store) =>
@@ -760,37 +795,55 @@ export function FinancePage() {
       </header>
 
       {tab === 'overview' ? (
-        <section className="finance-kpis" aria-label="Resumo executivo financeiro">
-          <article>
-            <Landmark size={21} />
-            <span>Verba BB</span>
-            <strong>{formatBRL(overviewKpis.budgetBbCents)}</strong>
-          </article>
-          <article>
-            <ReceiptText size={21} />
-            <span>Orçado total</span>
-            <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
-          </article>
-          <article className="finance-kpi finance-kpi--primary">
-            <Building2 size={21} />
-            <span>Realizado total</span>
-            <strong>{formatBRL(overviewKpis.realizedCents)}</strong>
-          </article>
-          <article className={overviewKpis.differenceCents < 0n ? 'finance-kpi--negative' : ''}>
-            <CheckCircle2 size={21} />
-            <span>Diferença orçamento</span>
-            <strong>{formatBRL(overviewKpis.differenceCents)}</strong>
-          </article>
-          <article>
-            <WalletCards size={21} />
-            <span>Pago</span>
-            <strong>{formatBRL(overviewKpis.paidCents)}</strong>
-          </article>
-          <article>
-            <CalendarDays size={21} />
-            <span>Saldo a pagar</span>
-            <strong>{formatBRL(overviewKpis.payableCents)}</strong>
-          </article>
+        <section
+          className="finance-kpis finance-kpis--grouped"
+          aria-label="Resumo executivo financeiro"
+        >
+          <div className="finance-kpi-group finance-kpi-group--budget">
+            <span className="finance-kpi-group__title">Orçamento</span>
+            <div>
+              <article>
+                <Landmark size={21} />
+                <span>Verba BB</span>
+                <strong>{formatBRL(overviewKpis.budgetBbCents)}</strong>
+              </article>
+              <article>
+                <ReceiptText size={21} />
+                <span>Orçado total</span>
+                <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
+              </article>
+            </div>
+          </div>
+          <div className="finance-kpi-group finance-kpi-group--execution">
+            <span className="finance-kpi-group__title">Realização</span>
+            <div>
+              <article className="finance-kpi finance-kpi--primary">
+                <Building2 size={21} />
+                <span>Realizado total</span>
+                <strong>{formatBRL(overviewKpis.realizedCents)}</strong>
+              </article>
+              <article className={overviewKpis.differenceCents < 0n ? 'finance-kpi--negative' : ''}>
+                <CheckCircle2 size={21} />
+                <span>Diferença orçamento</span>
+                <strong>{formatBRL(overviewKpis.differenceCents)}</strong>
+              </article>
+            </div>
+          </div>
+          <div className="finance-kpi-group finance-kpi-group--cash">
+            <span className="finance-kpi-group__title">Financeiro</span>
+            <div>
+              <article>
+                <WalletCards size={21} />
+                <span>Pago</span>
+                <strong>{formatBRL(overviewKpis.paidCents)}</strong>
+              </article>
+              <article>
+                <CalendarDays size={21} />
+                <span>Saldo a pagar</span>
+                <strong>{formatBRL(overviewKpis.payableCents)}</strong>
+              </article>
+            </div>
+          </div>
         </section>
       ) : (
         <section className="finance-kpis" aria-label="Resumo financeiro">
@@ -935,14 +988,40 @@ export function FinancePage() {
                     Itens e obras permanecem em módulos separados, mas são consolidados nesta visão.
                   </p>
                 </div>
-                <span>{filteredOverview.length} lojas</span>
+                <div className="finance-panel__tools">
+                  <span>{filteredOverview.length} lojas</span>
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    disabled={Boolean(overviewExporting) || !filteredOverview.length}
+                    onClick={() => void exportOverview('pdf')}
+                  >
+                    <FileText size={15} />
+                    {overviewExporting === 'pdf' ? 'Gerando...' : 'PDF'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    disabled={Boolean(overviewExporting) || !filteredOverview.length}
+                    onClick={() => void exportOverview('excel')}
+                  >
+                    <FileSpreadsheet size={15} />
+                    {overviewExporting === 'excel' ? 'Gerando...' : 'Excel'}
+                  </button>
+                </div>
               </header>
               {filteredOverview.length ? (
                 <div className="finance-table-scroll">
                   <table className="finance-table finance-overview-table">
                     <thead>
+                      <tr className="finance-overview-groups">
+                        <th rowSpan={2}>Loja</th>
+                        <th colSpan={4}>Orçamento</th>
+                        <th colSpan={4}>Realização</th>
+                        <th colSpan={2}>Financeiro</th>
+                        <th colSpan={1}>Documentação</th>
+                      </tr>
                       <tr>
-                        <th>Loja</th>
                         <th>Verba BB</th>
                         <th>Orçado itens</th>
                         <th>Orçado obra</th>
@@ -953,17 +1032,17 @@ export function FinancePage() {
                         <th>Diferença</th>
                         <th>Pago</th>
                         <th>Saldo a pagar</th>
-                        <th>Documentação obra</th>
-                        <th>Ação</th>
+                        <th>Obra</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredOverview.map((row) => (
                         <tr key={row.storeId}>
-                          <td>
+                          <td className="finance-overview-store">
                             <strong>{row.code}</strong>
                             <span>{row.name}</span>
                             <small>{row.city}/{row.state}</small>
+                            <Link to={`/financeiro/lojas/${row.storeId}`}>Ver detalhes</Link>
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.budgetBbCents)}</strong>
@@ -1019,14 +1098,6 @@ export function FinancePage() {
                             {row.worksMissingDocumentsCents > 0n && (
                               <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
                             )}
-                          </td>
-                          <td>
-                            <Link
-                              className="button button--secondary button--small"
-                              to={`/financeiro/lojas/${row.storeId}`}
-                            >
-                              Ver detalhes
-                            </Link>
                           </td>
                         </tr>
                       ))}
