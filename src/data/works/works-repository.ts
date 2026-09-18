@@ -1,5 +1,6 @@
 import type { Database } from '../supabase/database.types';
 import { supabase } from '../supabase/client';
+import { moneyToCents } from '../../domain/supply-calculations';
 import type {
   FinanceStoreBudget,
   WorkDocumentValues,
@@ -25,6 +26,10 @@ type WorkServiceRow = Database['public']['Tables']['works_services']['Row'];
 type WorkPaymentRow = Database['public']['Tables']['works_service_payments']['Row'];
 type WorkDocumentRow = Database['public']['Tables']['works_service_documents']['Row'];
 type BudgetRow = Database['public']['Tables']['finance_store_budgets']['Row'];
+
+function numericMoney(value: string): number {
+  return Number(moneyToCents(value || '0')) / 100;
+}
 
 function stringValue(value: number | string | null | undefined): string {
   return value === null || value === undefined ? '0' : String(value);
@@ -144,8 +149,8 @@ export async function saveWorkService(values: WorkServiceValues): Promise<string
     provider_name: values.providerName.trim() || null,
     provider_tax_id: values.providerTaxId.trim() || null,
     provider_phone: values.providerPhone.trim() || null,
-    budget_amount: values.budgetAmount || '0',
-    contracted_amount: values.contractedAmount || '0',
+    budget_amount: numericMoney(values.budgetAmount),
+    contracted_amount: numericMoney(values.contractedAmount),
     status: values.status,
     progress_percent: values.progressPercent,
     planned_start_date: values.plannedStartDate || null,
@@ -176,7 +181,7 @@ export async function saveWorkPayment(values: WorkPaymentValues): Promise<string
     payment_method: values.paymentMethod.trim(),
     source_label: values.sourceLabel.trim() || null,
     due_date: values.dueDate || null,
-    amount: values.amount,
+    amount: numericMoney(values.amount),
     status: values.status,
     paid_at: values.status === 'paid' ? values.paidAt || new Date().toISOString() : null,
     notes: values.notes.trim() || null,
@@ -251,7 +256,7 @@ export async function saveWorkDocument(values: WorkDocumentValues): Promise<stri
       document_type: values.documentType,
       document_number: values.documentNumber.trim() || null,
       document_date: values.documentDate || null,
-      document_amount: values.documentAmount.trim() || null,
+      document_amount: values.documentAmount.trim() ? numericMoney(values.documentAmount) : null,
       original_name: originalName,
       storage_path: uploadedPath,
       mime_type: type,
@@ -303,7 +308,7 @@ export async function saveFinanceStoreBudget(
   const { error } = await supabase.from('finance_store_budgets').upsert(
     {
       store_id: storeId,
-      budget_amount: budgetAmount || '0',
+      budget_amount: numericMoney(budgetAmount),
       notes: notes.trim() || null,
     },
     { onConflict: 'store_id' },
