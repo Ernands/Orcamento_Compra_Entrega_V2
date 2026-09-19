@@ -10,7 +10,7 @@ export type WorkServiceStatus =
 
 export type WorkPaymentStatus = 'planned' | 'paid' | 'overdue' | 'cancelled';
 
-export type WorkDocumentType = 'invoice' | 'receipt' | 'rpa' | 'other';
+export type WorkDocumentType = 'quote' | 'invoice' | 'receipt' | 'rpa' | 'payment_proof' | 'other';
 
 export type WorkDocumentStatus = 'pending' | 'verified';
 
@@ -48,6 +48,24 @@ export interface WorkServiceDocument {
   createdAt: string;
 }
 
+export interface WorkServiceComponent {
+  id: string;
+  serviceId: string;
+  storeId: string;
+  category: string;
+  description: string | null;
+  amount: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkServiceComponentValues {
+  category: string;
+  description: string;
+  amount: string;
+}
+
 export interface WorkService {
   id: string;
   code: string;
@@ -72,6 +90,7 @@ export interface WorkService {
   updatedAt: string;
   payments: WorkServicePayment[];
   documents: WorkServiceDocument[];
+  components: WorkServiceComponent[];
 }
 
 export interface WorkServiceValues {
@@ -89,6 +108,7 @@ export interface WorkServiceValues {
   plannedStartDate: string;
   plannedEndDate: string;
   notes: string;
+  components: WorkServiceComponentValues[];
 }
 
 export interface WorkPaymentValues {

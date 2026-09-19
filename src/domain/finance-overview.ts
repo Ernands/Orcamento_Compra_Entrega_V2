@@ -387,11 +387,16 @@ function worksByStore(works: WorkService[]) {
       current.paidCents += work.payments
         .filter((payment) => payment.status === 'paid')
         .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
-      current.documentedCents += work.documents.reduce(
-        (sum, document) =>
-          sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
-        0n,
-      );
+      current.documentedCents += work.documents
+        .filter(
+          (document) =>
+            document.documentType !== 'quote' && document.documentType !== 'payment_proof',
+        )
+        .reduce(
+          (sum, document) =>
+            sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
+          0n,
+        );
       rows.set(work.storeId, current);
     });
 

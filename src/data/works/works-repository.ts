@@ -1,4 +1,4 @@
-import type { Database } from '../supabase/database.types';
+import type { Database, Json } from '../supabase/database.types';
 import { supabase } from '../supabase/client';
 import { moneyToCents } from '../../domain/supply-calculations';
 import type {
@@ -6,6 +6,7 @@ import type {
   WorkDocumentValues,
   WorkPaymentValues,
   WorkService,
+  WorkServiceComponent,
   WorkServiceDocument,
   WorkServicePayment,
   WorkServiceValues,
@@ -23,6 +24,7 @@ const ACCEPTED_MIME_TYPES = new Set([
 ]);
 
 type WorkServiceRow = Database['public']['Tables']['works_services']['Row'];
+type WorkComponentRow = Database['public']['Tables']['works_service_components']['Row'];
 type WorkPaymentRow = Database['public']['Tables']['works_service_payments']['Row'];
 type WorkDocumentRow = Database['public']['Tables']['works_service_documents']['Row'];
 type BudgetRow = Database['public']['Tables']['finance_store_budgets']['Row'];
@@ -77,10 +79,25 @@ function mapDocument(row: WorkDocumentRow): WorkServiceDocument {
   };
 }
 
+function mapComponent(row: WorkComponentRow): WorkServiceComponent {
+  return {
+    id: row.id,
+    serviceId: row.service_id,
+    storeId: row.store_id,
+    category: row.category,
+    description: row.description,
+    amount: stringValue(row.amount),
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapService(
   row: WorkServiceRow,
   payments: WorkPaymentRow[],
   documents: WorkDocumentRow[],
+  components: WorkComponentRow[],
 ): WorkService {
   return {
     id: row.id,
@@ -112,97 +129,89 @@ function mapService(
       .filter((document) => document.service_id === row.id)
       .map(mapDocument)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    components: components
+      .filter((component) => component.service_id === row.id)
+      .map(mapComponent)
+      .sort((a, b) => a.sortOrder - b.sortOrder),
   };
 }
 
 export async function listWorkServices(): Promise<WorkService[]> {
-  const [servicesResult, paymentsResult, documentsResult] = await Promise.all([
+  const [servicesResult, paymentsResult, documentsResult, componentsResult] = await Promise.all([
     supabase.from('works_services').select('*').order('updated_at', { ascending: false }),
     supabase
       .from('works_service_payments')
       .select('*')
       .order('due_date', { ascending: true, nullsFirst: false }),
-    supabase
-      .from('works_service_documents')
-      .select('*')
-      .order('created_at', { ascending: false }),
+    supabase.from('works_service_documents').select('*').order('created_at', { ascending: false }),
+    supabase.from('works_service_components').select('*').order('sort_order', { ascending: true }),
   ]);
 
   const error =
-    servicesResult.error || paymentsResult.error || documentsResult.error;
+    servicesResult.error || paymentsResult.error || documentsResult.error || componentsResult.error;
   if (error) throw error;
 
   const payments = paymentsResult.data || [];
   const documents = documentsResult.data || [];
-  return (servicesResult.data || []).map((service) => mapService(service, payments, documents));
+  const components = componentsResult.data || [];
+  return (servicesResult.data || []).map((service) =>
+    mapService(service, payments, documents, components),
+  );
 }
 
 export async function saveWorkService(values: WorkServiceValues): Promise<string> {
-  const payload = {
-    store_id: values.storeId,
-    store_code_snapshot: '-',
-    store_name_snapshot: '-',
-    store_city_snapshot: '-',
-    store_state_snapshot: '-',
-    category: values.category.trim(),
-    description: values.description.trim(),
-    provider_name: values.providerName.trim() || null,
-    provider_tax_id: values.providerTaxId.trim() || null,
-    provider_phone: values.providerPhone.trim() || null,
-    budget_amount: numericMoney(values.budgetAmount),
-    contracted_amount: numericMoney(values.contractedAmount),
-    status: values.status,
-    progress_percent: values.progressPercent,
-    planned_start_date: values.plannedStartDate || null,
-    planned_end_date: values.plannedEndDate || null,
-    notes: values.notes.trim() || null,
-  };
-
-  if (values.id) {
-    const { error } = await supabase.from('works_services').update(payload).eq('id', values.id);
-    if (error) throw error;
-    return values.id;
-  }
-
-  const { data, error } = await supabase
-    .from('works_services')
-    .insert(payload)
-    .select('id')
-    .single();
+  const components = values.components.map((component) => ({
+    category: component.category.trim(),
+    description: component.description.trim(),
+    amount: numericMoney(component.amount),
+  })) as Json;
+  const { data, error } = await supabase.rpc('save_work_service_v2', {
+    p_service_id: values.id || null,
+    p_store_id: values.storeId,
+    p_category: values.category.trim(),
+    p_description: values.description.trim(),
+    p_provider_name: values.providerName.trim(),
+    p_provider_tax_id: values.providerTaxId.trim(),
+    p_provider_phone: values.providerPhone.trim(),
+    p_contracted_amount: numericMoney(values.contractedAmount),
+    p_budget_amount: numericMoney(values.budgetAmount),
+    p_status: values.status,
+    p_progress_percent: values.progressPercent,
+    p_planned_start_date: values.plannedStartDate || null,
+    p_planned_end_date: values.plannedEndDate || null,
+    p_notes: values.notes.trim(),
+    p_components: components,
+  });
   if (error) throw error;
-  return data.id;
+  return data;
+}
+
+export async function saveWorkPayments(values: WorkPaymentValues[]): Promise<string[]> {
+  const ids = values.map((value) => value.id || crypto.randomUUID());
+  const payload = values.map((value, index) => ({
+    id: ids[index],
+    service_id: value.serviceId,
+    store_id: value.storeId,
+    label: value.label.trim(),
+    payment_method: value.paymentMethod.trim(),
+    source_label: value.sourceLabel.trim() || null,
+    due_date: value.dueDate || null,
+    amount: numericMoney(value.amount),
+    status: value.status,
+    paid_at: value.status === 'paid' ? value.paidAt || new Date().toISOString() : null,
+    notes: value.notes.trim() || null,
+  }));
+
+  const { error } = await supabase
+    .from('works_service_payments')
+    .upsert(payload, { onConflict: 'id' });
+  if (error) throw error;
+  return ids;
 }
 
 export async function saveWorkPayment(values: WorkPaymentValues): Promise<string> {
-  const payload = {
-    service_id: values.serviceId,
-    store_id: values.storeId,
-    label: values.label.trim(),
-    payment_method: values.paymentMethod.trim(),
-    source_label: values.sourceLabel.trim() || null,
-    due_date: values.dueDate || null,
-    amount: numericMoney(values.amount),
-    status: values.status,
-    paid_at: values.status === 'paid' ? values.paidAt || new Date().toISOString() : null,
-    notes: values.notes.trim() || null,
-  };
-
-  if (values.id) {
-    const { error } = await supabase
-      .from('works_service_payments')
-      .update(payload)
-      .eq('id', values.id);
-    if (error) throw error;
-    return values.id;
-  }
-
-  const { data, error } = await supabase
-    .from('works_service_payments')
-    .insert(payload)
-    .select('id')
-    .single();
-  if (error) throw error;
-  return data.id;
+  const [id] = await saveWorkPayments([values]);
+  return id;
 }
 
 function safeFileName(name: string): string {
