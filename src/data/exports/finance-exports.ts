@@ -67,11 +67,15 @@ function workFinancials(work: WorkService) {
   const paidCents = work.payments
     .filter((payment) => payment.status === 'paid')
     .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
-  const documentedCents = work.documents.reduce(
-    (sum, document) =>
-      sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
-    0n,
-  );
+  const documentedCents = work.documents
+    .filter(
+      (document) => document.documentType !== 'quote' && document.documentType !== 'payment_proof',
+    )
+    .reduce(
+      (sum, document) =>
+        sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
+      0n,
+    );
   return {
     budgetCents,
     contractedCents,

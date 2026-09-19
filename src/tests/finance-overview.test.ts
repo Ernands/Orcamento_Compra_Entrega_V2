@@ -215,7 +215,25 @@ function work(): WorkService {
         notes: null,
         createdAt: '2026-09-30T12:00:00Z',
       },
+      {
+        id: 'quote-1',
+        serviceId: 'work-1',
+        storeId: 'store-1',
+        paymentId: null,
+        documentType: 'quote',
+        documentNumber: 'ORC-1',
+        documentDate: '2026-09-01',
+        documentAmount: '9999.00',
+        originalName: 'orcamento.pdf',
+        storagePath: 'obras/store-1/work-1/quote-1/orcamento.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 100,
+        status: 'pending',
+        notes: null,
+        createdAt: '2026-09-01T12:00:00Z',
+      },
     ],
+    components: [],
   };
 }
 
