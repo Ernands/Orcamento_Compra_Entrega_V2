@@ -1883,13 +1883,16 @@ svg {
 
 .access-permissions-groups {
   max-height: min(58vh, 570px);
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
   overflow-y: auto;
   padding-right: 3px;
 }
 
 .access-permissions-group {
+  flex: 0 0 auto;
   overflow: hidden;
   background: #fff;
   border: 1px solid var(--line);
@@ -1897,6 +1900,10 @@ svg {
 }
 
 .access-permissions-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 9px 12px;
   color: #244d40;
   background: #edf6f2;
@@ -1904,6 +1911,34 @@ svg {
   font-size: 0.72rem;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.access-permissions-group__action {
+  min-height: 28px;
+  padding: 4px 9px;
+  color: #174f3f;
+  background: #fff;
+  border: 1px solid #afd2c5;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.access-permissions-group__action:hover {
+  background: #f7fbf9;
+  border-color: #79b29d;
+}
+
+.access-permissions-group__hint {
+  padding: 9px 12px;
+  color: #52655e;
+  background: #f8fbf9;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 .access-permission-row {
@@ -1918,6 +1953,10 @@ svg {
 
 .access-permission-row:last-child {
   border-bottom: 0;
+}
+
+.access-permission-row--module-access {
+  background: #fbfdfc;
 }
 
 .access-permission-row > div {
