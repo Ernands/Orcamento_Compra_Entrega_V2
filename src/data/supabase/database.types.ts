@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 export type Json =
   | string
   | number
@@ -11,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -1116,6 +1115,181 @@ export type Database = {
           },
         ]
       }
+      supply_budget_items: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          segment_id: string
+          supply_item_id: string
+          unit_price: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          segment_id: string
+          supply_item_id: string
+          unit_price: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          segment_id?: string
+          supply_item_id?: string
+          unit_price?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_budget_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_budget_items_segment_item_fk"
+            columns: ["segment_id", "supply_item_id"]
+            isOneToOne: false
+            referencedRelation: "supply_budget_segments"
+            referencedColumns: ["id", "supply_item_id"]
+          },
+          {
+            foreignKeyName: "supply_budget_items_supply_item_id_fkey"
+            columns: ["supply_item_id"]
+            isOneToOne: false
+            referencedRelation: "supply_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_budget_items_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_budget_segment_stores: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          quantity: number
+          segment_id: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          quantity: number
+          segment_id: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          quantity?: number
+          segment_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_budget_segment_stores_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_budget_segment_stores_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "supply_budget_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_budget_segment_stores_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "lojas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_budget_segments: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          supply_item_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          supply_item_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          supply_item_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_budget_segments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_budget_segments_supply_item_id_fkey"
+            columns: ["supply_item_id"]
+            isOneToOne: false
+            referencedRelation: "supply_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_budget_segments_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_freight_profile_stores: {
         Row: {
           created_at: string
@@ -1191,6 +1365,7 @@ export type Database = {
           default_quantity: number | null
           default_unit: string
           description: string | null
+          financial_group: string | null
           group_name: string | null
           id: string
           item_type: Database["public"]["Enums"]["supply_item_type"]
@@ -1212,6 +1387,7 @@ export type Database = {
           default_quantity?: number | null
           default_unit: string
           description?: string | null
+          financial_group?: string | null
           group_name?: string | null
           id?: string
           item_type: Database["public"]["Enums"]["supply_item_type"]
@@ -1233,6 +1409,7 @@ export type Database = {
           default_quantity?: number | null
           default_unit?: string
           description?: string | null
+          financial_group?: string | null
           group_name?: string | null
           id?: string
           item_type?: Database["public"]["Enums"]["supply_item_type"]
@@ -3222,6 +3399,14 @@ export type Database = {
         Args: { p_actor_auth_user_id: string; p_user_id: string }
         Returns: undefined
       }
+      admin_replace_user_permission_overrides: {
+        Args: {
+          p_actor_auth_user_id: string
+          p_overrides: Json
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       admin_update_user_record: {
         Args: {
           p_actor_auth_user_id: string
@@ -3630,6 +3815,17 @@ export type Database = {
         }
         Returns: string
       }
+      save_supply_budget_segment: {
+        Args: {
+          p_active: boolean
+          p_name: string
+          p_notes: string
+          p_segment_id: string
+          p_stores: Json
+          p_supply_item_id: string
+        }
+        Returns: string
+      }
       save_supply_purchase_destination_distribution: {
         Args: { p_allocations: Json; p_purchase_destination_id: string }
         Returns: string
@@ -3747,13 +3943,13 @@ export type Database = {
           p_contracted_amount: number
           p_description: string
           p_notes: string
-          p_planned_end_date: string | null
-          p_planned_start_date: string | null
+          p_planned_end_date: string
+          p_planned_start_date: string
           p_progress_percent: number
           p_provider_name: string
           p_provider_phone: string
           p_provider_tax_id: string
-          p_service_id: string | null
+          p_service_id: string
           p_status: string
           p_store_id: string
         }
