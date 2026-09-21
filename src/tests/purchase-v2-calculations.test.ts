@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   approvedDestinationAllocations,
+  buildPurchaseInstallmentSchedule,
   calculateRegistrationTotal,
   itemExecution,
   purchaseAllocationCoverage,
@@ -196,6 +197,23 @@ describe('purchase-v2-calculations', () => {
       legacyFallbackItems: 1,
       unallocatedItems: 1,
     });
+  });
+
+  it('gera entrada separada das parcelas e preserva todos os centavos', () => {
+    const schedule = buildPurchaseInstallmentSchedule(14526400n, 4357920n, 5, '2026-10-10');
+    expect(schedule).toEqual([
+      { installment: 1, amountCents: 2033696n, dueDate: '2026-10-10' },
+      { installment: 2, amountCents: 2033696n, dueDate: '2026-11-10' },
+      { installment: 3, amountCents: 2033696n, dueDate: '2026-12-10' },
+      { installment: 4, amountCents: 2033696n, dueDate: '2027-01-10' },
+      { installment: 5, amountCents: 2033696n, dueDate: '2027-02-10' },
+    ]);
+    expect(schedule.reduce((sum, entry) => sum + entry.amountCents, 4357920n)).toBe(14526400n);
+  });
+
+  it('ajusta vencimento mensal para o ultimo dia quando necessario', () => {
+    const schedule = buildPurchaseInstallmentSchedule(30000n, 0n, 3, '2026-01-31');
+    expect(schedule.map((entry) => entry.dueDate)).toEqual(['2026-01-31', '2026-02-28', '2026-03-31']);
   });
 
   it('sugere previsao somando o prazo cotado a data da compra', () => {
