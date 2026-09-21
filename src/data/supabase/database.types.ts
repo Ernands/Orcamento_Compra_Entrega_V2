@@ -4182,6 +4182,8 @@ export type Enums<
     : never
 
 export type CompositeTypes<
+  // Supabase currently generates an empty CompositeTypes map for this schema.
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
