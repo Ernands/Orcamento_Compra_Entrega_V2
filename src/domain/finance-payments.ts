@@ -337,7 +337,7 @@ function purchaseUnscheduledRows(purchase: PurchaseV2): UnifiedFinancePaymentRow
 function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
   if (work.status === 'cancelled') return [];
 
-  const paymentRows = work.payments.flatMap((payment) => {
+  const paymentRows: UnifiedFinancePaymentRow[] = work.payments.flatMap((payment) => {
     if (payment.status === 'cancelled') return [];
     const paid = payment.status === 'paid';
     const date = (paid ? payment.paidAt : payment.dueDate)?.slice(0, 10) || null;
