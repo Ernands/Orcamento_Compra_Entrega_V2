@@ -3454,6 +3454,16 @@ export type Database = {
         Args: { p_name: string; p_notes?: string; p_source_version_id?: string }
         Returns: string
       }
+      create_supply_budget_segment: {
+        Args: {
+          p_active: boolean
+          p_name: string
+          p_notes: string
+          p_stores: Json
+          p_supply_item_id: string
+        }
+        Returns: string
+      }
       create_supply_purchase_operation_v1: {
         Args: {
           p_expected_delivery_date: string
@@ -4021,6 +4031,17 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_supply_budget_segment: {
+        Args: {
+          p_active: boolean
+          p_name: string
+          p_notes: string
+          p_segment_id: string
+          p_stores: Json
+          p_supply_item_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
