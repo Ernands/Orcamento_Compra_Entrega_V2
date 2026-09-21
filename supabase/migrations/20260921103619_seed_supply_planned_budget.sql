@@ -22,8 +22,6 @@ insert into planned_budget_seed_items (
   quantity_unattended,
   quantity_baependi
 ) values
-  ('orcamento_previsto:002', 'Ar condicionado 1', 'Equipamentos', 2081.97, 1.000, 1.000, 1.000),
-  ('orcamento_previsto:003', 'Ar condicionado 2', 'Equipamentos', 8204.78, 1.000, 1.000, 1.000),
   ('orcamento_previsto:004', 'Purificador/bebedouro', 'Equipamentos', 519.90, 1.000, 1.000, 1.000),
   ('orcamento_previsto:005', 'Suporte para copos', 'Itens gerais', 42.49, 1.000, 1.000, 1.000),
   ('orcamento_previsto:006', 'Lixeira coletiva com pedal', 'Itens gerais', 54.07, 1.000, 1.000, 1.000),
@@ -31,7 +29,7 @@ insert into planned_budget_seed_items (
   ('orcamento_previsto:008', 'Kit de primeiros socorros', 'Itens gerais', 61.90, 1.000, 1.000, 1.000),
   ('orcamento_previsto:009', 'Quadro de chaves', 'Itens gerais', 59.90, 1.000, 1.000, 1.000),
   ('orcamento_previsto:010', 'Suporte para notebook', 'Itens gerais', 21.89, 1.000, 1.000, 1.000),
-  ('orcamento_previsto:011', 'Monitor videoatendimento (Tela fundo BB)', 'Equipamentos', 628.99, 1.000, 0.000, 1.000),
+  ('orcamento_previsto:011', 'Monitor videoatendimento', 'Equipamentos', 628.99, 1.000, 0.000, 1.000),
   ('orcamento_previsto:012', 'Webcam Full HD', 'Equipamentos', 341.61, 1.000, 0.000, 1.000),
   ('orcamento_previsto:013', 'Teclado e mouse', 'Equipamentos', 75.90, 2.000, 1.000, 3.000),
   ('orcamento_previsto:014', 'Headset profissional', 'Equipamentos', 159.18, 1.000, 0.000, 1.000),
@@ -47,15 +45,16 @@ insert into planned_budget_seed_items (
   ('orcamento_previsto:024', 'Cadeira operacional ergonômica', 'Mobiliário', 645.20, 1.000, 1.000, 2.000),
   ('orcamento_previsto:025', 'Cadeira fixa para cliente', 'Mobiliário', 278.88, 2.000, 1.000, 3.000),
   ('orcamento_previsto:026', 'Longarina de espera com 3 lugares', 'Mobiliário', 629.98, 2.000, 2.000, 2.000),
-  ('orcamento_previsto:027', 'Capa cadeira preferencial', 'Itens gerais', 59.90, 2.000, 2.000, 2.000),
-  ('orcamento_previsto:028', 'Notebook negocial', 'Equipamentos', 3738.00, 1.000, 1.000, 2.000),
+  ('orcamento_previsto:027', 'Capa Assento Preferêncial', 'Itens gerais', 59.90, 2.000, 2.000, 2.000),
+  ('orcamento_previsto:028', 'Computador/notebook negocial', 'Equipamentos', 3738.00, 1.000, 1.000, 2.000),
   ('orcamento_previsto:029', 'Computador de mesa para videoatendimento', 'Equipamentos', 2900.00, 1.000, 0.000, 1.000),
   ('orcamento_previsto:030', 'SmartPOS', 'Equipamentos', 900.00, 2.000, 2.000, 3.000),
   ('orcamento_previsto:031', 'Adaptador para leitor pistola e fonte', 'Equipamentos', 39.90, 2.000, 2.000, 3.000),
   ('orcamento_previsto:032', 'Fonte de alimentação SmartPOS', 'Equipamentos', 0.00, 0.000, 0.000, 0.000),
   ('orcamento_previsto:033', 'Bobinas SmartPOS iniciais', 'Itens gerais', 1.14, 113.000, 113.000, 113.000),
   ('orcamento_previsto:034', 'Organizador de fila', 'Itens gerais', 481.66, 1.000, 1.000, 1.000),
-  ('orcamento_previsto:035', 'Filtro de privacidade para monitor', 'Equipamentos', 227.96, 2.000, 1.000, 3.000),
+  ('orcamento_previsto:035', 'Filtro de privacidade para monitor 23,8''''', 'Equipamentos', 227.96, 1.000, 0.000, 1.000),
+  ('orcamento_previsto:054', 'Filtro de privacidade para monitor - Notebook 15.6''''', 'Equipamentos', 227.96, 1.000, 1.000, 2.000),
   ('orcamento_previsto:036', 'Máquina contadora de cédulas', 'Equipamentos', 434.99, 1.000, 1.000, 1.000),
   ('orcamento_previsto:037', 'Fragmentadora de papel', 'Equipamentos', 227.16, 1.000, 1.000, 1.000),
   ('orcamento_previsto:038', 'Calculadora de mesa', 'Equipamentos', 19.63, 3.000, 3.000, 4.000),
@@ -129,6 +128,7 @@ begin
 end;
 $store_preflight$;
 
+-- Ar condicionado 1/2 foram omitidos desta carga inicial por decisão operacional; serão cadastrados após a subida.
 -- O Orçamento Previsto nunca cria nem reativa itens do catálogo.
 -- Todos os itens precisam ser cadastrados previamente pelo sistema.
 do $catalog_preflight$
@@ -314,12 +314,16 @@ declare
   v_store_link_count integer;
   v_total numeric(16,2);
 begin
-  select count(distinct item.id)
+  select count(*)
   into v_catalog_count
   from planned_budget_seed_items seed
-  join public.supply_items item
-    on lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
-      lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'));
+  where exists (
+    select 1
+    from public.supply_items item
+    where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
+      lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
+      and item.active
+  );
 
   select count(*)
   into v_segment_count
@@ -348,12 +352,12 @@ begin
   where segment.notes like 'Carga inicial Lista_Orçamento_Sistema.xlsx · orcamento_previsto:%'
     and budget_item.active;
 
-  if v_catalog_count < 52
-     or v_segment_count <> 52
-     or v_budget_item_count <> 52
+  if v_catalog_count <> 51
+     or v_segment_count <> 51
+     or v_budget_item_count <> 51
      or v_store_count <> 26
-     or v_store_link_count <> 1240
-     or v_total <> 786997.27 then
+     or v_store_link_count <> 1202
+     or v_total <> 519541.77 then
     raise exception
       'planned budget seed validation failed: catalog %, segments %, budget items %, stores %, links %, total %',
       v_catalog_count,
