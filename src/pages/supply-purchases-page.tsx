@@ -2819,6 +2819,11 @@ export function SupplyPurchasesPage() {
     });
   }, [purchases,query,status,stateFilter,destinationFilter,itemFilterIds,pendingFilter]);
 
+  const portfolioBulkEligibleCount = useMemo(
+    () => initialPortfolioBulkLines(purchases).filter((line) => !line.disabledReason).length,
+    [purchases],
+  );
+
   const allDetailsVisible =
     filtered.length > 0 && filtered.every((purchase) => expandedIds.has(purchase.id));
 
