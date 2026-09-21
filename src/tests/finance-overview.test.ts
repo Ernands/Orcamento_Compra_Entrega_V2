@@ -4,9 +4,9 @@ import {
   buildFinanceStoreCompositionRows,
   buildFinanceStoreItemRows,
   financeItemCompositionGroup,
-  purchaseApprovedBudgetByStore,
 } from '../domain/finance-overview';
 import type { FinanceStoreRow } from '../domain/finance-types';
+import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
 import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
@@ -123,6 +123,75 @@ function approvedPurchase(): PurchaseV2 {
     contact: null,
     quoteContextSnapshotSource: 'approval',
   } as unknown as PurchaseV2;
+}
+
+function plannedBudgetItem(values?: {
+  active?: boolean;
+  segmentActive?: boolean;
+}): PlannedBudgetItem {
+  const item = {
+    id: 'supply-item-1',
+    code: 'ITM-001',
+    name: 'Notebook',
+    description: null,
+    category: 'Equipamentos',
+    subcategory: 'Equipamentos',
+    groupName: 'Tecnologia',
+    areaName: null,
+    financialGroup: 'equipment' as const,
+    type: 'product' as const,
+    defaultUnit: 'un',
+    defaultQuantity: null,
+    brandReference: null,
+    technicalSpecification: null,
+    productLink: null,
+    active: true,
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
+  };
+  const segment = {
+    id: 'segment-1',
+    supplyItemId: item.id,
+    item,
+    name: 'Todas as lojas',
+    active: values?.segmentActive ?? true,
+    notes: null,
+    stores: [
+      {
+        id: 'segment-store-1',
+        storeId: 'store-1',
+        storeCode: 'L1',
+        storeName: 'Loja 1',
+        storeCity: 'Natal',
+        storeState: 'RN',
+        quantity: '1',
+      },
+      {
+        id: 'segment-store-2',
+        storeId: 'store-2',
+        storeCode: 'L2',
+        storeName: 'Loja 2',
+        storeCity: 'Natal',
+        storeState: 'RN',
+        quantity: '1',
+      },
+    ],
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
+  };
+
+  return {
+    id: 'budget-item-1',
+    supplyItemId: item.id,
+    item,
+    segmentId: segment.id,
+    segment,
+    unitPrice: '50.01',
+    active: values?.active ?? true,
+    notes: null,
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
+  };
 }
 
 function work(): WorkService {
@@ -256,19 +325,16 @@ describe('finance overview', () => {
     ).toBe('general');
   });
 
-  it('distribui o orçamento aprovado dos itens por loja conservando os centavos', () => {
-    const result = purchaseApprovedBudgetByStore([approvedPurchase()]);
-    expect(result.get('store-1')).toBe(5001n);
-    expect(result.get('store-2')).toBe(5000n);
-    expect([...result.values()].reduce((sum, value) => sum + value, 0n)).toBe(10001n);
-  });
-
-  it('mostra o orçamento aprovado antes de existir compra física', () => {
-    const rows = buildFinanceStoreItemRows([approvedPurchase()], 'store-1');
+  it('usa Orçamento Previsto como origem do orçado, sem consumir o aprovado da compra', () => {
+    const rows = buildFinanceStoreItemRows(
+      [approvedPurchase()],
+      [plannedBudgetItem()],
+      'store-1',
+    );
 
     expect(rows).toHaveLength(1);
-    expect(rows[0].purchaseCode).toBe('CMP-00001');
-    expect(rows[0].quoteCode).toBe('COT-00001');
+    expect(rows[0].segmentNames).toEqual(['Todas as lojas']);
+    expect(rows[0].purchaseCode).toBe('');
     expect(rows[0].approvedQuantity).toBe(1000n);
     expect(rows[0].budgetCents).toBe(5001n);
     expect(rows[0].purchasedQuantity).toBe(0n);
@@ -276,10 +342,20 @@ describe('finance overview', () => {
     expect(rows[0].purchaseStatus).toBe('not_purchased');
   });
 
+  it('não conta item ou segmento inativo no orçamento previsto', () => {
+    expect(
+      buildFinanceStoreItemRows([], [plannedBudgetItem({ active: false })], 'store-1'),
+    ).toHaveLength(0);
+    expect(
+      buildFinanceStoreItemRows([], [plannedBudgetItem({ segmentActive: false })], 'store-1'),
+    ).toHaveLength(0);
+  });
+
   it('separa a composição da loja por grupo e fecha os totais sem resíduos', () => {
     const rows = buildFinanceStoreCompositionRows({
       storeId: 'store-1',
       purchases: [approvedPurchase()],
+      plannedBudgetItems: [plannedBudgetItem()],
       purchaseStoreRows: [],
       works: [work()],
     });
@@ -354,6 +430,7 @@ describe('finance overview', () => {
     const row = buildFinanceOverviewRows({
       stores,
       purchases: [approvedPurchase()],
+      plannedBudgetItems: [plannedBudgetItem()],
       purchaseStoreRows,
       works: [work()],
       budgets,
