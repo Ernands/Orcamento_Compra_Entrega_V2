@@ -184,6 +184,16 @@ with catalog as (
         case
           when lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g')) = 'caneta'
             and item.codigo_negocio = 'ITM-0083' then 0
+          when seed.seed_key = 'orcamento_previsto:011'
+            and item.codigo_negocio = 'ITM-0030' then 0
+          when seed.seed_key = 'orcamento_previsto:027'
+            and item.codigo_negocio = 'ITM-0091' then 0
+          when seed.seed_key = 'orcamento_previsto:028'
+            and item.codigo_negocio = 'ITM-0014' then 0
+          when seed.seed_key = 'orcamento_previsto:035'
+            and item.codigo_negocio = 'ITM-0025' then 0
+          when seed.seed_key = 'orcamento_previsto:054'
+            and item.codigo_negocio = 'ITM-0072' then 0
           else 1
         end,
         item.codigo_negocio,
@@ -225,6 +235,16 @@ with catalog as (
         case
           when lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g')) = 'caneta'
             and item.codigo_negocio = 'ITM-0083' then 0
+          when seed.seed_key = 'orcamento_previsto:011'
+            and item.codigo_negocio = 'ITM-0030' then 0
+          when seed.seed_key = 'orcamento_previsto:027'
+            and item.codigo_negocio = 'ITM-0091' then 0
+          when seed.seed_key = 'orcamento_previsto:028'
+            and item.codigo_negocio = 'ITM-0014' then 0
+          when seed.seed_key = 'orcamento_previsto:035'
+            and item.codigo_negocio = 'ITM-0025' then 0
+          when seed.seed_key = 'orcamento_previsto:054'
+            and item.codigo_negocio = 'ITM-0072' then 0
           else 1
         end,
         item.codigo_negocio,
@@ -271,6 +291,16 @@ with catalog as (
         case
           when lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g')) = 'caneta'
             and item.codigo_negocio = 'ITM-0083' then 0
+          when seed.seed_key = 'orcamento_previsto:011'
+            and item.codigo_negocio = 'ITM-0030' then 0
+          when seed.seed_key = 'orcamento_previsto:027'
+            and item.codigo_negocio = 'ITM-0091' then 0
+          when seed.seed_key = 'orcamento_previsto:028'
+            and item.codigo_negocio = 'ITM-0014' then 0
+          when seed.seed_key = 'orcamento_previsto:035'
+            and item.codigo_negocio = 'ITM-0025' then 0
+          when seed.seed_key = 'orcamento_previsto:054'
+            and item.codigo_negocio = 'ITM-0072' then 0
           else 1
         end,
         item.codigo_negocio,
