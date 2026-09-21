@@ -2,7 +2,6 @@ import type { FinanceStoreRow } from './finance-types';
 import {
   activeOrders,
   purchaseOrderStoreCosts,
-  purchaseStoreCosts,
 } from './purchase-v2-calculations';
 import { plannedBudgetAllocations, plannedBudgetByStore } from './planned-budget-calculations';
 import type { PlannedBudgetItem } from './planned-budget-types';
@@ -63,20 +62,6 @@ export interface FinanceOverviewStoreRow {
   worksDocumentedCents: bigint;
   worksMissingDocumentsCents: bigint;
   documentationStatus: 'complete' | 'partial' | 'pending' | 'none';
-}
-
-export function purchaseApprovedBudgetByStore(purchases: PurchaseV2[]): Map<string, bigint> {
-  const totals = new Map<string, bigint>();
-
-  purchases
-    .filter((purchase) => !['returned', 'cancelled'].includes(purchase.status))
-    .forEach((purchase) => {
-      purchaseStoreCosts(purchase).rows.forEach((row) => {
-        totals.set(row.storeId, (totals.get(row.storeId) || 0n) + row.approvedCents);
-      });
-    });
-
-  return totals;
 }
 
 export function buildFinanceStoreItemRows(
