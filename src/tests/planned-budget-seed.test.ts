@@ -76,4 +76,8 @@ describe('planned budget spreadsheet seed', () => {
     expect(storeCodes).not.toContain('LOJ-022');
     expect(storeCodes).not.toContain('LOJ-028');
   });
+  it('prioriza ITM-0083 para o item Caneta no seed', () => {
+    expect(migration).toContain("item.codigo_negocio = 'ITM-0083'");
+  });
+
 });
