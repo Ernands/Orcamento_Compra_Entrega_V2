@@ -83,6 +83,19 @@ create index if not exists supply_budget_items_item_idx
 create index if not exists supply_budget_items_active_idx
   on public.supply_budget_items(active);
 
+create index if not exists supply_budget_segments_created_by_idx
+  on public.supply_budget_segments(created_by);
+create index if not exists supply_budget_segments_updated_by_idx
+  on public.supply_budget_segments(updated_by);
+create index if not exists supply_budget_segment_stores_created_by_idx
+  on public.supply_budget_segment_stores(created_by);
+create index if not exists supply_budget_items_created_by_idx
+  on public.supply_budget_items(created_by);
+create index if not exists supply_budget_items_updated_by_idx
+  on public.supply_budget_items(updated_by);
+create index if not exists supply_budget_items_segment_item_idx
+  on public.supply_budget_items(segment_id, supply_item_id);
+
 drop trigger if exists supply_budget_segments_updated_at on public.supply_budget_segments;
 create trigger supply_budget_segments_updated_at
 before update on public.supply_budget_segments
