@@ -28,6 +28,7 @@ import {
   cancelPurchasePaymentV2,
   createPurchaseAttachmentSignedUrlV2,
   createQuoteAttachmentSignedUrlReadOnlyV2,
+  createSupplyPurchaseBatchOperationV2,
   createSupplyPurchaseOperationV2,
   deletePurchaseAttachmentV2,
   listSupplyPurchasesV2,
