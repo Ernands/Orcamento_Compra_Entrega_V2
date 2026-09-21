@@ -1513,9 +1513,10 @@ export function FinancePage() {
       <footer className="finance-note">
         <Building2 size={18} />
         <span>
-          A Visão Geral consolida os itens de Compras e os contratos de Obras e Serviços. O custo
-          por loja continua usando o rateio confirmado em Compras; documentos e pagamentos de obra
-          são controlados separadamente no novo módulo.
+          A Visão Geral usa o Orçamento Previsto para o Orçado itens, as Compras para o realizado e
+          os contratos de Obras e Serviços para obra. O custo comprado por loja continua usando o
+          rateio confirmado em Compras; documentos e pagamentos de obra são controlados
+          separadamente.
         </span>
       </footer>
 
