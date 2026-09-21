@@ -43,6 +43,13 @@ describe('AppShell', () => {
     window.localStorage.clear();
   });
 
+  it('exibe a identidade Implanta Lojas Mais BB na navegacao', () => {
+    renderShell(['stores.view']);
+    expect(screen.getAllByText('Implanta Lojas Mais BB').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Implantação, Compra & Entrega').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Implanta 27')).not.toBeInTheDocument();
+  });
+
   it('mostra apenas modulos implementados e permitidos para Consulta', () => {
     renderShell(['stores.view']);
     expect(screen.getAllByRole('link', { name: 'Lojas' }).length).toBeGreaterThan(0);

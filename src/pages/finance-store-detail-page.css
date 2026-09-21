@@ -11,13 +11,24 @@
   gap: 18px;
 }
 
+.finance-store-detail__identity {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+.finance-store-detail__identity .eyebrow {
+  display: block;
+  margin-top: 2px;
+}
+
 .finance-store-detail__heading h2,
 .finance-store-detail__heading p {
   margin: 0;
 }
 
 .finance-store-detail__heading h2 {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .finance-store-detail__heading p {
@@ -38,7 +49,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 2px;
   color: var(--brand);
   font-size: 0.75rem;
   font-weight: 800;

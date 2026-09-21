@@ -112,7 +112,7 @@ export function AppShell() {
         : location.pathname.endsWith('/resumo-necessidades')
           ? 'Resumo e Necessidades'
           : 'Implantacao da loja'
-      : routeTitles[location.pathname] || 'Implanta 27';
+      : routeTitles[location.pathname] || 'Implanta Lojas Mais BB';
 
   useEffect(() => {
     if (location.pathname.startsWith('/lojas') || location.pathname.startsWith('/implantacao/')) {
@@ -194,8 +194,8 @@ export function AppShell() {
           <Building2 size={23} />
         </span>
         <span>
-          <strong>Implanta 27</strong>
-          <small>Implantacao, Compra & entrega</small>
+          <strong>Implanta Lojas Mais BB</strong>
+          <small>Implantação, Compra & Entrega</small>
         </span>
       </div>
       <nav className="sidebar__nav" aria-label="Navegacao principal">
@@ -419,7 +419,7 @@ export function AppShell() {
             <Menu size={21} />
           </IconButton>
           <div>
-            <span className="topbar__eyebrow">Implanta 27</span>
+            <span className="topbar__eyebrow">Implanta Lojas Mais BB</span>
             <h1>{title}</h1>
           </div>
         </header>

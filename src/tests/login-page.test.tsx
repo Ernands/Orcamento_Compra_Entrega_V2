@@ -12,7 +12,7 @@ const login = vi.fn();
 
 describe('LoginPage', () => {
   beforeEach(() => {
-    document.title = 'Implanta 27';
+    document.title = 'Implanta Lojas Mais BB';
     login.mockReset();
     vi.mocked(useSession).mockReturnValue({
       session: null,
@@ -32,9 +32,21 @@ describe('LoginPage', () => {
         <LoginPage />
       </MemoryRouter>,
     );
-    expect(document.title).toBe('Entrar | Implanta 27');
+    expect(document.title).toBe('Entrar | Implanta Lojas Mais BB');
     unmount();
-    expect(document.title).toBe('Implanta 27');
+    expect(document.title).toBe('Implanta Lojas Mais BB');
+  });
+
+  it('exibe a nova identidade sem a referencia operacional das 27 lojas', () => {
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('region', { name: 'Implanta Lojas Mais BB' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('ImplantaLojas Mais BB');
+    expect(screen.getByText('Implantação, Compra & Entrega')).toBeInTheDocument();
+    expect(screen.queryByText(/Operacao das 27 lojas/i)).not.toBeInTheDocument();
   });
 
   it('mostra somente CPF e senha, sem cadastro publico ou Google', () => {

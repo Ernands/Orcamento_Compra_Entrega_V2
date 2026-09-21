@@ -364,6 +364,42 @@ export async function createSupplyPurchaseOperationV2(
   return { orderId: result.order_id, paymentIds: result.payment_ids || [] };
 }
 
+export interface PurchaseBatchOperationResultV2 {
+  purchaseId: string;
+  orderId: string;
+  paymentIds: string[];
+}
+
+export async function createSupplyPurchaseBatchOperationV2(
+  operations: RegisterPurchaseOperationInputV2[],
+): Promise<PurchaseBatchOperationResultV2[]> {
+  const payload = operations.map((values) => {
+    const operation = buildPurchaseOperationRpcPayloadV2(values);
+    return {
+      purchase_id: operation.p_purchase_id,
+      purchased_on: operation.p_purchased_on,
+      supplier_order_ref: operation.p_supplier_order_ref,
+      expected_delivery_date: operation.p_expected_delivery_date,
+      notes: operation.p_notes,
+      lines: operation.p_lines,
+      payments: operation.p_payments,
+    };
+  });
+  const { data, error } = await supabase.rpc(
+    'create_supply_purchase_batch_operation_v1' as never,
+    { p_operations: payload } as never,
+  );
+  if (error) throw new Error(error.message);
+  const result = data as unknown as {
+    operations?: Array<{ purchase_id: string; order_id: string; payment_ids?: string[] }>;
+  };
+  return (result.operations || []).map((entry) => ({
+    purchaseId: entry.purchase_id,
+    orderId: entry.order_id,
+    paymentIds: entry.payment_ids || [],
+  }));
+}
+
 export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInputV2) {
   return {
     p_payment_id: values.id,

@@ -382,7 +382,7 @@ export function FinanceStoreDetailPage() {
   return (
     <div className="page-stack finance-store-detail">
       <header className="finance-store-detail__heading">
-        <div>
+        <div className="finance-store-detail__identity">
           <Link to="/financeiro" className="finance-store-detail__back">
             <ArrowLeft size={16} />
             Voltar para Visão Geral
