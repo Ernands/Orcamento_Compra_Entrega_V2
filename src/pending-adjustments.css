@@ -123,16 +123,16 @@
   display: grid;
   place-items: center;
   padding: 0;
-  color: #dce8e4;
-  background: #24443d;
-  border: 1px solid #3b5a53;
+  color: #ffffff;
+  background: #3449d9;
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 50%;
   box-shadow: 0 3px 10px rgba(17, 29, 25, 0.2);
 }
 .sidebar-collapse-toggle:hover {
   color: #fff;
-  background: #2b5147;
-  border-color: #57756c;
+  background: #2f43cb;
+  border-color: rgba(255, 255, 255, 0.38);
 }
 .sidebar--collapsed .sidebar__brand {
   justify-content: center;
