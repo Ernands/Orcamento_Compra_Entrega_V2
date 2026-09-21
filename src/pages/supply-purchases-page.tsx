@@ -40,6 +40,7 @@ import {
 } from '../data/purchases/purchases-v2-repository';
 import {
   approvedDestinationAllocations,
+  buildPurchaseInstallmentSchedule,
   calculateRegistrationTotal,
   destinationExecution,
   formatQuantityV2,
@@ -187,10 +188,10 @@ function paymentDraft(purchase: PurchaseV2, key = 'payment-1'): PurchasePaymentD
     method: purchase.paymentMethodSnapshot || 'pix',
     source: '',
     amount: '',
-    entry: purchase.entryAmountSnapshot || '',
-    installments: purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '',
+    entry: '',
+    installments: '',
     firstDueDate: '',
-    status: 'paid',
+    status: 'planned',
     notes: purchase.paymentNotesSnapshot || '',
   };
 }
@@ -281,6 +282,11 @@ function RegisterPurchaseModal({
   const [notes, setNotes] = useState('');
   const [storeAllocations, setStoreAllocations] = useState<Record<string, string>>({});
   const [payments, setPayments] = useState<PurchasePaymentDraft[]>([]);
+  const [installmentEntry, setInstallmentEntry] = useState('');
+  const [installmentCount, setInstallmentCount] = useState('');
+  const [installmentFirstDueDate, setInstallmentFirstDueDate] = useState('');
+  const [installmentEntryMethod, setInstallmentEntryMethod] = useState<PaymentMethod>('pix');
+  const [installmentMethod, setInstallmentMethod] = useState<PaymentMethod>('boleto');
   const nextPaymentKey = useRef(2);
   const previousSuggestedPayment = useRef('');
   const [file, setFile] = useState<File | null>(null);
@@ -408,6 +414,11 @@ function RegisterPurchaseModal({
     deliveryTouchedRef.current = false;
     setNotes('');
     setPayments([paymentDraft(purchase)]);
+    setInstallmentEntry('');
+    setInstallmentCount('');
+    setInstallmentFirstDueDate('');
+    setInstallmentEntryMethod('pix');
+    setInstallmentMethod('boleto');
     nextPaymentKey.current = 2;
     previousSuggestedPayment.current = '';
     setFile(null);
@@ -560,6 +571,52 @@ function RegisterPurchaseModal({
 
   const updatePayment = (key: string, change: Partial<PurchasePaymentDraft>) => {
     setPayments((current) => current.map((payment) => payment.key === key ? { ...payment, ...change } : payment));
+  };
+
+  const generateInstallmentPayments = () => {
+    if (total === null) {
+      setError('Calcule primeiro o total da compra.');
+      return;
+    }
+    try {
+      const entryCents = installmentEntry.trim() ? moneyToCents(installmentEntry) : 0n;
+      const count = Number(installmentCount);
+      const schedule = buildPurchaseInstallmentSchedule(total, entryCents, count, installmentFirstDueDate);
+      const generated: PurchasePaymentDraft[] = [];
+      let keyIndex = 1;
+      if (entryCents > 0n) {
+        generated.push({
+          key: `generated-${keyIndex++}`,
+          method: installmentEntryMethod,
+          source: 'Entrada',
+          amount: centsToInput(entryCents),
+          entry: '',
+          installments: '',
+          firstDueDate: '',
+          status: 'paid',
+          notes: 'Entrada da compra',
+        });
+      }
+      for (const installment of schedule) {
+        generated.push({
+          key: `generated-${keyIndex++}`,
+          method: installmentMethod,
+          source: `Parcela ${installment.installment}/${count}`,
+          amount: centsToInput(installment.amountCents),
+          entry: '',
+          installments: '',
+          firstDueDate: installment.dueDate,
+          status: 'planned',
+          notes: '',
+        });
+      }
+      setPayments(generated);
+      nextPaymentKey.current = generated.length + 1;
+      previousSuggestedPayment.current = '';
+      setError(null);
+    } catch {
+      setError('Informe entrada menor que o total, quantidade de parcelas e primeiro vencimento.');
+    }
   };
 
   const paymentTotal = useMemo(() => {
@@ -912,6 +969,17 @@ function RegisterPurchaseModal({
 
       <section className="purchase-v2-operation-section">
         <header><span>3</span><div><strong>Pagamento</strong><small>Obrigatorio e sempre vinculado a esta compra.</small></div></header>
+        <div className="purchase-v2-installment-builder">
+          <header><div><strong>Entrada + parcelas</strong><small>Gera a entrada como paga e cada parcela futura como um pagamento previsto separado.</small></div></header>
+          <div className="form-grid form-grid--three">
+            <label className="field">Entrada paga<input value={installmentEntry} onChange={(event) => setInstallmentEntry(event.target.value)} placeholder="0,00" /></label>
+            <label className="field">Forma da entrada<select value={installmentEntryMethod} onChange={(event) => setInstallmentEntryMethod(event.target.value as PaymentMethod)}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="field">Quantidade de parcelas<input inputMode="numeric" value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value.replace(/\D/g, ''))} placeholder="5" /></label>
+            <label className="field">Forma das parcelas<select value={installmentMethod} onChange={(event) => setInstallmentMethod(event.target.value as PaymentMethod)}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="field">Primeiro vencimento<input type="date" value={installmentFirstDueDate} onChange={(event) => setInstallmentFirstDueDate(event.target.value)} /></label>
+            <div className="field purchase-v2-installment-action"><span>Gerar cronograma</span><button type="button" className="button button--secondary" onClick={generateInstallmentPayments} disabled={total === null}>Gerar entrada + parcelas</button></div>
+          </div>
+        </div>
         <div className="purchase-v2-payment-drafts">
           {payments.map((payment, index) => <div className="purchase-v2-payment-draft" key={payment.key}>
             <header><strong>Pagamento {index + 1}</strong>{payments.length > 1 && <button type="button" className="button button--secondary button--small" onClick={() => setPayments((current) => current.filter((entry) => entry.key !== payment.key))}><XCircle size={15}/>Remover</button>}</header>
@@ -920,8 +988,6 @@ function RegisterPurchaseModal({
               <label className="field">Valor total<input value={payment.amount} onChange={(event) => updatePayment(payment.key, { amount: event.target.value })} required /></label>
               <label className="field">Situacao<select value={payment.status} onChange={(event) => updatePayment(payment.key, { status: event.target.value as 'planned' | 'paid' })}><option value="paid">Pago</option><option value="planned">A pagar / previsto</option></select></label>
               <label className="field">Origem / cartao utilizado<input value={payment.source} onChange={(event) => updatePayment(payment.key, { source: event.target.value })} placeholder="Ex.: Cartao corporativo final 1234" /></label>
-              <label className="field">Entrada<input value={payment.entry} onChange={(event) => updatePayment(payment.key, { entry: event.target.value })} /></label>
-              <label className="field">Parcelas<input inputMode="numeric" value={payment.installments} onChange={(event) => updatePayment(payment.key, { installments: event.target.value.replace(/\D/g, '') })} /></label>
               {payment.status === 'planned' && <label className="field">Primeiro vencimento<input type="date" value={payment.firstDueDate} onChange={(event) => updatePayment(payment.key, { firstDueDate: event.target.value })} /></label>}
             </div>
             <label className="field">Observacoes do pagamento<textarea rows={2} value={payment.notes} onChange={(event) => updatePayment(payment.key, { notes: event.target.value })} /></label>
