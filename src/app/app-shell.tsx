@@ -53,7 +53,6 @@ const SECTION_STORAGE = {
   implantation: 'implanta27.sidebar.implantation',
   supply: 'implanta27.sidebar.supply',
   administration: 'implanta27.sidebar.administration',
-  finance: 'implanta27.sidebar.finance',
 } as const;
 const SIDEBAR_COLLAPSED_STORAGE = 'implanta27.sidebar.collapsed';
 
@@ -95,7 +94,6 @@ export function AppShell() {
   const [administrationOpen, setAdministrationOpen] = useState(() =>
     readSectionState(SECTION_STORAGE.administration),
   );
-  const [financeOpen, setFinanceOpen] = useState(() => readSectionState(SECTION_STORAGE.finance));
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
   const canViewSupply =
@@ -131,10 +129,6 @@ export function AppShell() {
       setSupplyOpen(true);
       persistSectionState(SECTION_STORAGE.supply, true);
     }
-    if (location.pathname.startsWith('/financeiro')) {
-      setFinanceOpen(true);
-      persistSectionState(SECTION_STORAGE.finance, true);
-    }
     if (location.pathname.startsWith('/acessos')) {
       setAdministrationOpen(true);
       persistSectionState(SECTION_STORAGE.administration, true);
@@ -161,14 +155,6 @@ export function AppShell() {
     setAdministrationOpen((current) => {
       const next = !current;
       persistSectionState(SECTION_STORAGE.administration, next);
-      return next;
-    });
-  };
-
-  const toggleFinance = () => {
-    setFinanceOpen((current) => {
-      const next = !current;
-      persistSectionState(SECTION_STORAGE.finance, next);
       return next;
     });
   };
@@ -353,31 +339,20 @@ export function AppShell() {
 
         {can('finance.view') && (
           <>
-            {!compact && (
-              <button
-                type="button"
-                className="nav-section"
-                style={sectionButtonStyle(true)}
-                aria-expanded={financeOpen}
-                onClick={toggleFinance}
+            {!compact && <span className="nav-section nav-section--spaced">Financeiro</span>}
+            <NavLink to="/financeiro" end onClick={() => setMobileOpen(false)}>
+              <Landmark size={19} />
+              Financeiro
+            </NavLink>
+            {can('finance.payments_view') && (
+              <NavLink
+                className="nav-sub-link"
+                to="/financeiro/pagamentos"
+                onClick={() => setMobileOpen(false)}
               >
-                <span>Financeiro</span>
-                <ChevronRight size={15} style={sectionChevronStyle(financeOpen)} />
-              </button>
-            )}
-            {(compact || financeOpen) && (
-              <>
-                <NavLink to="/financeiro" end onClick={() => setMobileOpen(false)}>
-                  <Landmark size={19} />
-                  Visão Geral
-                </NavLink>
-                {can('finance.payments_view') && (
-                  <NavLink to="/financeiro/pagamentos" onClick={() => setMobileOpen(false)}>
-                    <WalletCards size={19} />
-                    Pagamentos
-                  </NavLink>
-                )}
-              </>
+                <WalletCards size={18} />
+                Pagamentos
+              </NavLink>
             )}
           </>
         )}
