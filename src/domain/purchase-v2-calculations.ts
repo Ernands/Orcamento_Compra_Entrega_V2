@@ -162,6 +162,49 @@ export function remainingDestinationQuantity(
   return approved > purchased ? approved - purchased : 0n;
 }
 
+export interface PurchaseInstallmentScheduleEntry {
+  installment: number;
+  amountCents: bigint;
+  dueDate: string;
+}
+
+function monthlyDueDate(firstDueDate: string, offset: number): string {
+  const [year, month, day] = firstDueDate.split('-').map(Number);
+  if (!year || !month || !day) throw new Error('invalid first due date');
+  const targetMonth = month - 1 + offset;
+  const targetYear = year + Math.floor(targetMonth / 12);
+  const normalizedMonth = ((targetMonth % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(targetYear, normalizedMonth, Math.min(day, lastDay))).toISOString().slice(0, 10);
+}
+
+export function buildPurchaseInstallmentSchedule(
+  totalCents: bigint,
+  entryCents: bigint,
+  installmentCount: number,
+  firstDueDate: string,
+): PurchaseInstallmentScheduleEntry[] {
+  if (totalCents <= 0n) throw new Error('purchase total must be positive');
+  if (entryCents < 0n || entryCents >= totalCents) throw new Error('entry must be smaller than purchase total');
+  if (!Number.isInteger(installmentCount) || installmentCount < 1) throw new Error('installment count must be positive');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(firstDueDate)) throw new Error('first due date is required');
+
+  const financed = totalCents - entryCents;
+  const count = BigInt(installmentCount);
+  const base = financed / count;
+  let remainder = financed - base * count;
+
+  return Array.from({ length: installmentCount }, (_, index) => {
+    const amountCents = base + (remainder > 0n ? 1n : 0n);
+    if (remainder > 0n) remainder -= 1n;
+    return {
+      installment: index + 1,
+      amountCents,
+      dueDate: monthlyDueDate(firstDueDate, index),
+    };
+  });
+}
+
 export function suggestedDeliveryDate(purchasedOn: string, deliveryDays: number | null): string {
   if (!purchasedOn || deliveryDays === null || !Number.isFinite(deliveryDays)) return '';
   const base = new Date(`${purchasedOn}T12:00:00Z`);
