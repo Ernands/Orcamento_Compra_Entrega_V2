@@ -4,7 +4,7 @@ import { collectPaginatedRows } from '../data/planned-budget/planned-budget-repo
 describe('planned budget pagination', () => {
   it('carrega todas as linhas quando os vínculos ultrapassam o limite de 1000', async () => {
     const source = Array.from({ length: 1202 }, (_, index) => ({ id: index + 1 }));
-    const loadPage = vi.fn(async (from: number, to: number) => source.slice(from, to + 1));
+    const loadPage = vi.fn((from: number, to: number) => Promise.resolve(source.slice(from, to + 1)));
 
     const rows = await collectPaginatedRows(loadPage, 500);
 
