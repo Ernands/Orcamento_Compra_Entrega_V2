@@ -159,7 +159,14 @@ with catalog as (
       where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
         lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
         and item.active
-      order by item.codigo_negocio, item.id
+      order by
+        case
+          when lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g')) = 'caneta'
+            and item.codigo_negocio = 'ITM-0083' then 0
+          else 1
+        end,
+        item.codigo_negocio,
+        item.id
       limit 1
     ) as supply_item_id
   from planned_budget_seed_items seed
@@ -193,7 +200,14 @@ with catalog as (
       where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
         lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
         and item.active
-      order by item.codigo_negocio, item.id
+      order by
+        case
+          when lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g')) = 'caneta'
+            and item.codigo_negocio = 'ITM-0083' then 0
+          else 1
+        end,
+        item.codigo_negocio,
+        item.id
       limit 1
     ) as supply_item_id
   from planned_budget_seed_items seed
@@ -232,7 +246,14 @@ with catalog as (
       where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
         lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
         and item.active
-      order by item.codigo_negocio, item.id
+      order by
+        case
+          when lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g')) = 'caneta'
+            and item.codigo_negocio = 'ITM-0083' then 0
+          else 1
+        end,
+        item.codigo_negocio,
+        item.id
       limit 1
     ) as supply_item_id
   from planned_budget_seed_items seed
