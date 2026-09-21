@@ -58,6 +58,13 @@ describe('planned budget spreadsheet seed', () => {
     );
   });
 
+  it('nunca cria nem reativa itens do catálogo automaticamente', () => {
+    expect(migration).toContain('planned budget seed requires existing catalog items. Missing: %');
+    expect(migration).toContain('planned budget seed requires active catalog items. Inactive: %');
+    expect(migration).not.toMatch(/insert into public\.supply_items/i);
+    expect(migration).not.toMatch(/update public\.supply_items/i);
+  });
+
   it('mapeia exatamente as 26 lojas da planilha por código de negócio', () => {
     const storeCodes = [
       ...migration.matchAll(/\('(Com atendimento|Sem atendimento|Baependi)', '(LOJ-\d{3})'\)/g),
