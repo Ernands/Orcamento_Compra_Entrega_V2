@@ -63,7 +63,7 @@ describe('planned budget spreadsheet seed', () => {
     expect(migration).toContain('planned budget seed requires active catalog items. Inactive: %');
     expect(migration).not.toMatch(/insert into public\.supply_items/i);
     expect(migration).not.toMatch(/update public\.supply_items/i);
-    expect(migration.match(/and item\.active/g)).toHaveLength(4);
+    expect(migration.match(/and item\.active/g)).toHaveLength(5);
   });
 
   it('mapeia exatamente as 26 lojas da planilha por código de negócio', () => {
