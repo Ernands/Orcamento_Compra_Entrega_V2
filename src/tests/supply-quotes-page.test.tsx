@@ -80,6 +80,15 @@ const store: Store = {
   notes: null,
 };
 
+const storeTwo: Store = {
+  ...store,
+  id: 'store-2',
+  code: 'LOJ-007',
+  name: 'Tavares - PB',
+  city: 'Tavares',
+  state: 'PB',
+};
+
 const item: SupplyItem = {
   id: 'item-1',
   code: 'ITM-0001',
@@ -301,6 +310,37 @@ describe('SupplyQuotesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar cotacao' }));
     expect(screen.getByLabelText('Valor do frete 1')).toBeInvalid();
     expect(saveSupplyQuoteWithPaymentTerms).not.toHaveBeenCalled();
+  });
+
+  it('usa todas as lojas selecionadas em Lojas em todos na cotacao consolidada', async () => {
+    const user = userEvent.setup();
+    const consolidated: SupplyQuote = {
+      ...draftQuote,
+      id: 'quote-consolidated',
+      code: 'COT-CONSOLIDATED',
+      contextType: 'consolidated',
+      stores: [store, storeTwo],
+      items: [{
+        ...quoteItem,
+        id: 'quote-item-consolidated',
+        quoteId: 'quote-consolidated',
+        storeId: storeTwo.id,
+        storeCode: storeTwo.code,
+        storeName: storeTwo.name,
+        quantity: '2',
+      }],
+    };
+    vi.mocked(listStores).mockResolvedValue([store, storeTwo]);
+    vi.mocked(listSupplyQuotes).mockResolvedValue([consolidated]);
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Editar COT-CONSOLIDATED' }));
+    await user.click(screen.getByRole('button', { name: 'Lojas em todos' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Editar COT-CONSOLIDATED' });
+    expect(within(dialog).getByText('LOJ-001 - Loja Um')).toBeInTheDocument();
+    expect(within(dialog).getByText('LOJ-007 - Tavares - PB')).toBeInTheDocument();
+    expect(within(dialog).getAllByLabelText(/Quantidade destino 1-/)).toHaveLength(2);
   });
 
   it('mantem o modal aberto ao aplicar prospectores sem perfil de frete', async () => {
