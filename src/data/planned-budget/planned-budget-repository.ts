@@ -158,7 +158,7 @@ function budgetItemPayload(values: PlannedBudgetItemValues) {
   return {
     supply_item_id: values.supplyItemId,
     segment_id: values.segmentId,
-    unit_price: scaledToDecimal(moneyToCents(values.unitPrice), 2),
+    unit_price: Number(scaledToDecimal(moneyToCents(values.unitPrice), 2)),
     active: values.active,
     notes: values.notes.trim() || null,
   };
