@@ -10,7 +10,7 @@ describe('planned budget pagination', () => {
 
     expect(rows).toHaveLength(1202);
     expect(rows[0]).toEqual({ id: 1 });
-    expect(rows.at(-1)).toEqual({ id: 1202 });
+    expect(rows[rows.length - 1]).toEqual({ id: 1202 });
     expect(loadPage.mock.calls).toEqual([
       [0, 499],
       [500, 999],
