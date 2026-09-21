@@ -1187,7 +1187,7 @@ function BulkRegisterPurchaseModal({
     setError(null);
     nextPaymentKey.current = 2;
     previousSuggestedPayment.current = '';
-  }, [purchase.id]);
+  }, [purchase]);
 
   const selectedLines = lines.filter((line) => line.selected && !line.disabledReason);
   const lineTotal = (line: BulkPurchaseDraftLine): bigint | null => {
