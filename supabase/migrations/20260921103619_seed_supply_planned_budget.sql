@@ -158,6 +158,7 @@ with catalog as (
       from public.supply_items item
       where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
         lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
+        and item.active
       order by item.codigo_negocio, item.id
       limit 1
     ) as supply_item_id
@@ -191,6 +192,7 @@ with catalog as (
       from public.supply_items item
       where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
         lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
+        and item.active
       order by item.codigo_negocio, item.id
       limit 1
     ) as supply_item_id
@@ -229,6 +231,7 @@ with catalog as (
       from public.supply_items item
       where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
         lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
+        and item.active
       order by item.codigo_negocio, item.id
       limit 1
     ) as supply_item_id
