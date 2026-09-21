@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   Store,
   Truck,
+  WalletCards,
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
