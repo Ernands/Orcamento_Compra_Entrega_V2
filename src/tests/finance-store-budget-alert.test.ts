@@ -12,6 +12,8 @@ describe('finance store budget excess alert', () => {
   it('keeps the alert compact and visually negative', () => {
     expect(styles).toContain('.finance-store-budget-alert');
     expect(styles).toContain('color: #9b342b');
-    expect(styles).toContain('font-size: 0.58rem');
+    expect(styles).toContain('font-size: 0.56rem');
+    expect(styles).toContain('width: 100%');
+    expect(styles).toContain('white-space: normal');
   });
 });
