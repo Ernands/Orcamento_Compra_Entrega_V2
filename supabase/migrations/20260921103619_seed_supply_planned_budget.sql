@@ -108,6 +108,27 @@ insert into planned_budget_seed_stores (store_group, store_code) values
   ('Sem atendimento', 'LOJ-027'),
   ('Baependi', 'LOJ-008');
 
+do $store_preflight$
+declare
+  v_missing_stores text;
+begin
+  select string_agg(seed_store.store_code, ', ' order by seed_store.store_code)
+  into v_missing_stores
+  from planned_budget_seed_stores seed_store
+  where not exists (
+    select 1
+    from public.lojas store
+    where store.codigo_negocio = seed_store.store_code
+  );
+
+  if v_missing_stores is not null then
+    raise exception
+      'planned budget seed requires stores. Missing: %',
+      v_missing_stores;
+  end if;
+end;
+$store_preflight$;
+
 -- O Orçamento Previsto nunca cria nem reativa itens do catálogo.
 -- Todos os itens precisam ser cadastrados previamente pelo sistema.
 do $catalog_preflight$
@@ -289,6 +310,9 @@ declare
   v_catalog_count integer;
   v_segment_count integer;
   v_budget_item_count integer;
+  v_store_count integer;
+  v_store_link_count integer;
+  v_total numeric(16,2);
 begin
   select count(distinct item.id)
   into v_catalog_count
@@ -309,12 +333,35 @@ begin
   where segment.notes like 'Carga inicial Lista_Orçamento_Sistema.xlsx · orcamento_previsto:%'
     and budget_item.active;
 
-  if v_catalog_count < 52 or v_segment_count <> 52 or v_budget_item_count <> 52 then
+  select count(distinct store.id), count(*)
+  into v_store_count, v_store_link_count
+  from public.supply_budget_segment_stores link
+  join public.supply_budget_segments segment on segment.id = link.segment_id
+  join public.lojas store on store.id = link.store_id
+  where segment.notes like 'Carga inicial Lista_Orçamento_Sistema.xlsx · orcamento_previsto:%';
+
+  select coalesce(sum(budget_item.unit_price * link.quantity), 0)
+  into v_total
+  from public.supply_budget_items budget_item
+  join public.supply_budget_segments segment on segment.id = budget_item.segment_id
+  join public.supply_budget_segment_stores link on link.segment_id = segment.id
+  where segment.notes like 'Carga inicial Lista_Orçamento_Sistema.xlsx · orcamento_previsto:%'
+    and budget_item.active;
+
+  if v_catalog_count < 52
+     or v_segment_count <> 52
+     or v_budget_item_count <> 52
+     or v_store_count <> 26
+     or v_store_link_count <> 1240
+     or v_total <> 786997.27 then
     raise exception
-      'planned budget seed validation failed: catalog %, segments %, budget items %',
+      'planned budget seed validation failed: catalog %, segments %, budget items %, stores %, links %, total %',
       v_catalog_count,
       v_segment_count,
-      v_budget_item_count;
+      v_budget_item_count,
+      v_store_count,
+      v_store_link_count,
+      v_total;
   end if;
 end;
 $validation$;
