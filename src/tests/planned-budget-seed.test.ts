@@ -80,4 +80,14 @@ describe('planned budget spreadsheet seed', () => {
     expect(migration).toContain("item.codigo_negocio = 'ITM-0083'");
   });
 
+  it('exige as 26 lojas e valida o total integral do orçamento previsto', () => {
+    expect(migration).toContain('planned budget seed requires stores');
+    expect(migration).toContain('v_store_count <> 26');
+    expect(migration).toContain('v_store_link_count <> 1240');
+    expect(migration).toContain('v_total <> 786997.27');
+    expect(migration).toContain("'LOJ-008'");
+    expect(migration).not.toContain("'LOJ-022'");
+    expect(migration).not.toContain("'LOJ-028'");
+  });
+
 });
