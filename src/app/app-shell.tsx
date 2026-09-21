@@ -104,6 +104,8 @@ export function AppShell() {
     can('stores.view') || can('checklists.view') || can('implementation.view');
   const title = location.pathname.startsWith('/financeiro/lojas/')
     ? 'Detalhe financeiro da loja'
+    : location.pathname.startsWith('/suprimentos/orcamento-previsto/')
+      ? 'Detalhe do Orçamento Previsto'
     : location.pathname.startsWith('/suprimentos/itens/')
       ? 'Detalhe do item'
     : location.pathname.startsWith('/lojas/')

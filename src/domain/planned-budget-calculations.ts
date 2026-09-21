@@ -48,3 +48,20 @@ export function plannedBudgetByStore(items: PlannedBudgetItem[]): Map<string, bi
   });
   return totals;
 }
+
+
+export function plannedBudgetItemTotalCents(item: PlannedBudgetItem): bigint {
+  const unitPriceCents = moneyToCents(item.unitPrice);
+  const quantity = item.segment.stores.reduce(
+    (sum, store) => sum + quantityToThousandths(store.quantity),
+    0n,
+  );
+  return roundedDivide(unitPriceCents * quantity, 1000n);
+}
+
+export function activePlannedBudgetSegmentTotalCents(items: PlannedBudgetItem[]): bigint {
+  return items.reduce((sum, item) => {
+    if (!item.active || !item.segment.active) return sum;
+    return sum + plannedBudgetItemTotalCents(item);
+  }, 0n);
+}

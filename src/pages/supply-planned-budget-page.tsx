@@ -1,6 +1,7 @@
 import {
   Boxes,
   Calculator,
+  Eye,
   Layers3,
   PackagePlus,
   Pencil,
@@ -11,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
@@ -23,7 +25,11 @@ import {
   setPlannedBudgetSegmentActive,
 } from '../data/planned-budget/planned-budget-repository';
 import { listSupplyItems } from '../data/supplies/supplies-repository';
-import { plannedBudgetAllocations } from '../domain/planned-budget-calculations';
+import {
+  activePlannedBudgetSegmentTotalCents,
+  plannedBudgetAllocations,
+  plannedBudgetItemTotalCents,
+} from '../domain/planned-budget-calculations';
 import type {
   PlannedBudgetData,
   PlannedBudgetItem,
@@ -517,8 +523,12 @@ export function SupplyPlannedBudgetPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('active');
+  const [itemQuery, setItemQuery] = useState('');
+  const [itemStatus, setItemStatus] = useState('active');
+  const [segmentQuery, setSegmentQuery] = useState('');
+  const [segmentStatus, setSegmentStatus] = useState('all');
+  const [viewMode, setViewMode] = useState<'segments' | 'items' | 'both'>('both');
+  const [segmentTotalsOpen, setSegmentTotalsOpen] = useState(false);
   const [segmentModal, setSegmentModal] = useState<PlannedBudgetSegment | 'new' | null>(null);
   const [itemModal, setItemModal] = useState<PlannedBudgetItem | 'new' | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -552,13 +562,34 @@ export function SupplyPlannedBudgetPage() {
   const activeItems = data.items.filter((item) => item.active && item.segment.active).length;
   const activeSegments = data.segments.filter((segment) => segment.active).length;
 
+  const filteredSegments = useMemo(() => {
+    const q = segmentQuery.trim().toLocaleLowerCase('pt-BR');
+    return data.segments.filter((segment) => {
+      const matchesStatus =
+        segmentStatus === 'all' ||
+        (segmentStatus === 'active' && segment.active) ||
+        (segmentStatus === 'inactive' && !segment.active);
+      if (!matchesStatus) return false;
+      if (!q) return true;
+      return [
+        segment.item.code,
+        segment.item.name,
+        segment.item.groupName,
+        segment.item.category,
+        segment.name,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase('pt-BR').includes(q));
+    });
+  }, [data.segments, segmentQuery, segmentStatus]);
+
   const filteredItems = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase('pt-BR');
+    const q = itemQuery.trim().toLocaleLowerCase('pt-BR');
     return data.items.filter((budgetItem) => {
       const matchesStatus =
-        status === 'all' ||
-        (status === 'active' && budgetItem.active && budgetItem.segment.active) ||
-        (status === 'inactive' && (!budgetItem.active || !budgetItem.segment.active));
+        itemStatus === 'all' ||
+        (itemStatus === 'active' && budgetItem.active && budgetItem.segment.active) ||
+        (itemStatus === 'inactive' && (!budgetItem.active || !budgetItem.segment.active));
       if (!matchesStatus) return false;
       if (!q) return true;
       return [
@@ -571,7 +602,24 @@ export function SupplyPlannedBudgetPage() {
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('pt-BR').includes(q));
     });
-  }, [data.items, query, status]);
+  }, [data.items, itemQuery, itemStatus]);
+
+  const activeSegmentRows = useMemo(
+    () =>
+      data.segments
+        .filter((segment) => segment.active)
+        .map((segment) => {
+          const budgetItem =
+            data.items.find((item) => item.segmentId === segment.id && item.active) || null;
+          return {
+            segment,
+            budgetItem,
+            totalCents: budgetItem ? plannedBudgetItemTotalCents(budgetItem) : 0n,
+          };
+        }),
+    [data.items, data.segments],
+  );
+  const activeSegmentsTotalCents = activePlannedBudgetSegmentTotalCents(data.items);
 
   const toggleItem = async (item: PlannedBudgetItem) => {
     setActionId(item.id);
@@ -666,7 +714,18 @@ export function SupplyPlannedBudgetPage() {
         </article>
       </section>
 
-      <section className="planned-budget-panel planned-budget-panel--segments">
+      <section className="planned-budget-viewbar" aria-label="Filtros de visualização">
+        <label>
+          Visualização
+          <select value={viewMode} onChange={(event) => setViewMode(event.target.value as 'segments' | 'items' | 'both')}>
+            <option value="segments">Ver segmentos</option>
+            <option value="items">Ver itens</option>
+            <option value="both">Ver itens e segmentos</option>
+          </select>
+        </label>
+      </section>
+
+      {viewMode !== 'items' && <section className="planned-budget-panel planned-budget-panel--segments">
         <header>
           <div>
             <Layers3 size={19} />
@@ -675,9 +734,37 @@ export function SupplyPlannedBudgetPage() {
               <p>Cada segmento pertence a um item e define lojas e quantidade por loja.</p>
             </div>
           </div>
-          <span>{data.segments.length} segmento(s)</span>
+          <div className="planned-budget-panel__header-actions">
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => setSegmentTotalsOpen(true)}
+            >
+              <Calculator size={15} />
+              Ver total segmentos
+            </button>
+            <span>{filteredSegments.length} segmento(s)</span>
+          </div>
         </header>
-        {data.segments.length ? (
+        <div className="planned-budget-filters">
+          <label className="search-field">
+            <Search size={18} />
+            <input
+              value={segmentQuery}
+              onChange={(event) => setSegmentQuery(event.target.value)}
+              placeholder="Buscar item, código ou segmento"
+            />
+          </label>
+          <label>
+            Situação
+            <select value={segmentStatus} onChange={(event) => setSegmentStatus(event.target.value)}>
+              <option value="all">Todos</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+          </label>
+        </div>
+        {filteredSegments.length ? (
           <div className="planned-budget-table-scroll">
             <table className="planned-budget-table">
               <thead>
@@ -691,7 +778,7 @@ export function SupplyPlannedBudgetPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.segments.map((segment) => (
+                {filteredSegments.map((segment) => (
                   <tr key={segment.id}>
                     <td>
                       <strong>{segment.item.code}</strong>
@@ -751,9 +838,9 @@ export function SupplyPlannedBudgetPage() {
             detail="Cadastre o primeiro segmento para definir lojas e quantidades previstas."
           />
         )}
-      </section>
+      </section>}
 
-      <section className="planned-budget-panel planned-budget-panel--items">
+      {viewMode !== 'segments' && <section className="planned-budget-panel planned-budget-panel--items">
         <header>
           <div>
             <PackagePlus size={19} />
@@ -768,14 +855,14 @@ export function SupplyPlannedBudgetPage() {
           <label className="search-field">
             <Search size={18} />
             <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              value={itemQuery}
+              onChange={(event) => setItemQuery(event.target.value)}
               placeholder="Buscar item, grupo ou segmento"
             />
           </label>
           <label>
             Situação
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+            <select value={itemStatus} onChange={(event) => setItemStatus(event.target.value)}>
               <option value="active">Ativos</option>
               <option value="inactive">Inativos</option>
               <option value="all">Todos</option>
@@ -794,7 +881,7 @@ export function SupplyPlannedBudgetPage() {
                   <th>Valor unitário</th>
                   <th>Valor total</th>
                   <th>Situação</th>
-                  {canManage && <th>Ações</th>}
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -831,38 +918,47 @@ export function SupplyPlannedBudgetPage() {
                           {budgetItem.active && budgetItem.segment.active ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
-                      {canManage && (
-                        <td>
-                          <div className="planned-budget-actions">
-                            <button
-                              type="button"
-                              className="button button--secondary button--small"
-                              onClick={() => setItemModal(budgetItem)}
-                            >
-                              <Pencil size={14} />
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              className="button button--secondary button--small"
-                              disabled={actionId === budgetItem.id}
-                              onClick={() => void toggleItem(budgetItem)}
-                            >
-                              <Power size={14} />
-                              {budgetItem.active ? 'Inativar' : 'Ativar'}
-                            </button>
-                            <button
-                              type="button"
-                              className="button button--secondary button--small planned-budget-delete"
-                              disabled={actionId === budgetItem.id}
-                              onClick={() => void removeItem(budgetItem)}
-                            >
-                              <Trash2 size={14} />
-                              Excluir
-                            </button>
-                          </div>
-                        </td>
-                      )}
+                      <td>
+                        <div className="planned-budget-actions">
+                          <Link
+                            className="button button--secondary button--small"
+                            to={`/suprimentos/orcamento-previsto/${budgetItem.id}`}
+                          >
+                            <Eye size={14} />
+                            Detalhar
+                          </Link>
+                          {canManage && (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--secondary button--small"
+                                onClick={() => setItemModal(budgetItem)}
+                              >
+                                <Pencil size={14} />
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--secondary button--small"
+                                disabled={actionId === budgetItem.id}
+                                onClick={() => void toggleItem(budgetItem)}
+                              >
+                                <Power size={14} />
+                                {budgetItem.active ? 'Inativar' : 'Ativar'}
+                              </button>
+                              <button
+                                type="button"
+                                className="button button--secondary button--small planned-budget-delete"
+                                disabled={actionId === budgetItem.id}
+                                onClick={() => void removeItem(budgetItem)}
+                              >
+                                <Trash2 size={14} />
+                                Excluir
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -875,7 +971,51 @@ export function SupplyPlannedBudgetPage() {
             detail="Adicione itens e informe valor unitário e segmento."
           />
         )}
-      </section>
+      </section>}
+
+      {segmentTotalsOpen && (
+        <Modal
+          open
+          title="Total dos segmentos ativos"
+          description="Considera somente segmentos ativos com item do orçamento ativo."
+          onClose={() => setSegmentTotalsOpen(false)}
+          className="planned-budget-modal"
+        >
+          <div className="planned-budget-segment-total-summary">
+            <span>Total ativo</span>
+            <strong>{formatBRL(activeSegmentsTotalCents)}</strong>
+          </div>
+          <div className="planned-budget-table-scroll">
+            <table className="planned-budget-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Segmento</th>
+                  <th>Lojas</th>
+                  <th>Qtd. total</th>
+                  <th>Valor unitário</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeSegmentRows.map(({ segment, budgetItem, totalCents: segmentTotal }) => (
+                  <tr key={segment.id}>
+                    <td>
+                      <strong>{segment.item.code}</strong>
+                      <span>{segment.item.name}</span>
+                    </td>
+                    <td><strong>{segment.name}</strong></td>
+                    <td>{segment.stores.length}</td>
+                    <td>{formatQuantityV2(String(Number(segmentQuantity(segment)) / 1000))}</td>
+                    <td>{budgetItem ? formatBRL(moneyToCents(budgetItem.unitPrice)) : 'Sem item ativo'}</td>
+                    <td><strong>{formatBRL(segmentTotal)}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
 
       {segmentModal && (
         <SegmentModal
