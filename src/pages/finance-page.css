@@ -138,17 +138,20 @@
 
 .finance-store-budget-alert {
   display: block;
-  width: fit-content;
-  margin-top: 4px;
-  padding: 2px 5px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 3px 5px;
   color: #9b342b !important;
   background: #fff0ee;
   border-left: 2px solid #d9554a;
   border-radius: 3px;
-  font-size: 0.58rem !important;
+  font-size: 0.56rem !important;
   font-weight: 850;
-  line-height: 1.2;
-  white-space: nowrap;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .finance-kpis .finance-kpi--primary {
