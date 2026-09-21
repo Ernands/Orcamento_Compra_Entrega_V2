@@ -2869,6 +2869,7 @@ export function SupplyPurchasesPage() {
     <LineDistributionModal purchase={lineDistribution ? purchases.find((entry)=>entry.id===lineDistribution.purchase.id)||lineDistribution.purchase : null} line={lineDistribution ? (purchases.find((entry)=>entry.id===lineDistribution.purchase.id)?.orders.flatMap((order)=>order.lines).find((entry)=>entry.id===lineDistribution.line.id)||lineDistribution.line) : null} onClose={()=>setLineDistribution(null)} onSaved={load}/>
     <BulkStoreConfirmationModal purchase={bulkPurchase ? purchases.find((entry)=>entry.id===bulkPurchase.id)||bulkPurchase : null} onClose={()=>setBulkPurchase(null)} onSaved={load}/>
     <SummaryModal purchase={summaryPurchase ? purchases.find((entry)=>entry.id===summaryPurchase.id)||summaryPurchase : null} onClose={()=>setSummaryPurchase(null)}/>
+    {portfolioBulkOpen && <PortfolioBulkRegisterPurchaseModal purchases={purchases} onClose={()=>setPortfolioBulkOpen(false)} onSaved={load}/>}
     <PurchasesPortfolioModal purchases={filtered} open={portfolioOpen} onClose={()=>setPortfolioOpen(false)}/>
   </section>;
 }
