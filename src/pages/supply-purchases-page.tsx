@@ -1854,6 +1854,7 @@ function PurchaseManagementModal({
 }) {
   const [itemId, setItemId] = useState(initialItemId || '');
   const [creating, setCreating] = useState(Boolean(initialItemId));
+  const [creatingBulk, setCreatingBulk] = useState(false);
   const [editor, setEditor] = useState<PurchaseOperationEditor>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -1863,6 +1864,7 @@ function PurchaseManagementModal({
     const firstPending = purchase.items.find((item) => remainingItemQuantity(item, purchase) > 0n);
     setItemId(initialItemId || firstPending?.id || purchase.items[0]?.id || '');
     setCreating(Boolean(initialItemId));
+    setCreatingBulk(false);
     const firstActiveOrder = purchase.orders.find((order) => order.status === 'active');
     setEditor(initialTab === 'payment' && firstActiveOrder
       ? { kind: 'payment', orderId: firstActiveOrder.id }
@@ -1874,7 +1876,9 @@ function PurchaseManagementModal({
   if (!purchase) return null;
   const item = purchase.items.find((entry) => entry.id === itemId) || purchase.items[0] || null;
   const isClosed = purchase.status === 'returned' || purchase.status === 'cancelled';
+  const pendingItems = purchase.items.filter((entry) => remainingItemQuantity(entry, purchase) > 0n);
   const canRegister = Boolean(item && canEdit && !isClosed && remainingItemQuantity(item, purchase) > 0n);
+  const canBulkRegister = canEdit && !isClosed && pendingItems.length > 1;
   const unlinked = purchaseUnlinkedPayments(purchase);
   const activeUnlinkedPayments = unlinked.payments.filter((payment) => payment.status !== 'cancelled');
   const orphanAttachments = purchase.attachments.filter((attachment) => !attachment.purchaseOrderId);
@@ -1927,6 +1931,11 @@ function PurchaseManagementModal({
         </label>
         <RegisterPurchaseModal embedded purchase={purchase} item={item} onClose={onClose} onSaved={async () => { await onSaved(); }}/>
       </div>}
+    </details>}
+
+    {canBulkRegister && <details className="purchase-v2-new-operation purchase-v2-new-operation--bulk" open={creatingBulk} onToggle={(event) => setCreatingBulk(event.currentTarget.open)}>
+      <summary><span><ShoppingCart size={17}/><strong>Compra em lote</strong></span><small>{pendingItems.length} itens com saldo · um unico pedido e pagamento</small></summary>
+      {creatingBulk && <BulkRegisterPurchaseModal purchase={purchase} onClose={() => setCreatingBulk(false)} onSaved={onSaved}/>}
     </details>}
 
     {!canRegister && <EmptyState title={isClosed ? 'Processo encerrado' : 'Todos os itens foram comprados'} detail={isClosed ? 'As compras, pagamentos e arquivos permanecem disponiveis para auditoria.' : 'As operacoes realizadas estao consolidadas abaixo.'}/>}
