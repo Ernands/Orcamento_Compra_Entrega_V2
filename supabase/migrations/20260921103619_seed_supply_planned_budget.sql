@@ -108,48 +108,47 @@ insert into planned_budget_seed_stores (store_group, store_code) values
   ('Sem atendimento', 'LOJ-027'),
   ('Baependi', 'LOJ-008');
 
--- Reutiliza item com o mesmo nome normalizado; só cria o que ainda não existe.
-insert into public.supply_items (
-  name,
-  description,
-  category,
-  subcategory,
-  group_name,
-  financial_group,
-  item_type,
-  default_unit,
-  active
-)
-select
-  seed.item_name,
-  'Carga inicial do Orçamento Previsto',
-  'Implantação',
-  seed.group_name,
-  seed.group_name,
-  case seed.group_name
-    when 'Equipamentos' then 'equipment'
-    when 'Mobiliário' then 'furniture'
-    else 'general'
-  end,
-  'product'::public.supply_item_type,
-  'un',
-  true
-from planned_budget_seed_items seed
-where not exists (
-  select 1
-  from public.supply_items item
-  where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
-    lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
-)
-order by seed.seed_key;
+-- O Orçamento Previsto nunca cria nem reativa itens do catálogo.
+-- Todos os itens precisam ser cadastrados previamente pelo sistema.
+do $catalog_preflight$
+declare
+  v_missing_items text;
+  v_inactive_items text;
+begin
+  select string_agg(seed.item_name, ', ' order by seed.item_name)
+  into v_missing_items
+  from planned_budget_seed_items seed
+  where not exists (
+    select 1
+    from public.supply_items item
+    where lower(regexp_replace(btrim(item.name), '\\s+', ' ', 'g')) =
+      lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g'))
+  );
 
--- A planilha determina que todos os 52 itens iniciais estejam ativos.
-update public.supply_items item
-set active = true
-from planned_budget_seed_items seed
-where lower(regexp_replace(btrim(item.name), '\s+', ' ', 'g')) =
-  lower(regexp_replace(btrim(seed.item_name), '\s+', ' ', 'g'))
-  and not item.active;
+  if v_missing_items is not null then
+    raise exception
+      'planned budget seed requires existing catalog items. Missing: %',
+      v_missing_items;
+  end if;
+
+  select string_agg(seed.item_name, ', ' order by seed.item_name)
+  into v_inactive_items
+  from planned_budget_seed_items seed
+  where not exists (
+    select 1
+    from public.supply_items item
+    where lower(regexp_replace(btrim(item.name), '\\s+', ' ', 'g')) =
+      lower(regexp_replace(btrim(seed.item_name), '\\s+', ' ', 'g'))
+      and item.active
+  );
+
+  if v_inactive_items is not null then
+    raise exception
+      'planned budget seed requires active catalog items. Inactive: %',
+      v_inactive_items;
+  end if;
+end;
+$catalog_preflight$;
 
 with catalog as (
   select
