@@ -352,14 +352,14 @@ function BudgetItemModal({
     }
   }, [itemSegments, segmentId]);
 
-  const previewTotal = useMemo(() => {
-    if (!selectedSegment || !unitPrice.trim()) return 0n;
+  let previewTotal = 0n;
+  if (selectedSegment && unitPrice.trim()) {
     try {
-      return segmentTotalCents(selectedSegment, unitPrice);
+      previewTotal = segmentTotalCents(selectedSegment, unitPrice);
     } catch {
-      return 0n;
+      previewTotal = 0n;
     }
-  }, [selectedSegment, unitPrice]);
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
