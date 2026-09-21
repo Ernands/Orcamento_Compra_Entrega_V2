@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   ChartNoAxesCombined,
+  Calculator,
   KeyRound,
   Landmark,
   HardHat,
@@ -36,6 +37,7 @@ const routeTitles: Record<string, string> = {
   '/implantacao/pendencias': 'Pendencias',
   '/implantacao/checklist-mestre': 'Checklist Mestre',
   '/suprimentos/itens': 'Itens',
+  '/suprimentos/orcamento-previsto': 'Orçamento Previsto',
   '/suprimentos/necessidades': 'Necessidades',
   '/suprimentos/fornecedores': 'Fornecedores',
   '/suprimentos/cotacoes': 'Cotacoes',
@@ -93,7 +95,11 @@ export function AppShell() {
   const { viewer, can, signOut } = useSession();
   const location = useLocation();
   const canViewSupply =
-    can('items.view') || can('suppliers.view') || can('quotes.view') || can('purchases.view');
+    can('items.view') ||
+    can('planned_budget.view') ||
+    can('suppliers.view') ||
+    can('quotes.view') ||
+    can('purchases.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
   const title = location.pathname.startsWith('/financeiro/lojas/')
@@ -272,6 +278,12 @@ export function AppShell() {
                   <NavLink to="/suprimentos/itens" onClick={() => setMobileOpen(false)}>
                     <PackageSearch size={19} />
                     Itens
+                  </NavLink>
+                )}
+                {can('planned_budget.view') && (
+                  <NavLink to="/suprimentos/orcamento-previsto" onClick={() => setMobileOpen(false)}>
+                    <Calculator size={19} />
+                    Orçamento Previsto
                   </NavLink>
                 )}
                 {can('needs.view') && (
