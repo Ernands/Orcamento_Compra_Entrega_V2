@@ -36,8 +36,33 @@ function itemMap(items: SupplyItem[]) {
   return new Map(items.map((item) => [item.id, item]));
 }
 
+export async function collectPaginatedRows<T>(
+  loadPage: (from: number, to: number) => Promise<T[]>,
+  pageSize = 500,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const page = await loadPage(from, from + pageSize - 1);
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+async function listAllSegmentStores(): Promise<SegmentStoreRow[]> {
+  return collectPaginatedRows(async (from, to) => {
+    const { data, error } = await supabase
+      .from('supply_budget_segment_stores')
+      .select('*')
+      .order('created_at')
+      .order('id')
+      .range(from, to);
+    if (error) throw error;
+    return data as SegmentStoreRow[];
+  });
+}
+
 export async function listPlannedBudget(): Promise<PlannedBudgetData> {
-  const [items, storesResult, segmentsResult, segmentStoresResult, budgetItemsResult] =
+  const [items, storesResult, segmentsResult, segmentStores, budgetItemsResult] =
     await Promise.all([
       listSupplyItems(),
       supabase
@@ -45,14 +70,13 @@ export async function listPlannedBudget(): Promise<PlannedBudgetData> {
         .select('id,codigo_negocio,nome,cidade,uf')
         .order('codigo_negocio'),
       supabase.from('supply_budget_segments').select('*').order('name'),
-      supabase.from('supply_budget_segment_stores').select('*').order('created_at'),
+      listAllSegmentStores(),
       supabase.from('supply_budget_items').select('*').order('created_at'),
     ]);
 
   const error =
     storesResult.error ||
     segmentsResult.error ||
-    segmentStoresResult.error ||
     budgetItemsResult.error;
   if (error) throw error;
 
@@ -61,7 +85,7 @@ export async function listPlannedBudget(): Promise<PlannedBudgetData> {
     (storesResult.data as StoreLite[]).map((store) => [store.id, store]),
   );
   const storesBySegment = new Map<string, SegmentStoreRow[]>();
-  (segmentStoresResult.data as SegmentStoreRow[]).forEach((row) => {
+  segmentStores.forEach((row) => {
     const current = storesBySegment.get(row.segment_id) || [];
     current.push(row);
     storesBySegment.set(row.segment_id, current);
