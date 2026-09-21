@@ -1087,7 +1087,7 @@ function bulkLineStoreWeights(
 }
 
 function initialBulkLines(purchase: PurchaseV2): BulkPurchaseDraftLine[] {
-  return purchase.items.flatMap((item) => {
+  return purchase.items.flatMap<BulkPurchaseDraftLine>((item) => {
     const itemRemaining = remainingItemQuantity(item, purchase);
     if (itemRemaining <= 0n) return [];
     if (item.destinations.length) {
