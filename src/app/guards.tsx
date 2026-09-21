@@ -10,6 +10,7 @@ export function authorizedHomePath(capabilities: Capability[]): string {
   if (has('stores.view')) return '/lojas';
   if (has('implementation.view')) return '/implantacao/pendencias';
   if (has('items.view')) return '/suprimentos/itens';
+  if (has('planned_budget.view')) return '/suprimentos/orcamento-previsto';
   if (has('needs.view')) return '/suprimentos/necessidades';
   if (has('suppliers.view')) return '/suprimentos/fornecedores';
   if (has('quotes.view')) return '/suprimentos/cotacoes';
