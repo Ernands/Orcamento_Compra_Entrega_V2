@@ -5,18 +5,31 @@ import {
   purchaseOrderStoreCosts,
   purchaseStoreCosts,
 } from './purchase-v2-calculations';
+import { plannedBudgetAllocations, plannedBudgetByStore } from './planned-budget-calculations';
+import type { PlannedBudgetItem } from './planned-budget-types';
 import type { PurchaseV2 } from './purchase-v2-types';
 import type { Store } from './types';
 import type { FinanceStoreBudget, WorkService } from './works-types';
 import { moneyToCents, quantityToThousandths } from './supply-calculations';
 
-export interface FinanceStoreItemDetailRow {
-  id: string;
+export interface FinanceStoreItemPurchaseRef {
   purchaseId: string;
   purchaseItemId: string;
   purchaseCode: string;
   quoteCode: string;
   supplierName: string;
+}
+
+export interface FinanceStoreItemDetailRow {
+  id: string;
+  supplyItemId: string;
+  purchaseId: string;
+  purchaseItemId: string;
+  purchaseCode: string;
+  quoteCode: string;
+  supplierName: string;
+  purchaseRefs: FinanceStoreItemPurchaseRef[];
+  segmentNames: string[];
   itemCode: string;
   itemName: string;
   itemCategory: string | null;
@@ -67,57 +80,77 @@ export function purchaseApprovedBudgetByStore(purchases: PurchaseV2[]): Map<stri
   return totals;
 }
 
-function equalQuantityShare(total: bigint, count: number, index: number): bigint {
-  if (count <= 0) return 0n;
-  const divisor = BigInt(count);
-  const base = total / divisor;
-  const remainder = total % divisor;
-  return base + (BigInt(index) < remainder ? 1n : 0n);
-}
-
 export function buildFinanceStoreItemRows(
   purchases: PurchaseV2[],
+  plannedBudgetItems: PlannedBudgetItem[],
   storeId: string,
 ): FinanceStoreItemDetailRow[] {
-  const rows: FinanceStoreItemDetailRow[] = [];
+  type MutableRow = Omit<FinanceStoreItemDetailRow, 'differenceCents' | 'purchaseStatus'>;
+
+  const rows = new Map<string, MutableRow>();
+
+  const ensureRow = (values: {
+    supplyItemId: string;
+    itemCode: string;
+    itemName: string;
+    itemCategory: string | null;
+    itemSubcategory?: string | null;
+    itemGroupName?: string | null;
+    itemFinancialGroup?: 'equipment' | 'furniture' | 'general' | null;
+    unit: string;
+  }) => {
+    const existing = rows.get(values.supplyItemId);
+    if (existing) return existing;
+    const created: MutableRow = {
+      id: `${values.supplyItemId}:${storeId}`,
+      supplyItemId: values.supplyItemId,
+      purchaseId: '',
+      purchaseItemId: '',
+      purchaseCode: '',
+      quoteCode: '',
+      supplierName: '',
+      purchaseRefs: [],
+      segmentNames: [],
+      itemCode: values.itemCode,
+      itemName: values.itemName,
+      itemCategory: values.itemCategory,
+      itemSubcategory: values.itemSubcategory || null,
+      itemGroupName: values.itemGroupName || null,
+      itemFinancialGroup: values.itemFinancialGroup || null,
+      unit: values.unit,
+      approvedQuantity: 0n,
+      budgetCents: 0n,
+      purchasedQuantity: 0n,
+      realizedCents: 0n,
+    };
+    rows.set(values.supplyItemId, created);
+    return created;
+  };
+
+  plannedBudgetAllocations(plannedBudgetItems)
+    .filter((allocation) => allocation.storeId === storeId)
+    .forEach((allocation) => {
+      const row = ensureRow({
+        supplyItemId: allocation.supplyItemId,
+        itemCode: allocation.itemCode,
+        itemName: allocation.itemName,
+        itemCategory: allocation.itemCategory,
+        itemSubcategory: allocation.itemSubcategory,
+        itemGroupName: allocation.itemGroupName,
+        itemFinancialGroup: allocation.itemFinancialGroup,
+        unit: allocation.unit,
+      });
+      row.approvedQuantity += quantityToThousandths(allocation.quantity);
+      row.budgetCents += allocation.totalCents;
+      if (!row.segmentNames.includes(allocation.segmentName)) {
+        row.segmentNames.push(allocation.segmentName);
+      }
+    });
 
   purchases
     .filter((purchase) => !['returned', 'cancelled'].includes(purchase.status))
     .forEach((purchase) => {
       purchase.items.forEach((item) => {
-        let approvedQuantity = 0n;
-        let budgetCents = 0n;
-
-        if (item.destinations.length) {
-          item.destinations.forEach((destination) => {
-            const allocation = purchaseDestinationStoreCosts(purchase, destination).rows.find(
-              (entry) => entry.storeId === storeId,
-            );
-            if (!allocation) return;
-            approvedQuantity += allocation.approvedQuantity
-              ? quantityToThousandths(allocation.approvedQuantity)
-              : 0n;
-            budgetCents += allocation.approvedCents;
-          });
-        } else if (item.storeId === storeId) {
-          approvedQuantity = quantityToThousandths(item.quantityApproved);
-          budgetCents = moneyToCents(item.approvedLineTotal);
-        } else if (item.sourceQuoteItemId === null) {
-          const storeIndex = purchase.stores.findIndex((store) => store.storeId === storeId);
-          if (storeIndex >= 0) {
-            approvedQuantity = equalQuantityShare(
-              quantityToThousandths(item.quantityApproved),
-              purchase.stores.length,
-              storeIndex,
-            );
-            const purchaseCosts = purchaseStoreCosts({
-              ...purchase,
-              items: [item],
-            }).rows.find((entry) => entry.storeId === storeId);
-            budgetCents = purchaseCosts?.approvedCents || 0n;
-          }
-        }
-
         let purchasedQuantity = 0n;
         let realizedCents = 0n;
 
@@ -136,29 +169,10 @@ export function buildFinanceStoreItemRows(
             });
         });
 
-        if (
-          approvedQuantity <= 0n &&
-          budgetCents <= 0n &&
-          purchasedQuantity <= 0n &&
-          realizedCents <= 0n
-        ) {
-          return;
-        }
+        if (purchasedQuantity <= 0n && realizedCents <= 0n) return;
 
-        const purchaseStatus: FinanceStoreItemDetailRow['purchaseStatus'] =
-          purchasedQuantity <= 0n
-            ? 'not_purchased'
-            : purchasedQuantity < approvedQuantity
-              ? 'partial'
-              : 'purchased';
-
-        rows.push({
-          id: `${purchase.id}:${item.id}:${storeId}`,
-          purchaseId: purchase.id,
-          purchaseItemId: item.id,
-          purchaseCode: purchase.code,
-          quoteCode: purchase.quoteCode,
-          supplierName: purchase.supplierName,
+        const row = ensureRow({
+          supplyItemId: item.supplyItemId,
           itemCode: item.itemCode,
           itemName: item.itemName,
           itemCategory: item.itemCategory,
@@ -166,23 +180,52 @@ export function buildFinanceStoreItemRows(
           itemGroupName: item.catalogGroupName || null,
           itemFinancialGroup: item.catalogFinancialGroup || null,
           unit: item.unit,
-          approvedQuantity,
-          budgetCents,
-          purchasedQuantity,
-          realizedCents,
-          differenceCents: budgetCents - realizedCents,
-          purchaseStatus,
         });
+
+        row.purchasedQuantity += purchasedQuantity;
+        row.realizedCents += realizedCents;
+
+        const ref: FinanceStoreItemPurchaseRef = {
+          purchaseId: purchase.id,
+          purchaseItemId: item.id,
+          purchaseCode: purchase.code,
+          quoteCode: purchase.quoteCode,
+          supplierName: purchase.supplierName,
+        };
+        if (
+          !row.purchaseRefs.some(
+            (entry) =>
+              entry.purchaseId === ref.purchaseId &&
+              entry.purchaseItemId === ref.purchaseItemId,
+          )
+        ) {
+          row.purchaseRefs.push(ref);
+        }
       });
     });
 
-  return rows.sort(
-    (a, b) =>
-      a.itemName.localeCompare(b.itemName, 'pt-BR') ||
-      a.purchaseCode.localeCompare(b.purchaseCode, 'pt-BR'),
-  );
+  return [...rows.values()]
+    .map((row): FinanceStoreItemDetailRow => {
+      const firstRef = row.purchaseRefs[0];
+      const purchaseStatus: FinanceStoreItemDetailRow['purchaseStatus'] =
+        row.purchasedQuantity <= 0n
+          ? 'not_purchased'
+          : row.approvedQuantity > 0n && row.purchasedQuantity < row.approvedQuantity
+            ? 'partial'
+            : 'purchased';
+      return {
+        ...row,
+        purchaseId: firstRef?.purchaseId || '',
+        purchaseItemId: firstRef?.purchaseItemId || '',
+        purchaseCode: row.purchaseRefs.map((entry) => entry.purchaseCode).join(', '),
+        quoteCode: row.purchaseRefs.map((entry) => entry.quoteCode).join(', '),
+        supplierName: [...new Set(row.purchaseRefs.map((entry) => entry.supplierName))].join(', '),
+        differenceCents: row.budgetCents - row.realizedCents,
+        purchaseStatus,
+      };
+    })
+    .sort((a, b) => a.itemName.localeCompare(b.itemName, 'pt-BR'));
 }
-
 
 export type FinanceStoreCompositionKey = 'equipment' | 'furniture' | 'general' | 'works';
 
@@ -284,6 +327,7 @@ function allocateCompositionCents(
 export function buildFinanceStoreCompositionRows(values: {
   storeId: string;
   purchases: PurchaseV2[];
+  plannedBudgetItems: PlannedBudgetItem[];
   purchaseStoreRows: FinanceStoreRow[];
   works: WorkService[];
 }): FinanceStoreCompositionRow[] {
@@ -294,7 +338,7 @@ export function buildFinanceStoreCompositionRows(values: {
     ['works', { key: 'works', label: 'Obras e Serviços', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
   ]);
 
-  buildFinanceStoreItemRows(values.purchases, values.storeId).forEach((item) => {
+  buildFinanceStoreItemRows(values.purchases, values.plannedBudgetItems, values.storeId).forEach((item) => {
     const group = financeItemCompositionGroup(
       item.itemCategory,
       item.itemSubcategory,
@@ -406,11 +450,12 @@ function worksByStore(works: WorkService[]) {
 export function buildFinanceOverviewRows(values: {
   stores: Store[];
   purchases: PurchaseV2[];
+  plannedBudgetItems: PlannedBudgetItem[];
   purchaseStoreRows: FinanceStoreRow[];
   works: WorkService[];
   budgets: FinanceStoreBudget[];
 }): FinanceOverviewStoreRow[] {
-  const approved = purchaseApprovedBudgetByStore(values.purchases);
+  const approved = plannedBudgetByStore(values.plannedBudgetItems);
   const works = worksByStore(values.works);
   const budgetByStore = new Map(
     values.budgets.map((budget) => [budget.storeId, moneyToCents(budget.budgetAmount)]),
