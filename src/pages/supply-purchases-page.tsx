@@ -1434,6 +1434,418 @@ function BulkRegisterPurchaseModal({
   </form>;
 }
 
+
+type PortfolioBulkPurchaseDraftLine = BulkPurchaseDraftLine & {
+  purchase: PurchaseV2;
+};
+
+function initialPortfolioBulkLines(purchases: PurchaseV2[]): PortfolioBulkPurchaseDraftLine[] {
+  return purchases
+    .filter((purchase) => !['returned', 'cancelled'].includes(purchase.status))
+    .flatMap((purchase) => initialBulkLines(purchase).map((line) => ({ ...line, purchase })));
+}
+
+function splitPortfolioBatchPayments(
+  groupTotals: bigint[],
+  payments: PurchasePaymentDraft[],
+): PurchasePaymentDraft[][] {
+  const remaining = [...groupTotals];
+  const result = groupTotals.map(() => [] as PurchasePaymentDraft[]);
+
+  payments.forEach((payment, paymentIndex) => {
+    const amount = moneyToCents(payment.amount);
+    if (amount <= 0n) throw new Error('Todos os pagamentos precisam ter valor maior que zero.');
+    const remainingTotal = remaining.reduce((sum, value) => sum + value, 0n);
+    if (amount > remainingTotal) throw new Error('Pagamento maior que o saldo restante do lote.');
+
+    const shares = paymentIndex === payments.length - 1
+      ? [...remaining]
+      : allocateCentsByWeights(amount, remaining);
+
+    shares.forEach((share, groupIndex) => {
+      if (share <= 0n) return;
+      result[groupIndex].push({
+        ...payment,
+        key: `${payment.key}:group-${groupIndex}`,
+        amount: centsToInput(share),
+        entry: '',
+        installments: '',
+      });
+      remaining[groupIndex] -= share;
+    });
+  });
+
+  if (remaining.some((value) => value !== 0n)) {
+    throw new Error('Nao foi possivel conciliar os pagamentos entre as CMPs do lote.');
+  }
+  return result;
+}
+
+function PortfolioBulkRegisterPurchaseModal({
+  purchases,
+  onClose,
+  onSaved,
+}: {
+  purchases: PurchaseV2[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [lines, setLines] = useState<PortfolioBulkPurchaseDraftLine[]>(() => initialPortfolioBulkLines(purchases));
+  const [purchasedOn, setPurchasedOn] = useState(todayInput());
+  const [supplierOrderRef, setSupplierOrderRef] = useState('');
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [payments, setPayments] = useState<PurchasePaymentDraft[]>(() => [{
+    key: 'portfolio-payment-1',
+    method: 'pix',
+    source: '',
+    amount: '',
+    entry: '',
+    installments: '',
+    firstDueDate: '',
+    status: 'planned',
+    notes: '',
+  }]);
+  const [installmentEntry, setInstallmentEntry] = useState('');
+  const [installmentCount, setInstallmentCount] = useState('');
+  const [installmentFirstDueDate, setInstallmentFirstDueDate] = useState('');
+  const [installmentEntryMethod, setInstallmentEntryMethod] = useState<PaymentMethod>('pix');
+  const [installmentMethod, setInstallmentMethod] = useState<PaymentMethod>('boleto');
+  const nextPaymentKey = useRef(2);
+  const previousSuggestedPayment = useRef('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLines(initialPortfolioBulkLines(purchases));
+  }, [purchases]);
+
+  const selectedLines = lines.filter((line) => line.selected && !line.disabledReason);
+
+  const lineTotal = (line: PortfolioBulkPurchaseDraftLine): bigint | null => {
+    try {
+      if (!line.quantity.trim() || !line.unitPrice.trim() || !line.shipping.trim()) return null;
+      return calculateRegistrationTotal({
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountAmount: '0',
+        shippingAmount: line.shipping,
+        otherCosts: '0',
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  const total = selectedLines.length > 0 && selectedLines.every((line) => lineTotal(line) !== null)
+    ? selectedLines.reduce((sum, line) => sum + (lineTotal(line) || 0n), 0n)
+    : null;
+
+  useEffect(() => {
+    const suggested = total === null ? '' : centsToInput(total);
+    setPayments((current) => {
+      if (current.length !== 1) return current;
+      const first = current[0];
+      if (first.amount && first.amount !== previousSuggestedPayment.current) return current;
+      return [{ ...first, amount: suggested }];
+    });
+    previousSuggestedPayment.current = suggested;
+  }, [total]);
+
+  const paymentTotal = useMemo(() => {
+    try {
+      return payments.reduce(
+        (sum, payment) => sum + (payment.amount.trim() ? moneyToCents(payment.amount) : 0n),
+        0n,
+      );
+    } catch {
+      return null;
+    }
+  }, [payments]);
+
+  const updateLine = (key: string, change: Partial<PortfolioBulkPurchaseDraftLine>) => {
+    setLines((current) => current.map((line) => line.key === key ? { ...line, ...change } : line));
+  };
+
+  const updatePayment = (key: string, change: Partial<PurchasePaymentDraft>) => {
+    setPayments((current) => current.map((payment) => payment.key === key ? { ...payment, ...change } : payment));
+  };
+
+  const selectAll = () => {
+    setLines((current) => current.map((line) => ({
+      ...line,
+      selected: line.disabledReason ? false : true,
+    })));
+  };
+
+  const generateInstallments = () => {
+    if (total === null) {
+      setError('Selecione os itens e revise os valores antes de gerar o parcelamento.');
+      return;
+    }
+    try {
+      const entryCents = installmentEntry.trim() ? moneyToCents(installmentEntry) : 0n;
+      const count = Number(installmentCount);
+      const schedule = buildPurchaseInstallmentSchedule(total, entryCents, count, installmentFirstDueDate);
+      const generated: PurchasePaymentDraft[] = [];
+      let keyIndex = 1;
+
+      if (entryCents > 0n) {
+        generated.push({
+          key: `portfolio-payment-${keyIndex++}`,
+          method: installmentEntryMethod,
+          source: 'Entrada',
+          amount: centsToInput(entryCents),
+          entry: '',
+          installments: '',
+          firstDueDate: '',
+          status: 'paid',
+          notes: 'Entrada da compra em lote',
+        });
+      }
+
+      schedule.forEach((installment) => generated.push({
+        key: `portfolio-payment-${keyIndex++}`,
+        method: installmentMethod,
+        source: `Parcela ${installment.installment}/${count}`,
+        amount: centsToInput(installment.amountCents),
+        entry: '',
+        installments: '',
+        firstDueDate: installment.dueDate,
+        status: 'planned',
+        notes: '',
+      }));
+
+      setPayments(generated);
+      nextPaymentKey.current = generated.length + 1;
+      previousSuggestedPayment.current = '';
+      setError(null);
+    } catch {
+      setError('Informe entrada menor que o total, quantidade de parcelas e primeiro vencimento.');
+    }
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+
+    try {
+      if (!selectedLines.length) throw new Error('Selecione ao menos um item para esta compra em lote.');
+      if (!supplierOrderRef.trim()) throw new Error('Informe o pedido/referencia da compra em lote.');
+      if (expectedDeliveryDate && expectedDeliveryDate < purchasedOn) {
+        throw new Error('A previsao de entrega nao pode ser anterior a data da compra.');
+      }
+
+      const grouped = new Map<string, {
+        purchase: PurchaseV2;
+        lines: Array<{
+          purchaseItemId: string;
+          purchaseDestinationId: string | null;
+          quantity: string;
+          unitPrice: string;
+          discountAmount: string;
+          shippingAmount: string;
+          otherCosts: string;
+          expectedDeliveryDate: string;
+          notes: string;
+          storeAllocations: StoreAllocationInputV2[];
+        }>;
+        totalCents: bigint;
+      }>();
+
+      for (const line of selectedLines) {
+        const qty = quantityToThousandths(line.quantity);
+        if (qty <= 0n || qty > line.remaining) {
+          throw new Error(`Revise a quantidade de ${line.purchase.code} · ${line.item.itemName}.`);
+        }
+        if (moneyToCents(line.unitPrice) < 0n || moneyToCents(line.shipping) < 0n) {
+          throw new Error('Valores negativos nao sao permitidos.');
+        }
+        const currentLineTotal = lineTotal(line);
+        if (currentLineTotal === null) {
+          throw new Error(`Informe preco e frete de ${line.purchase.code} · ${line.item.itemName}. Use 0 quando o frete for gratis.`);
+        }
+
+        const weights = bulkLineStoreWeights(line.purchase, line.item, line.destination);
+        const allocations = allocateBulkQuantity(qty, weights);
+        const allocated = allocations.reduce(
+          (sum, allocation) => sum + quantityToThousandths(allocation.quantity),
+          0n,
+        );
+        if (!allocations.length || allocated !== qty) {
+          throw new Error(`Nao foi possivel distribuir ${line.purchase.code} · ${line.item.itemName} entre as lojas.`);
+        }
+
+        const current = grouped.get(line.purchase.id) || {
+          purchase: line.purchase,
+          lines: [],
+          totalCents: 0n,
+        };
+        current.lines.push({
+          purchaseItemId: line.item.id,
+          purchaseDestinationId: line.destination?.id || null,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountAmount: '0',
+          shippingAmount: line.shipping,
+          otherCosts: '0',
+          expectedDeliveryDate,
+          notes: '',
+          storeAllocations: allocations,
+        });
+        current.totalCents += currentLineTotal;
+        grouped.set(line.purchase.id, current);
+      }
+
+      if (!payments.length) throw new Error('Informe ao menos um pagamento.');
+      if (total === null || paymentTotal === null || paymentTotal !== total) {
+        throw new Error('A soma dos pagamentos deve ser igual ao total da compra em lote.');
+      }
+
+      const groups = [...grouped.values()];
+      const splitPayments = splitPortfolioBatchPayments(groups.map((group) => group.totalCents), payments);
+
+      const operations = groups.map((group, index) => ({
+        purchaseId: group.purchase.id,
+        purchasedOn,
+        supplierOrderRef: supplierOrderRef.trim(),
+        expectedDeliveryDate,
+        notes: notes.trim()
+          ? `Lote ${supplierOrderRef.trim()} · ${notes.trim()}`
+          : `Lote ${supplierOrderRef.trim()}`,
+        lines: group.lines,
+        payments: splitPayments[index].map((payment) => ({
+          paymentMethod: payment.method,
+          sourceLabel: payment.source,
+          amount: payment.amount,
+          entryAmount: '',
+          installmentCount: '',
+          firstDueDate: payment.firstDueDate,
+          status: payment.status,
+          paidAt: payment.status === 'paid' ? new Date().toISOString() : '',
+          notes: payment.notes,
+        })),
+      }));
+
+      setSaving(true);
+      await createSupplyPurchaseBatchOperationV2(operations);
+      await onSaved();
+      onClose();
+    } catch (failure) {
+      setError(errorMessage(failure, 'Nao foi possivel registrar a compra em lote.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const eligibleCount = lines.filter((line) => !line.disabledReason).length;
+  const selectedCmpCount = new Set(selectedLines.map((line) => line.purchase.id)).size;
+
+  return <Modal
+    className="purchase-v2-manage-modal"
+    open
+    title="Compra em lote"
+    description="Selecione itens pendentes de CMPs diferentes e registre uma unica compra/pedido. Cada CMP continua conciliada individualmente."
+    onClose={onClose}
+  >
+    <form className="stack-form purchase-v2-bulk-purchase" onSubmit={submit}>
+      <section className="purchase-v2-operation-section">
+        <header><span>1</span><div><strong>Itens pendentes</strong><small>Voce pode misturar CMPs diferentes no mesmo pedido.</small></div></header>
+        <div className="purchase-v2-bulk-actions">
+          <button type="button" className="button button--secondary button--small" onClick={selectAll} disabled={!eligibleCount}><CheckCheck size={15}/>Selecionar todos disponiveis</button>
+          <span>{selectedLines.length} linhas selecionadas · {selectedCmpCount} CMPs</span>
+        </div>
+        <div className="purchase-v2-bulk-purchase-lines">
+          {lines.map((line) => <div className={`purchase-v2-bulk-purchase-line ${line.selected ? 'is-selected' : ''} ${line.disabledReason ? 'is-disabled' : ''}`} key={`${line.purchase.id}:${line.key}`}>
+            <label className="purchase-v2-bulk-check">
+              <input type="checkbox" checked={line.selected} disabled={Boolean(line.disabledReason)} onChange={(event) => updateLine(line.key, { selected: event.target.checked })}/>
+              <span>
+                <strong>{line.purchase.code} · {line.item.itemName}</strong>
+                <small>{line.item.itemCode} · {line.purchase.supplierName}</small>
+                <small>{line.destination ? `${line.destination.label} · ${line.destination.state}` : line.item.storeCode || 'Destino direto'} · saldo {formatQuantityV2(decimalFromThousandths(line.remaining))} {line.item.unit}</small>
+                {line.disabledReason && <small className="is-warning">{line.disabledReason}</small>}
+              </span>
+            </label>
+            <label className="field">Quantidade<input value={line.quantity} disabled={!line.selected} onChange={(event) => updateLine(line.key, { quantity: event.target.value })}/></label>
+            <label className="field">Preco unitario<input value={line.unitPrice} disabled={!line.selected} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })}/></label>
+            <label className="field">Frete<input value={line.shipping} disabled={!line.selected} onChange={(event) => updateLine(line.key, { shipping: event.target.value })} placeholder="0 para gratis"/></label>
+            <div className="purchase-v2-bulk-line-total"><small>Total</small><strong>{line.selected && lineTotal(line) !== null ? formatBRL(lineTotal(line)!) : '—'}</strong></div>
+          </div>)}
+        </div>
+      </section>
+
+      <section className="purchase-v2-operation-section">
+        <header><span>2</span><div><strong>Dados gerais da compra</strong><small>Esses dados serao gravados em todas as CMPs selecionadas.</small></div></header>
+        <div className="form-grid form-grid--three">
+          <label className="field">Data da compra<input type="date" value={purchasedOn} onChange={(event) => setPurchasedOn(event.target.value)} required /></label>
+          <label className="field">Pedido / referencia do lote<input value={supplierOrderRef} onChange={(event) => setSupplierOrderRef(event.target.value)} placeholder="Ex.: Mercado Livre #12345" required /></label>
+          <label className="field">Previsao de entrega<input type="date" value={expectedDeliveryDate} onChange={(event) => setExpectedDeliveryDate(event.target.value)} /></label>
+        </div>
+        <label className="field">Observacoes<textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+      </section>
+
+      <section className="purchase-v2-operation-section">
+        <header><span>3</span><div><strong>Pagamento do lote</strong><small>O valor e informado uma vez e o sistema concilia proporcionalmente cada CMP, preservando todos os centavos.</small></div></header>
+        <div className="purchase-v2-installment-builder">
+          <div className="form-grid form-grid--three">
+            <label className="field">Entrada paga<input value={installmentEntry} onChange={(event) => setInstallmentEntry(event.target.value)} placeholder="0,00" /></label>
+            <label className="field">Forma da entrada<select value={installmentEntryMethod} onChange={(event) => setInstallmentEntryMethod(event.target.value as PaymentMethod)}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="field">Quantidade de parcelas<input inputMode="numeric" value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value.replace(/\D/g, ''))}/></label>
+            <label className="field">Forma das parcelas<select value={installmentMethod} onChange={(event) => setInstallmentMethod(event.target.value as PaymentMethod)}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="field">Primeiro vencimento<input type="date" value={installmentFirstDueDate} onChange={(event) => setInstallmentFirstDueDate(event.target.value)} /></label>
+            <div className="field purchase-v2-installment-action"><span>Gerar cronograma</span><button type="button" className="button button--secondary" onClick={generateInstallments} disabled={total === null}>Gerar entrada + parcelas</button></div>
+          </div>
+        </div>
+
+        <div className="purchase-v2-payment-drafts">
+          {payments.map((payment, index) => <div className="purchase-v2-payment-draft" key={payment.key}>
+            <header><strong>Pagamento {index + 1}</strong>{payments.length > 1 && <button type="button" className="button button--secondary button--small" onClick={() => setPayments((current) => current.filter((entry) => entry.key !== payment.key))}><XCircle size={15}/>Remover</button>}</header>
+            <div className="form-grid form-grid--three">
+              <label className="field">Forma<select value={payment.method} onChange={(event) => updatePayment(payment.key, { method: event.target.value as PaymentMethod })}>{Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label className="field">Valor<input value={payment.amount} onChange={(event) => updatePayment(payment.key, { amount: event.target.value })}/></label>
+              <label className="field">Situacao<select value={payment.status} onChange={(event) => updatePayment(payment.key, { status: event.target.value as 'planned' | 'paid' })}><option value="planned">A pagar / previsto</option><option value="paid">Pago</option></select></label>
+              <label className="field">Origem / identificacao<input value={payment.source} onChange={(event) => updatePayment(payment.key, { source: event.target.value })}/></label>
+              {payment.status === 'planned' && <label className="field">Vencimento<input type="date" value={payment.firstDueDate} onChange={(event) => updatePayment(payment.key, { firstDueDate: event.target.value })}/></label>}
+            </div>
+          </div>)}
+        </div>
+
+        <div className="purchase-v2-payment-balance">
+          <span>Total do lote <strong>{total === null ? 'A calcular' : formatBRL(total)}</strong></span>
+          <span>Pagamentos <strong>{paymentTotal === null ? 'Valor invalido' : formatBRL(paymentTotal)}</strong></span>
+          <span className={total !== null && paymentTotal === total ? 'is-ok' : 'is-warning'}>Diferenca <strong>{total === null || paymentTotal === null ? 'A calcular' : formatBRL(total - paymentTotal)}</strong></span>
+        </div>
+
+        <button type="button" className="button button--secondary button--small" onClick={() => {
+          const key = `portfolio-manual-${nextPaymentKey.current++}`;
+          setPayments((current) => [...current, {
+            key,
+            method: 'pix',
+            source: '',
+            amount: '',
+            entry: '',
+            installments: '',
+            firstDueDate: '',
+            status: 'planned',
+            notes: '',
+          }]);
+        }}><Plus size={15}/>Adicionar pagamento manual</button>
+      </section>
+
+      <div className="purchase-v2-hint">
+        <strong>Arquivos</strong>
+        <span>Depois de salvar o lote, notas e comprovantes continuam sendo anexados na CMP correspondente. Isso evita duplicar o mesmo arquivo em varias compras.</span>
+      </div>
+
+      {error && <div className="form-error">{error}</div>}
+      <div className="modal-actions">
+        <button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button>
+        <button className="button button--primary" disabled={saving || !selectedLines.length}>{saving ? 'Salvando lote...' : `Salvar compra em lote · ${selectedCmpCount} CMPs`}</button>
+      </div>
+    </form>
+  </Modal>;
+}
+
 function PaymentModal({
   purchase,
   initialPurchaseOrderId,
