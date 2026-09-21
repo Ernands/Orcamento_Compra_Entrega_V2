@@ -43,6 +43,8 @@ export type Capability =
   | 'dashboard.view'
   | 'items.view'
   | 'items.manage'
+  | 'planned_budget.view'
+  | 'planned_budget.manage'
   | 'suppliers.view'
   | 'suppliers.manage'
   | 'quotes.view'
@@ -239,6 +241,7 @@ export interface SupplyItem {
   subcategory: string | null;
   groupName: string | null;
   areaName: string | null;
+  financialGroup: 'equipment' | 'furniture' | 'general' | null;
   type: SupplyItemType;
   defaultUnit: string;
   defaultQuantity: number | null;
