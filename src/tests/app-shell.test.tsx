@@ -69,6 +69,12 @@ describe('AppShell', () => {
     expect(screen.getAllByRole('link', { name: 'Checklist Mestre' }).length).toBeGreaterThan(0);
   });
 
+  it('mostra Orçamento Previsto somente com a capability correspondente', () => {
+    renderShell(['planned_budget.view']);
+    expect(screen.getAllByRole('link', { name: 'Orçamento Previsto' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Itens' })).not.toBeInTheDocument();
+  });
+
   it('mostra somente as opcoes de Suprimentos liberadas por capability', () => {
     renderShell(['items.view', 'needs.view', 'quotes.view']);
     expect(screen.getAllByRole('link', { name: 'Itens' }).length).toBeGreaterThan(0);
