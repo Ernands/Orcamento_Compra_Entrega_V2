@@ -774,7 +774,7 @@ export function SupplyPlannedBudgetPage() {
                   <th>Lojas / Quantidades</th>
                   <th>Qtd. total</th>
                   <th>Situação</th>
-                  <th>Ações</th>
+                  {canManage && <th>Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -881,7 +881,7 @@ export function SupplyPlannedBudgetPage() {
                   <th>Valor unitário</th>
                   <th>Valor total</th>
                   <th>Situação</th>
-                  {canManage && <th>Ações</th>}
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
