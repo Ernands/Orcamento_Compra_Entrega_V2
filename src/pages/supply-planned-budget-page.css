@@ -650,3 +650,24 @@
   align-items: center;
   gap: 5px;
 }
+
+
+@media (max-width: 640px) {
+  .planned-budget-viewbar {
+    justify-content: stretch;
+  }
+
+  .planned-budget-viewbar label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .planned-budget-panel__header-actions {
+    align-items: flex-end !important;
+    flex-direction: column;
+  }
+
+  .planned-budget-detail-kpis {
+    grid-template-columns: 1fr;
+  }
+}
