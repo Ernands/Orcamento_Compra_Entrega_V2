@@ -124,6 +124,47 @@ function multiDestinationPurchase(): PurchaseV2 {
   };
 }
 
+
+function bulkItemsPurchase(): PurchaseV2 {
+  const first: PurchaseItemV2 = {
+    ...baseItem,
+    id: 'item-1',
+    supplyItemId: 'supply-item-1',
+    itemCode: 'ITM-0001',
+    itemName: 'Notebook',
+    storeId: 'store-1',
+    storeCode: 'LOJ-001',
+    quantityApproved: '2',
+    purchasedQuantity: '0',
+    quotedUnitPrice: '100',
+    approvedLineTotal: '200',
+    actualTotal: '0',
+  };
+  const second: PurchaseItemV2 = {
+    ...baseItem,
+    id: 'item-2',
+    sourceQuoteItemId: 'quote-item-2',
+    supplyItemId: 'supply-item-2',
+    itemCode: 'ITM-0002',
+    itemName: 'Webcam',
+    storeId: 'store-1',
+    storeCode: 'LOJ-001',
+    quantityApproved: '3',
+    purchasedQuantity: '0',
+    quotedUnitPrice: '50',
+    approvedLineTotal: '150',
+    actualTotal: '0',
+  };
+  return {
+    ...purchase,
+    status: 'approved',
+    approvedTotal: '350',
+    items: [first, second],
+    orders: [],
+    payments: [],
+  };
+}
+
 function renderPage(current: PurchaseV2 = purchase) {
   vi.mocked(listSupplyPurchasesV2).mockResolvedValue([current]);
   return render(<MemoryRouter><SupplyPurchasesPage /></MemoryRouter>);
@@ -214,9 +255,64 @@ describe('SupplyPurchasesPage V2', () => {
         shippingAmount: '0',
         storeAllocations: [{ storeId: 'store-1', quantity: '5' }, { storeId: 'store-2', quantity: '5' }],
       })],
-      payments: [expect.objectContaining({ amount: '1000', paymentMethod: 'pix', status: 'paid' })],
+      payments: [expect.objectContaining({ amount: '1000', paymentMethod: 'pix', status: 'planned' })],
     }));
     expect(within(dialog).getByText('Compra registrada com pagamento e lojas vinculadas.')).toBeInTheDocument();
+  });
+
+  it('gera entrada paga e parcelas futuras separadas na nova compra', async () => {
+    const user = userEvent.setup();
+    renderPage({ ...purchase, orders: [], payments: [], status: 'approved', items: [{ ...baseItem, purchasedQuantity: '0' }] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+
+    await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
+    await user.clear(within(dialog).getByLabelText('Quantidade da loja LOJ-001'));
+    await user.type(within(dialog).getByLabelText('Quantidade da loja LOJ-001'), '5');
+    await user.clear(within(dialog).getByLabelText('Quantidade da loja LOJ-002'));
+    await user.type(within(dialog).getByLabelText('Quantidade da loja LOJ-002'), '5');
+
+    const builder = within(dialog).getByText('Entrada + parcelas').closest('.purchase-v2-installment-builder');
+    expect(builder).not.toBeNull();
+    await user.type(within(builder as HTMLElement).getByLabelText('Entrada paga'), '200');
+    await user.type(within(builder as HTMLElement).getByLabelText('Quantidade de parcelas'), '4');
+    fireEvent.change(within(builder as HTMLElement).getByLabelText('Primeiro vencimento'), { target: { value: '2026-10-10' } });
+    await user.click(within(builder as HTMLElement).getByRole('button', { name: 'Gerar entrada + parcelas' }));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      payments: [
+        expect.objectContaining({ amount: '200', status: 'paid', sourceLabel: 'Entrada' }),
+        expect.objectContaining({ amount: '200', status: 'planned', sourceLabel: 'Parcela 1/4', firstDueDate: '2026-10-10' }),
+        expect.objectContaining({ amount: '200', status: 'planned', sourceLabel: 'Parcela 2/4', firstDueDate: '2026-11-10' }),
+        expect.objectContaining({ amount: '200', status: 'planned', sourceLabel: 'Parcela 3/4', firstDueDate: '2026-12-10' }),
+        expect.objectContaining({ amount: '200', status: 'planned', sourceLabel: 'Parcela 4/4', firstDueDate: '2027-01-10' }),
+      ],
+    }));
+  });
+
+  it('registra varios itens em uma unica operacao de compra', async () => {
+    const user = userEvent.setup();
+    renderPage(bulkItemsPurchase());
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+
+    await user.click(within(dialog).getByText('Compra em lote'));
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos disponiveis' }));
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Salvar compra em lote (2 itens/destinos)' })).toBeEnabled());
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra em lote (2 itens/destinos)' }));
+
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [
+        expect.objectContaining({ purchaseItemId: 'item-1', quantity: '2', unitPrice: '100', shippingAmount: '0', storeAllocations: [{ storeId: 'store-1', quantity: '2' }] }),
+        expect.objectContaining({ purchaseItemId: 'item-2', quantity: '3', unitPrice: '50', shippingAmount: '0', storeAllocations: [{ storeId: 'store-1', quantity: '3' }] }),
+      ],
+      payments: [expect.objectContaining({ amount: '350', status: 'planned' })],
+    }));
   });
 
   it('exige que o frete seja informado explicitamente', async () => {
