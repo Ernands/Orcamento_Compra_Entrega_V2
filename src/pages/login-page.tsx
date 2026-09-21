@@ -1,4 +1,4 @@
-import { Eye, EyeOff, KeyRound, LoaderCircle, LogIn, ShieldCheck } from 'lucide-react';
+import { Building2, Eye, EyeOff, KeyRound, LoaderCircle, LogIn } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { EdgeFunctionError } from '../lib/edge-function';
@@ -26,9 +26,9 @@ export function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Entrar | Implanta 27';
+    document.title = 'Entrar | Implanta Lojas Mais BB';
     return () => {
-      document.title = 'Implanta 27';
+      document.title = 'Implanta Lojas Mais BB';
     };
   }, []);
 
@@ -58,14 +58,13 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-brand" aria-label="Implanta 27">
+      <section className="login-brand" aria-label="Implanta Lojas Mais BB">
         <div className="login-brand__content">
           <span className="login-brand__mark">
-            <ShieldCheck size={30} />
+            <Building2 size={30} />
           </span>
-          <p className="login-brand__kicker">Operacao das 27 lojas</p>
-          <h1>Implanta 27</h1>
-          <p>Implantacao, Compra & entrega</p>
+          <h1>Implanta<br />Lojas Mais BB</h1>
+          <p>Implantação, Compra & Entrega</p>
         </div>
         <div className="login-brand__footer">
           <KeyRound size={18} />
