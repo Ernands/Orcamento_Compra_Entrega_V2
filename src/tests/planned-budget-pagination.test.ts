@@ -20,7 +20,7 @@ describe('planned budget pagination', () => {
 
   it('faz uma página vazia final quando o total é múltiplo exato', async () => {
     const source = Array.from({ length: 1000 }, (_, index) => index);
-    const loadPage = vi.fn(async (from: number, to: number) => source.slice(from, to + 1));
+    const loadPage = vi.fn((from: number, to: number) => Promise.resolve(source.slice(from, to + 1)));
 
     const rows = await collectPaginatedRows(loadPage, 500);
 
