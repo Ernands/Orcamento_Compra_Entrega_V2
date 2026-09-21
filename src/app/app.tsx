@@ -16,6 +16,7 @@ import { StoresPage } from '../pages/stores-page';
 import { SuppliersPage } from '../pages/suppliers-page';
 import { SupplyComparisonPage } from '../pages/supply-comparison-page';
 import { SupplyItemsPage } from '../pages/supply-items-page';
+import { SupplyPlannedBudgetPage } from '../pages/supply-planned-budget-page';
 import { SupplyItemDetailPage } from '../pages/supply-item-detail-page';
 import { SupplyNeedsPage } from '../pages/supply-needs-page';
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
@@ -142,6 +143,14 @@ export function App() {
               element={
                 <RequireCapability capability="items.view">
                   <SupplyItemDetailPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/orcamento-previsto"
+              element={
+                <RequireCapability capability="planned_budget.view">
+                  <SupplyPlannedBudgetPage />
                 </RequireCapability>
               }
             />

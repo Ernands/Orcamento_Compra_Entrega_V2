@@ -74,6 +74,7 @@ function mapItem(row: ItemRow): SupplyItem {
     subcategory: row.subcategory,
     groupName: row.group_name,
     areaName: row.area_name,
+    financialGroup: row.financial_group as SupplyItem['financialGroup'],
     type: row.item_type,
     defaultUnit: row.default_unit,
     defaultQuantity: row.default_quantity === null ? null : Number(row.default_quantity),

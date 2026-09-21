@@ -20,6 +20,7 @@ import {
   downloadFinanceStoreDetailExcel,
   downloadFinanceStoreDetailPdf,
 } from '../data/exports/finance-exports';
+import { listPlannedBudget } from '../data/planned-budget/planned-budget-repository';
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import {
   buildFinanceOverviewRows,
@@ -30,6 +31,7 @@ import {
 } from '../domain/finance-overview';
 import { formatQuantityV2 } from '../domain/purchase-v2-calculations';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
+import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 import type { PurchaseAttachmentV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
 import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
@@ -136,6 +138,7 @@ export function FinanceStoreDetailPage() {
   const canWorks = can('works.view');
   const [stores, setStores] = useState<Store[]>([]);
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
+  const [plannedBudgetItems, setPlannedBudgetItems] = useState<PlannedBudgetItem[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
   const [budgets, setBudgets] = useState<FinanceStoreBudget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,14 +160,17 @@ export function FinanceStoreDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextStores, nextPurchases, nextWorks, nextBudgets] = await Promise.all([
-        listStores(),
-        listSupplyPurchasesV2(),
-        listWorkServices(),
-        listFinanceStoreBudgets(),
-      ]);
+      const [nextStores, nextPurchases, nextPlannedBudget, nextWorks, nextBudgets] =
+        await Promise.all([
+          listStores(),
+          listSupplyPurchasesV2(),
+          listPlannedBudget(),
+          listWorkServices(),
+          listFinanceStoreBudgets(),
+        ]);
       setStores(nextStores);
       setPurchases(nextPurchases);
+      setPlannedBudgetItems(nextPlannedBudget.items);
       setWorks(nextWorks);
       setBudgets(nextBudgets);
     } catch (loadError) {
@@ -186,15 +192,16 @@ export function FinanceStoreDetailPage() {
       buildFinanceOverviewRows({
         stores: [store],
         purchases,
+        plannedBudgetItems,
         purchaseStoreRows,
         works,
         budgets,
       })[0] || null
     );
-  }, [budgets, purchaseStoreRows, purchases, store, works]);
+  }, [budgets, plannedBudgetItems, purchaseStoreRows, purchases, store, works]);
   const itemRows = useMemo(
-    () => (storeId ? buildFinanceStoreItemRows(purchases, storeId) : []),
-    [purchases, storeId],
+    () => (storeId ? buildFinanceStoreItemRows(purchases, plannedBudgetItems, storeId) : []),
+    [plannedBudgetItems, purchases, storeId],
   );
   const compositionRows = useMemo(
     () =>
@@ -202,11 +209,12 @@ export function FinanceStoreDetailPage() {
         ? buildFinanceStoreCompositionRows({
             storeId,
             purchases,
+            plannedBudgetItems,
             purchaseStoreRows,
             works,
           })
         : [],
-    [purchaseStoreRows, purchases, storeId, works],
+    [plannedBudgetItems, purchaseStoreRows, purchases, storeId, works],
   );
   const storeWorks = useMemo(
     () =>
@@ -254,31 +262,38 @@ export function FinanceStoreDetailPage() {
     [detailSearch, storeWorks, workCategoryFilter, workStatusFilter],
   );
   const itemDocuments = (row: FinanceStoreItemDetailRow): PurchaseAttachmentV2[] => {
-    const purchase = purchases.find((entry) => entry.id === row.purchaseId);
-    if (!purchase || !storeId) return [];
+    if (!storeId || !row.purchaseRefs.length) return [];
+    const documents = new Map<string, PurchaseAttachmentV2>();
 
-    const orderIds = new Set(
-      purchase.orders
-        .filter(
-          (order) =>
-            order.status === 'active' &&
-            order.lines.some(
-              (line) =>
-                line.purchaseItemId === row.purchaseItemId &&
-                line.stores.some((entry) => entry.storeId === storeId),
-            ),
-        )
-        .map((order) => order.id),
-    );
+    row.purchaseRefs.forEach((ref) => {
+      const purchase = purchases.find((entry) => entry.id === ref.purchaseId);
+      if (!purchase) return;
 
-    return purchase.attachments.filter((attachment) => {
-      const appliesToStore =
-        attachment.stores.length === 0 ||
-        attachment.stores.some((entry) => entry.storeId === storeId);
-      const appliesToOrder =
-        attachment.purchaseOrderId === null || orderIds.has(attachment.purchaseOrderId);
-      return appliesToStore && appliesToOrder;
+      const orderIds = new Set(
+        purchase.orders
+          .filter(
+            (order) =>
+              order.status === 'active' &&
+              order.lines.some(
+                (line) =>
+                  line.purchaseItemId === ref.purchaseItemId &&
+                  line.stores.some((entry) => entry.storeId === storeId),
+              ),
+          )
+          .map((order) => order.id),
+      );
+
+      purchase.attachments.forEach((attachment) => {
+        const appliesToStore =
+          attachment.stores.length === 0 ||
+          attachment.stores.some((entry) => entry.storeId === storeId);
+        const appliesToOrder =
+          attachment.purchaseOrderId === null || orderIds.has(attachment.purchaseOrderId);
+        if (appliesToStore && appliesToOrder) documents.set(attachment.id, attachment);
+      });
     });
+
+    return [...documents.values()];
   };
 
   const filtersText = useMemo(() => {
@@ -557,7 +572,7 @@ export function FinanceStoreDetailPage() {
             <ShoppingCart size={19} />
             <div>
               <h3>Itens da loja</h3>
-              <p>Orçamento aprovado x compra efetivamente registrada.</p>
+              <p>Orçamento Previsto x compra efetivamente registrada.</p>
             </div>
           </div>
           <span>{filteredItemRows.length} linha(s)</span>
@@ -604,9 +619,9 @@ export function FinanceStoreDetailPage() {
                       </strong>
                     </td>
                     <td>
-                      <strong>{row.purchaseCode}</strong>
-                      <span>{row.quoteCode}</span>
-                      <small>{row.supplierName}</small>
+                      <strong>{row.segmentNames.join(', ') || 'Sem orçamento previsto'}</strong>
+                      <span>{row.purchaseCode || 'Sem compra registrada'}</span>
+                      <small>{row.supplierName || '—'}</small>
                     </td>
                     <td>
                       <span className={`finance-store-status finance-store-status--${row.purchaseStatus}`}>
@@ -749,7 +764,7 @@ export function FinanceStoreDetailPage() {
           }
           description={
             documentPopup.kind === 'item'
-              ? `${documentPopup.row.itemName} · ${documentPopup.row.purchaseCode}`
+              ? `${documentPopup.row.itemName} · ${documentPopup.row.purchaseCode || 'sem compra registrada'}`
               : documentPopup.work.description
           }
           onClose={() => {

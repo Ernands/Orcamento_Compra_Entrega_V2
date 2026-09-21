@@ -28,6 +28,7 @@ import {
   listFinanceReimbursements,
   saveFinanceReimbursement,
 } from '../data/finance/finance-repository';
+import { listPlannedBudget } from '../data/planned-budget/planned-budget-repository';
 import { listStores } from '../data/stores/stores-repository';
 import {
   listFinanceStoreBudgets,
@@ -53,6 +54,7 @@ import type {
   FinanceStorePurchaseRow,
   FinanceStoreRow,
 } from '../domain/finance-types';
+import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 import type { PurchaseAttachmentV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import type { Store } from '../domain/types';
@@ -536,6 +538,7 @@ export function FinancePage() {
           : 'overview';
   const hasAnyFinanceView = canOverview || canPayments || canStoresUfs || canReimbursements;
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
+  const [plannedBudgetItems, setPlannedBudgetItems] = useState<PlannedBudgetItem[]>([]);
   const [reimbursements, setReimbursements] = useState<FinanceReimbursement[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
@@ -559,15 +562,23 @@ export function FinancePage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextPurchases, nextReimbursements, nextStores, nextWorks, nextBudgets] =
-        await Promise.all([
-          listSupplyPurchasesV2(),
-          listFinanceReimbursements(),
-          listStores(),
-          listWorkServices(),
-          listFinanceStoreBudgets(),
-        ]);
+      const [
+        nextPurchases,
+        nextPlannedBudget,
+        nextReimbursements,
+        nextStores,
+        nextWorks,
+        nextBudgets,
+      ] = await Promise.all([
+        listSupplyPurchasesV2(),
+        listPlannedBudget(),
+        listFinanceReimbursements(),
+        listStores(),
+        listWorkServices(),
+        listFinanceStoreBudgets(),
+      ]);
       setPurchases(nextPurchases);
+      setPlannedBudgetItems(nextPlannedBudget.items);
       setReimbursements(nextReimbursements);
       setStores(nextStores);
       setWorks(nextWorks);
@@ -614,11 +625,12 @@ export function FinancePage() {
       buildFinanceOverviewRows({
         stores,
         purchases,
+        plannedBudgetItems,
         purchaseStoreRows: storeRows,
         works,
         budgets,
       }),
-    [budgets, purchases, storeRows, stores, works],
+    [budgets, plannedBudgetItems, purchases, storeRows, stores, works],
   );
   const search = normalized(query);
   const allowedStoreIds = useMemo(
@@ -865,6 +877,11 @@ export function FinancePage() {
                 <ReceiptText size={21} />
                 <span>Orçado total</span>
                 <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
+                {availableBbCents < 0n && (
+                  <small className="finance-budget-alert" role="status">
+                    Atenção: orçamento {formatBRL(-availableBbCents)} acima da Verba BB.
+                  </small>
+                )}
               </article>
             </div>
           </div>
@@ -1501,9 +1518,10 @@ export function FinancePage() {
       <footer className="finance-note">
         <Building2 size={18} />
         <span>
-          A Visão Geral consolida os itens de Compras e os contratos de Obras e Serviços. O custo
-          por loja continua usando o rateio confirmado em Compras; documentos e pagamentos de obra
-          são controlados separadamente no novo módulo.
+          A Visão Geral usa o Orçamento Previsto para o Orçado itens, as Compras para o realizado e
+          os contratos de Obras e Serviços para obra. O custo comprado por loja continua usando o
+          rateio confirmado em Compras; documentos e pagamentos de obra são controlados
+          separadamente.
         </span>
       </footer>
 

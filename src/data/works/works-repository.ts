@@ -166,7 +166,7 @@ export async function saveWorkService(values: WorkServiceValues): Promise<string
     amount: numericMoney(component.amount),
   })) as Json;
   const { data, error } = await supabase.rpc('save_work_service_v2', {
-    p_service_id: values.id || null,
+    p_service_id: (values.id || null) as unknown as string,
     p_store_id: values.storeId,
     p_category: values.category.trim(),
     p_description: values.description.trim(),
@@ -177,8 +177,8 @@ export async function saveWorkService(values: WorkServiceValues): Promise<string
     p_budget_amount: numericMoney(values.budgetAmount),
     p_status: values.status,
     p_progress_percent: values.progressPercent,
-    p_planned_start_date: values.plannedStartDate || null,
-    p_planned_end_date: values.plannedEndDate || null,
+    p_planned_start_date: (values.plannedStartDate || null) as unknown as string,
+    p_planned_end_date: (values.plannedEndDate || null) as unknown as string,
     p_notes: values.notes.trim(),
     p_components: components,
   });
