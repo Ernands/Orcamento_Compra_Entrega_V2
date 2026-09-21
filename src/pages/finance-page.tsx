@@ -1151,6 +1151,11 @@ export function FinancePage() {
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.budgetTotalCents)}</strong>
+                            {row.budgetTotalCents > row.budgetBbCents && (
+                              <small className="finance-store-budget-alert" role="status">
+                                Acima da verba em {formatBRL(row.budgetTotalCents - row.budgetBbCents)}
+                              </small>
+                            )}
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.itemsRealizedCents)}</strong>
