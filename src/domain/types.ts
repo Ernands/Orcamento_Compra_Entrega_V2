@@ -241,7 +241,7 @@ export interface SupplyItem {
   subcategory: string | null;
   groupName: string | null;
   areaName: string | null;
-  financialGroup: 'equipment' | 'furniture' | 'general' | null;
+  financialGroup?: 'equipment' | 'furniture' | 'general' | null;
   type: SupplyItemType;
   defaultUnit: string;
   defaultQuantity: number | null;
