@@ -364,4 +364,57 @@ revoke all on function public.save_supply_budget_segment(uuid,uuid,text,boolean,
 revoke all on function public.save_supply_budget_segment(uuid,uuid,text,boolean,text,jsonb) from anon;
 grant execute on function public.save_supply_budget_segment(uuid,uuid,text,boolean,text,jsonb) to authenticated;
 
+create or replace function public.create_supply_budget_segment(
+  p_supply_item_id uuid,
+  p_name text,
+  p_active boolean,
+  p_notes text,
+  p_stores jsonb
+)
+returns uuid
+language sql
+security invoker
+set search_path = ''
+as $function$
+  select public.save_supply_budget_segment(
+    null,
+    p_supply_item_id,
+    p_name,
+    p_active,
+    p_notes,
+    p_stores
+  );
+$function$;
+
+create or replace function public.update_supply_budget_segment(
+  p_segment_id uuid,
+  p_supply_item_id uuid,
+  p_name text,
+  p_active boolean,
+  p_notes text,
+  p_stores jsonb
+)
+returns uuid
+language sql
+security invoker
+set search_path = ''
+as $function$
+  select public.save_supply_budget_segment(
+    p_segment_id,
+    p_supply_item_id,
+    p_name,
+    p_active,
+    p_notes,
+    p_stores
+  );
+$function$;
+
+revoke all on function public.create_supply_budget_segment(uuid,text,boolean,text,jsonb) from public;
+revoke all on function public.create_supply_budget_segment(uuid,text,boolean,text,jsonb) from anon;
+grant execute on function public.create_supply_budget_segment(uuid,text,boolean,text,jsonb) to authenticated;
+
+revoke all on function public.update_supply_budget_segment(uuid,uuid,text,boolean,text,jsonb) from public;
+revoke all on function public.update_supply_budget_segment(uuid,uuid,text,boolean,text,jsonb) from anon;
+grant execute on function public.update_supply_budget_segment(uuid,uuid,text,boolean,text,jsonb) to authenticated;
+
 commit;
