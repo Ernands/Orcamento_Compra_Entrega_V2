@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { plannedBudgetAllocations, plannedBudgetByStore } from '../domain/planned-budget-calculations';
+import {
+  plannedBudgetAllocations,
+  plannedBudgetByStore,
+} from '../domain/planned-budget-calculations';
 import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 
 function item(values?: { active?: boolean; segmentActive?: boolean }): PlannedBudgetItem {
@@ -85,5 +88,13 @@ describe('planned budget calculations', () => {
 
   it('ignora segmento inativo', () => {
     expect(plannedBudgetAllocations([item({ segmentActive: false })])).toEqual([]);
+  });
+
+  it('mantém item ativo sem distribuição com total zero', () => {
+    const pendingDistribution = item();
+    pendingDistribution.segment.stores = [];
+
+    expect(plannedBudgetAllocations([pendingDistribution])).toEqual([]);
+    expect(plannedBudgetByStore([pendingDistribution])).toEqual(new Map());
   });
 });
