@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  activePlannedBudgetSegmentTotalCents,
   plannedBudgetAllocations,
   plannedBudgetByStore,
+  plannedBudgetItemTotalCents,
 } from '../domain/planned-budget-calculations';
 import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 
@@ -88,6 +90,18 @@ describe('planned budget calculations', () => {
 
   it('ignora segmento inativo', () => {
     expect(plannedBudgetAllocations([item({ segmentActive: false })])).toEqual([]);
+  });
+
+  it('calcula o total bruto de um item do orçamento', () => {
+    expect(plannedBudgetItemTotalCents(item())).toBe(50000n);
+  });
+
+  it('soma somente itens e segmentos ativos no total dos segmentos ativos', () => {
+    expect(activePlannedBudgetSegmentTotalCents([
+      item(),
+      item({ active: false }),
+      item({ segmentActive: false }),
+    ])).toBe(50000n);
   });
 
   it('mantém item ativo sem distribuição com total zero', () => {
