@@ -6,7 +6,7 @@ import type {
   PlannedBudgetSegmentValues,
 } from '../../domain/planned-budget-types';
 import { moneyToCents, quantityToThousandths } from '../../domain/supply-calculations';
-import type { SupplyItem } from '../../domain/types';
+import type { Store, SupplyItem } from '../../domain/types';
 import { supabase } from '../supabase/client';
 import type { Database, Json } from '../supabase/database.types';
 import { listSupplyItems } from '../supplies/supplies-repository';
@@ -209,4 +209,22 @@ export async function setPlannedBudgetSegmentActive(
     .update({ active })
     .eq('id', id);
   if (error) throw error;
+}
+
+
+export async function listPlannedBudgetStores(): Promise<
+  Pick<Store, 'id' | 'code' | 'name' | 'city' | 'state'>[]
+> {
+  const { data, error } = await supabase
+    .from('lojas')
+    .select('id,codigo_negocio,nome,cidade,uf')
+    .order('codigo_negocio');
+  if (error) throw error;
+  return data.map((store) => ({
+    id: store.id,
+    code: store.codigo_negocio,
+    name: store.nome,
+    city: store.cidade,
+    state: store.uf,
+  }));
 }
