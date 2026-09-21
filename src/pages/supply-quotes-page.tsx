@@ -315,11 +315,12 @@ function QuoteModal({
     quoteStoreIds: string[],
     mode: 'profile' | 'store',
   ) => {
+    const itemStoreId = values.contextType === 'store' ? line.storeId : '';
     if (mode === 'profile') {
       const { options, uncoveredStoreIds } = getProfileDestinationOptions(
         quoteStoreIds,
         freightProfiles,
-        line.storeId,
+        itemStoreId,
       );
       if (uncoveredStoreIds.length) {
         const uncoveredNames = uncoveredStoreIds
@@ -332,7 +333,7 @@ function QuoteModal({
       if (!options.length) throw new Error('Nenhum perfil de frete atende o escopo deste item.');
       return buildDestinationValues(line.quantity, line.unit, options);
     }
-    const options = getStoreDestinationOptions(quoteStoreIds, stores, line.storeId);
+    const options = getStoreDestinationOptions(quoteStoreIds, stores, itemStoreId);
     if (!options.length) throw new Error('Nenhuma loja de destino disponivel para este item.');
     return buildDestinationValues(line.quantity, line.unit, options);
   };
