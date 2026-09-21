@@ -2771,6 +2771,7 @@ export function SupplyPurchasesPage() {
   const [bulkPurchase, setBulkPurchase] = useState<PurchaseV2 | null>(null);
   const [summaryPurchase, setSummaryPurchase] = useState<PurchaseV2 | null>(null);
   const [portfolioOpen, setPortfolioOpen] = useState(false);
+  const [portfolioBulkOpen, setPortfolioBulkOpen] = useState(false);
   const [returningId, setReturningId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
