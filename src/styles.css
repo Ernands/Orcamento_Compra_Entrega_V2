@@ -407,7 +407,7 @@ svg {
   background: var(--brand);
 }
 .button--primary:hover:not(:disabled) {
-  background: #105b49;
+  background: var(--brand-dark);
 }
 .button--secondary {
   color: var(--ink);
@@ -551,7 +551,7 @@ svg {
   display: grid;
   place-items: center;
   background: var(--accent);
-  color: #342b13;
+  color: var(--brand-dark);
   border-radius: 6px;
   margin-bottom: 54px;
 }
@@ -698,7 +698,7 @@ svg {
   height: 42px;
   display: grid;
   place-items: center;
-  color: #362c12;
+  color: var(--brand-dark);
   background: var(--accent);
   border-radius: 6px;
 }
@@ -708,7 +708,8 @@ svg {
   flex-direction: column;
 }
 .sidebar__brand strong {
-  font-size: 1rem;
+  font-size: 0.92rem;
+  line-height: 1.08;
 }
 .sidebar__brand small {
   margin-top: 2px;
@@ -750,11 +751,11 @@ svg {
 }
 .sidebar__nav a:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(84, 220, 252, 0.14);
 }
 .sidebar__nav a.active {
   color: #fff;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(84, 220, 252, 0.20);
   box-shadow: inset 3px 0 var(--accent);
 }
 .sidebar__account {
