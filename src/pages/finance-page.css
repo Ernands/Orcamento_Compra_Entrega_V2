@@ -85,19 +85,21 @@
 }
 
 .finance-kpis article span {
-  overflow: hidden;
+  overflow: visible;
   color: var(--muted);
   font-size: 0.66rem;
   font-weight: 800;
-  text-overflow: ellipsis;
+  line-height: 1.15;
+  text-overflow: clip;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .finance-kpis article strong {
-  overflow: hidden;
-  font-size: clamp(0.94rem, 1.4vw, 1.22rem);
-  text-overflow: ellipsis;
+  overflow: visible;
+  font-size: clamp(0.84rem, 1.05vw, 1.08rem);
+  letter-spacing: -0.02em;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -116,6 +118,21 @@
 
 .finance-bb-available.is-negative {
   color: #a33a32;
+}
+
+.finance-budget-alert {
+  grid-column: 2;
+  display: block;
+  margin-top: 2px;
+  padding: 4px 6px;
+  color: #7d241c;
+  background: #fff0d9;
+  border-left: 3px solid #e46b4b;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 850;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .finance-kpis .finance-kpi--primary {
