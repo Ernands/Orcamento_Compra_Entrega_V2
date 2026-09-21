@@ -422,6 +422,43 @@
 }
 .purchase-v2-multi-summary > div > span { display: grid; gap: 2px; }
 .purchase-v2-multi-summary small { color: var(--muted); font-size: .68rem; }
+.purchase-v2-new-operation--bulk { border-color: #b8cfe0; }
+.purchase-v2-new-operation--bulk > summary { background: #eef5fa; }
+.purchase-v2-installment-builder {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #c9dbea;
+  border-radius: 7px;
+  background: #f5f9fc;
+}
+.purchase-v2-installment-builder > header > div { display: grid; gap: 2px; }
+.purchase-v2-installment-builder > header small { color: var(--muted); font-size: .72rem; }
+.purchase-v2-installment-action { align-content: end; }
+.purchase-v2-installment-action > span { visibility: hidden; }
+.purchase-v2-bulk-purchase { padding: 16px; }
+.purchase-v2-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.purchase-v2-bulk-actions > span { color: var(--muted); font-size: .74rem; }
+.purchase-v2-bulk-purchase-lines { display: grid; gap: 8px; }
+.purchase-v2-bulk-purchase-line {
+  display: grid;
+  grid-template-columns: minmax(260px,1.7fr) minmax(105px,.55fr) minmax(120px,.65fr) minmax(105px,.55fr) minmax(105px,.55fr);
+  gap: 9px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+.purchase-v2-bulk-purchase-line.is-selected { border-color: #9fc5d9; background: #f2f8fb; }
+.purchase-v2-bulk-purchase-line.is-disabled { opacity: .72; }
+.purchase-v2-bulk-check { display: flex; gap: 9px; align-items: flex-start; align-self: center; cursor: pointer; }
+.purchase-v2-bulk-check > span { display: grid; gap: 2px; min-width: 0; }
+.purchase-v2-bulk-check small { color: var(--muted); font-size: .68rem; }
+.purchase-v2-bulk-check small.is-warning { color: #9b6515; }
+.purchase-v2-bulk-line-total { display: grid; gap: 3px; align-self: center; }
+.purchase-v2-bulk-line-total small { color: var(--muted); font-size: .68rem; }
+.purchase-v2-bulk-line-total strong { font-size: .85rem; }
 .purchase-v2-payment-drafts { display: grid; gap: 10px; }
 .purchase-v2-payment-draft { display: grid; gap: 11px; padding: 13px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-soft); }
 .purchase-v2-payment-draft > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -551,6 +588,8 @@
   .purchase-v2-store-cost-editor,
   .purchase-v2-multi-destination__stores,
   .purchase-v2-individual-shippings,
+  .purchase-v2-bulk-purchase-line { grid-template-columns: 1fr; align-items: stretch; }
+  .purchase-v2-bulk-actions { align-items: flex-start; flex-direction: column; }
   .purchase-v2-multi-summary,
   .purchase-v2-operation-body,
   .purchase-v2-payment-balance,
