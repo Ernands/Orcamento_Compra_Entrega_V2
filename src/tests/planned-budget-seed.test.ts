@@ -18,8 +18,8 @@ function lineTotal(unitPrice: string, quantity: string): bigint {
 }
 
 describe('planned budget spreadsheet seed', () => {
-  it('preserva os 52 itens e os valores consolidados da planilha', () => {
-    expect(items).toHaveLength(52);
+  it('preserva a carga inicial sem os dois ares e com filtros separados', () => {
+    expect(items).toHaveLength(51);
 
     const attended = items.reduce(
       (total, item) => total + lineTotal(item.unitPrice, item.attended),
@@ -34,10 +34,10 @@ describe('planned budget spreadsheet seed', () => {
       0n,
     );
 
-    expect(attended).toBe(3219768n);
-    expect(unattended).toBe(2742616n);
-    expect(baependi).toBe(3931351n);
-    expect(attended * 13n + unattended * 12n + baependi).toBe(78699727n);
+    expect(attended).toBe(2191093n);
+    expect(unattended).toBe(1713941n);
+    expect(baependi).toBe(2902676n);
+    expect(attended * 13n + unattended * 12n + baependi).toBe(51954177n);
   });
 
   it('mantém os dois itens de valor zero ativos e sem inventar UUIDs', () => {
@@ -83,11 +83,23 @@ describe('planned budget spreadsheet seed', () => {
   it('exige as 26 lojas e valida o total integral do orçamento previsto', () => {
     expect(migration).toContain('planned budget seed requires stores');
     expect(migration).toContain('v_store_count <> 26');
-    expect(migration).toContain('v_store_link_count <> 1240');
-    expect(migration).toContain('v_total <> 786997.27');
+    expect(migration).toContain('v_store_link_count <> 1202');
+    expect(migration).toContain('v_total <> 519541.77');
     expect(migration).toContain("'LOJ-008'");
     expect(migration).not.toContain("'LOJ-022'");
     expect(migration).not.toContain("'LOJ-028'");
+  });
+
+  it('usa os itens existentes em PROD e omite os ares desta carga inicial', () => {
+    expect(migration).toContain("item.codigo_negocio = 'ITM-0030'");
+    expect(migration).toContain("item.codigo_negocio = 'ITM-0091'");
+    expect(migration).toContain("item.codigo_negocio = 'ITM-0014'");
+    expect(migration).toContain("item.codigo_negocio = 'ITM-0025'");
+    expect(migration).toContain("item.codigo_negocio = 'ITM-0072'");
+    expect(items.map((item) => item.name)).toContain("Filtro de privacidade para monitor 23,8''");
+    expect(items.map((item) => item.name)).toContain("Filtro de privacidade para monitor - Notebook 15.6''");
+    expect(items.map((item) => item.name)).not.toContain('Ar condicionado 1');
+    expect(items.map((item) => item.name)).not.toContain('Ar condicionado 2');
   });
 
 });
