@@ -6,6 +6,7 @@ import { useSession } from '../app/session-provider';
 import {
   cancelPurchasePaymentV2,
   cancelSupplyPurchaseOrderV2,
+  createSupplyPurchaseBatchOperationV2,
   createSupplyPurchaseOperationV2,
   listSupplyPurchasesV2,
   savePurchaseDestinationDistributionV2,
@@ -21,6 +22,7 @@ vi.mock('../data/purchases/purchases-v2-repository', async () => {
   return {
     ...actual,
     listSupplyPurchasesV2: vi.fn(),
+    createSupplyPurchaseBatchOperationV2: vi.fn(),
     createSupplyPurchaseOperationV2: vi.fn(),
     cancelPurchasePaymentV2: vi.fn(),
     cancelSupplyPurchaseOrderV2: vi.fn(),
@@ -165,20 +167,150 @@ function bulkItemsPurchase(): PurchaseV2 {
   };
 }
 
-function renderPage(current: PurchaseV2 = purchase) {
-  vi.mocked(listSupplyPurchasesV2).mockResolvedValue([current]);
+function portfolioBatchPurchases(): PurchaseV2[] {
+  const first: PurchaseV2 = {
+    ...purchase,
+    status: 'approved',
+    stores: [purchase.stores[0]],
+    items: [{
+      ...baseItem,
+      id: 'item-batch-1',
+      purchaseId: 'purchase-1',
+      supplyItemId: 'supply-batch-1',
+      itemCode: 'ITM-0101',
+      itemName: 'Notebook',
+      storeId: 'store-1',
+      storeCode: 'LOJ-001',
+      quantityApproved: '2',
+      purchasedQuantity: '0',
+      quotedUnitPrice: '100',
+      approvedLineTotal: '200',
+      actualTotal: '0',
+      destinations: [],
+    }],
+    approvedTotal: '200',
+    orders: [],
+    payments: [],
+    attachments: [],
+    quoteAttachments: [],
+  };
+  const second: PurchaseV2 = {
+    ...purchase,
+    id: 'purchase-2',
+    code: 'CMP-00002',
+    quoteId: 'quote-2',
+    quoteCode: 'COT-00171',
+    supplierId: 'supplier-2',
+    supplierName: 'Marketplace Teste',
+    status: 'approved',
+    stores: [{
+      id: 'ps-2b', storeId: 'store-2', code: 'LOJ-002', name: 'Loja Dois', city: 'Natal', state: 'RN',
+      address: 'Rua B', addressSnapshotSource: 'approval',
+    }],
+    items: [{
+      ...baseItem,
+      id: 'item-batch-2',
+      purchaseId: 'purchase-2',
+      sourceQuoteItemId: 'quote-item-2',
+      supplyItemId: 'supply-batch-2',
+      itemCode: 'ITM-0102',
+      itemName: 'Webcam',
+      storeId: 'store-2',
+      storeCode: 'LOJ-002',
+      quantityApproved: '3',
+      purchasedQuantity: '0',
+      quotedUnitPrice: '50',
+      approvedLineTotal: '150',
+      actualTotal: '0',
+      destinations: [],
+    }],
+    approvedTotal: '150',
+    orders: [],
+    payments: [],
+    attachments: [],
+    quoteAttachments: [],
+  };
+  return [first, second];
+}
+
+function renderPage(current: PurchaseV2 | PurchaseV2[] = purchase) {
+  vi.mocked(listSupplyPurchasesV2).mockResolvedValue(Array.isArray(current) ? current : [current]);
   return render(<MemoryRouter><SupplyPurchasesPage /></MemoryRouter>);
 }
 
 describe('SupplyPurchasesPage V2', () => {
   beforeEach(() => {
     vi.mocked(useSession).mockReturnValue({ can: () => true } as never);
+    vi.mocked(createSupplyPurchaseBatchOperationV2).mockResolvedValue([
+      { purchaseId: 'purchase-1', orderId: 'order-batch-1', paymentIds: ['payment-batch-1'] },
+      { purchaseId: 'purchase-2', orderId: 'order-batch-2', paymentIds: ['payment-batch-2'] },
+    ]);
     vi.mocked(createSupplyPurchaseOperationV2).mockResolvedValue({ orderId: 'order-new', paymentIds: ['payment-new'] });
     vi.mocked(cancelPurchasePaymentV2).mockResolvedValue();
     vi.mocked(cancelSupplyPurchaseOrderV2).mockResolvedValue();
     vi.mocked(savePurchaseDestinationDistributionV2).mockResolvedValue('confirmed');
     vi.mocked(savePurchaseOrderLineDistributionV2).mockResolvedValue('confirmed');
     vi.mocked(savePurchasePaymentV2).mockResolvedValue('payment-new');
+  });
+
+  it('exibe compra em lote no topo e registra CMPs diferentes em uma unica acao', async () => {
+    const user = userEvent.setup();
+    renderPage(portfolioBatchPurchases());
+
+    await screen.findByText('CMP-00001');
+    expect(screen.getByText('CMP-00002')).toBeInTheDocument();
+
+    const batchButton = screen.getByRole('button', { name: 'Compra em lote' });
+    expect(batchButton).toBeEnabled();
+    await user.click(batchButton);
+
+    const dialog = screen.getByRole('dialog', { name: 'Compra em lote' });
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos disponiveis' }));
+    expect(within(dialog).getByText('2 linhas selecionadas · 2 CMPs')).toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText('Pedido / referencia do lote'), 'ML-12345');
+
+    await user.type(within(dialog).getByLabelText('Entrada paga'), '70');
+    await user.type(within(dialog).getByLabelText('Quantidade de parcelas'), '2');
+    fireEvent.change(within(dialog).getByLabelText('Primeiro vencimento'), { target: { value: '2026-10-10' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Gerar entrada + parcelas' }));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra em lote · 2 CMPs' }));
+
+    expect(createSupplyPurchaseBatchOperationV2).toHaveBeenCalledWith([
+      expect.objectContaining({
+        purchaseId: 'purchase-1',
+        supplierOrderRef: 'ML-12345',
+        lines: [expect.objectContaining({
+          purchaseItemId: 'item-batch-1',
+          quantity: '2',
+          unitPrice: '100',
+          shippingAmount: '0',
+          storeAllocations: [{ storeId: 'store-1', quantity: '2' }],
+        })],
+        payments: [
+          expect.objectContaining({ amount: '40', status: 'paid', sourceLabel: 'Entrada' }),
+          expect.objectContaining({ amount: '80', status: 'planned', sourceLabel: 'Parcela 1/2', firstDueDate: '2026-10-10' }),
+          expect.objectContaining({ amount: '80', status: 'planned', sourceLabel: 'Parcela 2/2', firstDueDate: '2026-11-10' }),
+        ],
+      }),
+      expect.objectContaining({
+        purchaseId: 'purchase-2',
+        supplierOrderRef: 'ML-12345',
+        lines: [expect.objectContaining({
+          purchaseItemId: 'item-batch-2',
+          quantity: '3',
+          unitPrice: '50',
+          shippingAmount: '0',
+          storeAllocations: [{ storeId: 'store-2', quantity: '3' }],
+        })],
+        payments: [
+          expect.objectContaining({ amount: '30', status: 'paid', sourceLabel: 'Entrada' }),
+          expect.objectContaining({ amount: '60', status: 'planned', sourceLabel: 'Parcela 1/2', firstDueDate: '2026-10-10' }),
+          expect.objectContaining({ amount: '60', status: 'planned', sourceLabel: 'Parcela 2/2', firstDueDate: '2026-11-10' }),
+        ],
+      }),
+    ]);
   });
 
   it('mostra item, quantidades e link do produto com a compra recolhida', async () => {
