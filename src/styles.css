@@ -16,11 +16,12 @@
   --line: #dbe0dc;
   --surface: #ffffff;
   --surface-soft: #f7f8f6;
-  --brand: #176b57;
-  --brand-dark: #173c35;
-  --accent: #d9a62e;
+  --brand: #465eff;
+  --brand-dark: #3449d9;
+  --brand-light: #54dcfc;
+  --accent: #fcfc30;
   --danger: #b54336;
-  --focus: #13846a;
+  --focus: #465eff;
 }
 
 /* Cotacoes: anexos privados e resumo operacional */
@@ -523,19 +524,20 @@ svg {
   justify-content: space-between;
   padding: clamp(32px, 6vw, 76px);
   color: #f5faf7;
-  background: var(--brand-dark);
+  background: var(--brand);
   position: relative;
   overflow: hidden;
 }
 .login-brand::after {
-  content: '27';
+  content: 'Loja BB';
   position: absolute;
-  right: -18px;
-  bottom: 7%;
-  color: rgba(255, 255, 255, 0.055);
-  font-size: clamp(12rem, 28vw, 25rem);
-  line-height: 0.7;
+  right: -24px;
+  bottom: 9%;
+  color: rgba(255, 255, 255, 0.075);
+  font-size: clamp(6rem, 16vw, 13rem);
+  line-height: 0.78;
   font-weight: 800;
+  white-space: nowrap;
   pointer-events: none;
 }
 .login-brand__content,
@@ -553,28 +555,22 @@ svg {
   border-radius: 6px;
   margin-bottom: 54px;
 }
-.login-brand__kicker {
-  color: #9ed2c5 !important;
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
 .login-brand h1 {
   margin: 10px 0 8px;
   max-width: 640px;
-  font-size: clamp(3rem, 6vw, 5.7rem);
+  font-size: clamp(2.75rem, 5.2vw, 4.8rem);
   line-height: 0.98;
 }
 .login-brand p {
   margin: 0;
-  color: #d8e6e1;
+  color: rgba(255, 255, 255, 0.88);
   font-size: 1.05rem;
 }
 .login-brand__footer {
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #c4d6d0;
+  color: rgba(255, 255, 255, 0.82);
   font-size: 0.88rem;
 }
 .login-form-section {
@@ -685,9 +681,9 @@ svg {
   top: 0;
   display: flex;
   flex-direction: column;
-  color: #e8efec;
-  background: #18352f;
-  border-right: 1px solid #294a43;
+  color: #ffffff;
+  background: var(--brand);
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
 }
 .sidebar__brand {
   height: 89px;
@@ -695,7 +691,7 @@ svg {
   align-items: center;
   gap: 12px;
   padding: 18px 20px;
-  border-bottom: 1px solid #315048;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
 }
 .brand-mark {
   width: 42px;
@@ -717,7 +713,7 @@ svg {
 .sidebar__brand small {
   margin-top: 2px;
   overflow: hidden;
-  color: #a9beb7;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -731,7 +727,7 @@ svg {
 }
 .nav-section {
   padding: 0 10px 8px;
-  color: #88a39a;
+  color: rgba(255, 255, 255, 0.68);
   font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -747,18 +743,18 @@ svg {
   margin: 2px 0;
   padding: 9px 11px;
   border-radius: 6px;
-  color: #bfd0ca;
+  color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
   font-size: 0.89rem;
   font-weight: 650;
 }
 .sidebar__nav a:hover {
   color: #fff;
-  background: #24443d;
+  background: rgba(255, 255, 255, 0.10);
 }
 .sidebar__nav a.active {
   color: #fff;
-  background: #2b5147;
+  background: rgba(255, 255, 255, 0.16);
   box-shadow: inset 3px 0 var(--accent);
 }
 .sidebar__account {
@@ -768,15 +764,15 @@ svg {
   align-items: center;
   gap: 7px;
   padding: 13px;
-  border-top: 1px solid #315048;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
 }
 .avatar {
   width: 36px;
   height: 36px;
   display: grid;
   place-items: center;
-  color: #19493d;
-  background: #cfe7df;
+  color: #3248dc;
+  background: #ffffff;
   border-radius: 50%;
   font-size: 0.82rem;
   font-weight: 800;
@@ -797,16 +793,16 @@ svg {
 }
 .account-copy small {
   margin-top: 2px;
-  color: #9fb6ae;
+  color: rgba(255, 255, 255, 0.66);
   font-size: 0.69rem;
 }
 .sidebar__account .icon-button {
-  color: #adc1ba;
+  color: rgba(255, 255, 255, 0.82);
 }
 .sidebar__account .icon-button:hover {
   color: #fff;
-  background: #284840;
-  border-color: #3b5a53;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 .app-main {
   min-width: 0;
@@ -2220,15 +2216,15 @@ svg {
     inset: 0;
     z-index: 60;
     display: block;
-    background: rgba(17, 29, 25, 0.56);
+    background: rgba(19, 27, 76, 0.52);
   }
   .mobile-nav {
     width: min(88vw, 310px);
     height: 100%;
     display: flex;
     flex-direction: column;
-    color: #e8efec;
-    background: #18352f;
+    color: #ffffff;
+    background: var(--brand);
     box-shadow: 12px 0 46px rgba(0, 0, 0, 0.22);
   }
   .mobile-nav > .icon-button {
