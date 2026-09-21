@@ -136,6 +136,7 @@
   white-space: normal;
 }
 
+/* Mantém o alerta de estouro dentro da coluna Orçado total. */
 .finance-store-budget-alert {
   display: block;
   width: 100%;
