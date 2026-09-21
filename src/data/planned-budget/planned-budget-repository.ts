@@ -57,7 +57,7 @@ async function listAllSegmentStores(): Promise<SegmentStoreRow[]> {
       .order('id')
       .range(from, to);
     if (error) throw error;
-    return data as SegmentStoreRow[];
+    return data;
   });
 }
 
