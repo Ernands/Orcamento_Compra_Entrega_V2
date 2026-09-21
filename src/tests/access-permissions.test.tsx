@@ -25,6 +25,15 @@ const data = {
   stores: [{ id: 'store-1', code: 'LOJ-901', name: 'Loja Aurora' }],
   permissions: [
     {
+      id: 'perm-finance-menu',
+      key: 'finance.view' as const,
+      description: 'Visualizar pagamentos, custos e reembolsos das lojas acessiveis',
+      moduleKey: 'finance',
+      moduleName: 'Financeiro',
+      actionKey: 'view',
+      actionName: 'Visualizar',
+    },
+    {
       id: 'perm-overview',
       key: 'finance.overview_view' as const,
       description: 'Visualizar a aba Visao Geral do Financeiro',
@@ -42,8 +51,31 @@ const data = {
       actionKey: 'payments_view',
       actionName: 'Visualizar pagamentos',
     },
+    {
+      id: 'perm-stores',
+      key: 'finance.stores_ufs_view' as const,
+      description: 'Visualizar a aba Lojas e UFs do Financeiro',
+      moduleKey: 'finance',
+      moduleName: 'Financeiro',
+      actionKey: 'stores_ufs_view',
+      actionName: 'Visualizar lojas e UFs',
+    },
+    {
+      id: 'perm-reimbursements',
+      key: 'finance.reimbursements_view' as const,
+      description: 'Visualizar a aba Reembolsos do Financeiro',
+      moduleKey: 'finance',
+      moduleName: 'Financeiro',
+      actionKey: 'reimbursements_view',
+      actionName: 'Visualizar reembolsos',
+    },
   ],
-  profilePermissions: [{ profileId: 'profile-consult', permissionId: 'perm-overview' }],
+  profilePermissions: [
+    { profileId: 'profile-consult', permissionId: 'perm-finance-menu' },
+    { profileId: 'profile-consult', permissionId: 'perm-overview' },
+    { profileId: 'profile-consult', permissionId: 'perm-stores' },
+    { profileId: 'profile-consult', permissionId: 'perm-reimbursements' },
+  ],
   userPermissionOverrides: [],
   users: [
     {
@@ -97,8 +129,8 @@ describe('AccessPage granular permissions', () => {
     await screen.findByText('Joana Consulta');
     await user.click(screen.getByRole('button', { name: 'Editar permissoes de Joana Consulta' }));
 
-    expect(screen.getByText('Perfil: permitido')).toBeInTheDocument();
-    expect(screen.getByText('Perfil: bloqueado')).toBeInTheDocument();
+    expect(screen.getAllByText('Perfil: permitido').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Perfil: bloqueado').length).toBeGreaterThan(0);
 
     await user.selectOptions(
       screen.getByLabelText('Visualizar a aba Visao Geral do Financeiro para Joana Consulta'),
@@ -115,6 +147,44 @@ describe('AccessPage granular permissions', () => {
       { permissionId: 'perm-payments', effect: 'grant' },
     ]);
     expect(await screen.findByText('Permissoes do usuario atualizadas.')).toBeInTheDocument();
+  });
+
+  it('mantem o menu financeiro e bloqueia somente as outras abas pelo atalho', async () => {
+    const user = userEvent.setup();
+    sessionWith(['access.view', 'access.permissions_manage']);
+
+    render(<AccessPage />);
+    await screen.findByText('Joana Consulta');
+    await user.click(screen.getByRole('button', { name: 'Editar permissoes de Joana Consulta' }));
+
+    expect(
+      screen.getByLabelText('Exibir o menu Financeiro para Joana Consulta'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Apenas Visão Geral' }));
+
+    expect(
+      screen.getByLabelText('Exibir o menu Financeiro para Joana Consulta'),
+    ).toHaveValue('inherit');
+    expect(
+      screen.getByLabelText('Visualizar a aba Visao Geral do Financeiro para Joana Consulta'),
+    ).toHaveValue('inherit');
+    expect(
+      screen.getByLabelText('Visualizar a aba Pagamentos do Financeiro para Joana Consulta'),
+    ).toHaveValue('deny');
+    expect(
+      screen.getByLabelText('Visualizar a aba Lojas e UFs do Financeiro para Joana Consulta'),
+    ).toHaveValue('deny');
+    expect(
+      screen.getByLabelText('Visualizar a aba Reembolsos do Financeiro para Joana Consulta'),
+    ).toHaveValue('deny');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar permissoes' }));
+
+    expect(saveAccessUserPermissions).toHaveBeenCalledWith('user-2', [
+      { permissionId: 'perm-payments', effect: 'deny' },
+      { permissionId: 'perm-stores', effect: 'deny' },
+      { permissionId: 'perm-reimbursements', effect: 'deny' },
+    ]);
   });
 
   it('nao exibe editor granular sem a permissao administrativa', async () => {

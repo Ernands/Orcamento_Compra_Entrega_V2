@@ -1,3 +1,5 @@
+import { isTrustedDevPreview } from './origin.ts';
+
 const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
 function allowedOrigins(): string[] {
@@ -11,7 +13,7 @@ function allowedOrigins(): string[] {
 
 export function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get('Origin') || '';
-  const allowed = allowedOrigins().includes(origin) ? origin : defaultOrigins[0];
+  const allowed = isConfiguredOrigin(origin) ? origin : defaultOrigins[0];
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -22,9 +24,16 @@ export function corsHeaders(request: Request): HeadersInit {
   };
 }
 
+function isConfiguredOrigin(origin: string): boolean {
+  return (
+    allowedOrigins().includes(origin) ||
+    isTrustedDevPreview(origin, Deno.env.get('SUPABASE_URL')?.trim() || '')
+  );
+}
+
 export function isAllowedOrigin(request: Request): boolean {
   const origin = request.headers.get('Origin');
-  return !origin || allowedOrigins().includes(origin);
+  return !origin || isConfiguredOrigin(origin);
 }
 
 export function json(request: Request, body: Record<string, unknown>, status = 200): Response {

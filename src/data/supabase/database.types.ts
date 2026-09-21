@@ -2857,6 +2857,77 @@ export type Database = {
           },
         ]
       }
+      works_service_components: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          service_id: string
+          sort_order: number
+          store_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          service_id: string
+          sort_order?: number
+          store_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          service_id?: string
+          sort_order?: number
+          store_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "works_service_components_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "works_service_components_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "works_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "works_service_components_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "lojas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "works_service_components_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       works_service_documents: {
         Row: {
           created_at: string
@@ -3665,6 +3736,26 @@ export type Database = {
           p_supplier_channel_id: string
           p_supplier_id: string
           p_valid_until: string
+        }
+        Returns: string
+      }
+      save_work_service_v2: {
+        Args: {
+          p_budget_amount: number
+          p_category: string
+          p_components?: Json
+          p_contracted_amount: number
+          p_description: string
+          p_notes: string
+          p_planned_end_date: string | null
+          p_planned_start_date: string | null
+          p_progress_percent: number
+          p_provider_name: string
+          p_provider_phone: string
+          p_provider_tax_id: string
+          p_service_id: string | null
+          p_status: string
+          p_store_id: string
         }
         Returns: string
       }

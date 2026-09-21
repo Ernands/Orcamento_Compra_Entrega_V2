@@ -31,6 +31,7 @@ import {
 } from '../data/access/access-repository';
 import type {
   AccessFormValues,
+  AccessPermission,
   AccessPermissionOverride,
   AccessUser,
   UserStatus,
@@ -46,6 +47,17 @@ const emptyForm: AccessFormValues = {
   status: 'active',
   initialPassword: '',
 };
+
+const financeOverviewOnlyHiddenKeys = new Set<AccessPermission['key']>([
+  'finance.payments_view',
+  'finance.stores_ufs_view',
+  'finance.reimbursements_view',
+]);
+
+function permissionLabel(permission: AccessPermission): string {
+  if (permission.key === 'finance.view') return 'Exibir o menu Financeiro';
+  return permission.description;
+}
 
 function valuesFromUser(user: AccessUser): AccessFormValues {
   return {
@@ -114,9 +126,38 @@ export function AccessPage() {
     });
     return [...grouped.entries()].map(([moduleName, permissions]) => ({
       moduleName,
+      moduleKey: permissions[0]?.moduleKey || '',
       permissions,
     }));
   }, [data]);
+
+  const permissionIsInherited = useCallback(
+    (permissionId: string) =>
+      data?.profilePermissions?.some(
+        (entry) =>
+          entry.profileId === permissionUser?.profile.id && entry.permissionId === permissionId,
+      ) || false,
+    [data?.profilePermissions, permissionUser?.profile.id],
+  );
+
+  const showOnlyFinanceOverview = () => {
+    const financePermissions =
+      data?.permissions?.filter((permission) => permission.moduleKey === 'finance') || [];
+
+    setPermissionDraft((current) => {
+      const next = { ...current };
+
+      financePermissions.forEach((permission) => {
+        if (permission.key === 'finance.view' || permission.key === 'finance.overview_view') {
+          next[permission.id] = permissionIsInherited(permission.id) ? 'inherit' : 'grant';
+        } else if (financeOverviewOnlyHiddenKeys.has(permission.key)) {
+          next[permission.id] = 'deny';
+        }
+      });
+
+      return next;
+    });
+  };
 
   const openCreate = () => {
     setForm({ ...emptyForm, profileId: data?.profiles[0]?.id || '' });
@@ -549,19 +590,39 @@ export function AccessPage() {
           <div className="access-permissions-groups">
             {permissionGroups.map((group) => (
               <section key={group.moduleName} className="access-permissions-group">
-                <header>{group.moduleName}</header>
+                <header>
+                  <span>{group.moduleName}</span>
+                  {group.moduleKey === 'finance' && (
+                    <button
+                      type="button"
+                      className="access-permissions-group__action"
+                      onClick={showOnlyFinanceOverview}
+                    >
+                      Apenas Visão Geral
+                    </button>
+                  )}
+                </header>
+                {group.moduleKey === 'finance' && (
+                  <div className="access-permissions-group__hint">
+                    Mantenha <strong>Exibir o menu Financeiro</strong> permitido. As permissoes de
+                    Pagamentos, Lojas e UFs e Reembolsos controlam somente as respectivas abas.
+                  </div>
+                )}
                 {group.permissions.map((permission) => {
-                  const inherited =
-                    data?.profilePermissions?.some(
-                      (entry) =>
-                        entry.profileId === permissionUser?.profile.id &&
-                        entry.permissionId === permission.id,
-                    ) || false;
+                  const inherited = permissionIsInherited(permission.id);
                   const value = permissionDraft[permission.id] || 'inherit';
+                  const label = permissionLabel(permission);
                   return (
-                    <div className="access-permission-row" key={permission.id}>
+                    <div
+                      className={`access-permission-row${
+                        permission.key === 'finance.view'
+                          ? ' access-permission-row--module-access'
+                          : ''
+                      }`}
+                      key={permission.id}
+                    >
                       <div>
-                        <strong>{permission.description}</strong>
+                        <strong>{label}</strong>
                         <small>{permission.key}</small>
                       </div>
                       <span
@@ -572,7 +633,7 @@ export function AccessPage() {
                         Perfil: {inherited ? 'permitido' : 'bloqueado'}
                       </span>
                       <select
-                        aria-label={`${permission.description} para ${permissionUser?.name || 'usuario'}`}
+                        aria-label={`${label} para ${permissionUser?.name || 'usuario'}`}
                         value={value}
                         onChange={(event) =>
                           setPermissionDraft((current) => ({
