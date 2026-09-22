@@ -71,7 +71,6 @@ const item: PlannedBudgetItem = {
       },
       {
         id: 'link-2',
-        segmentId: 'segment-1',
         storeId: 'store-2',
         quantity: '2',
         storeCode: 'LOJ-002',
