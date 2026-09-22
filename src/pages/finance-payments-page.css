@@ -452,3 +452,116 @@
     flex-direction: column;
   }
 }
+
+
+.finance-payments-tab--paid {
+  color: #177354 !important;
+  background: #edf9f4 !important;
+  border-color: #b9ddcf !important;
+}
+
+.finance-payments-tab--paid.is-active {
+  color: #ffffff !important;
+  background: #177354 !important;
+  border-color: #177354 !important;
+}
+
+.finance-payments-tab--planned {
+  color: #8a610e !important;
+  background: #fff8e8 !important;
+  border-color: #ead28a !important;
+}
+
+.finance-payments-tab--planned.is-active {
+  color: #ffffff !important;
+  background: #b98212 !important;
+  border-color: #b98212 !important;
+}
+
+.finance-payments-tab--unscheduled {
+  color: #9b342b !important;
+  background: #fff2ef !important;
+  border-color: #eac5c0 !important;
+}
+
+.finance-payments-tab--unscheduled.is-active {
+  color: #ffffff !important;
+  background: #b54135 !important;
+  border-color: #b54135 !important;
+}
+
+.finance-payment-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.finance-payment-document-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  color: #53615c;
+  background: transparent;
+  border: 0;
+  font-size: 0.7rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.finance-payment-document-link:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.modal.finance-payments-documents-modal {
+  width: min(94vw, 760px);
+}
+
+.finance-payments-documents-list {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.finance-payments-documents-list article {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.finance-payments-documents-list article:last-child {
+  border-bottom: 0;
+}
+
+.finance-payments-documents-list article > svg {
+  color: var(--brand);
+}
+
+.finance-payments-documents-list article > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.finance-payments-documents-list strong,
+.finance-payments-documents-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-payments-documents-list strong {
+  font-size: 0.78rem;
+}
+
+.finance-payments-documents-list small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
