@@ -769,7 +769,7 @@ export function SupplyPlannedBudgetPage() {
         </label>
         <button
           type="button"
-          className="button button--secondary"
+          className="button button--secondary planned-budget-bank-yellow"
           onClick={() => setStoreSummaryOpen(true)}
         >
           <StoreIcon size={16} />
@@ -1066,7 +1066,7 @@ export function SupplyPlannedBudgetPage() {
                     <td>
                       <button
                         type="button"
-                        className="button button--secondary button--small"
+                        className="button button--secondary button--small planned-budget-bank-yellow"
                         onClick={() => {
                           setStoreFilter(store.id);
                           setStoreSummaryOpen(false);
