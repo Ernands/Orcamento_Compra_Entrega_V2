@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   Store,
   Truck,
+  WalletCards,
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -45,6 +46,7 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/comparativo': 'Comparativo',
   '/obras': 'Obras e Serviços',
   '/financeiro': 'Financeiro',
+  '/financeiro/pagamentos': 'Pagamentos',
 };
 
 const SECTION_STORAGE = {
@@ -102,7 +104,9 @@ export function AppShell() {
     can('purchases.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
-  const title = location.pathname.startsWith('/financeiro/lojas/')
+  const title = location.pathname === '/financeiro/pagamentos'
+    ? 'Pagamentos'
+    : location.pathname.startsWith('/financeiro/lojas/')
     ? 'Detalhe financeiro da loja'
     : location.pathname.startsWith('/suprimentos/orcamento-previsto/')
       ? 'Detalhe do Orçamento Previsto'
@@ -336,10 +340,20 @@ export function AppShell() {
         {can('finance.view') && (
           <>
             {!compact && <span className="nav-section nav-section--spaced">Financeiro</span>}
-            <NavLink to="/financeiro" onClick={() => setMobileOpen(false)}>
+            <NavLink to="/financeiro" end onClick={() => setMobileOpen(false)}>
               <Landmark size={19} />
               Financeiro
             </NavLink>
+            {can('finance.payments_view') && (
+              <NavLink
+                className="nav-sub-link"
+                to="/financeiro/pagamentos"
+                onClick={() => setMobileOpen(false)}
+              >
+                <WalletCards size={18} />
+                Pagamentos
+              </NavLink>
+            )}
           </>
         )}
 
