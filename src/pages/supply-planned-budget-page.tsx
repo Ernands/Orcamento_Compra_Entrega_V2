@@ -28,6 +28,7 @@ import { listSupplyItems } from '../data/supplies/supplies-repository';
 import {
   activePlannedBudgetSegmentTotalCents,
   plannedBudgetAllocations,
+  plannedBudgetByStore,
   plannedBudgetItemTotalCents,
 } from '../domain/planned-budget-calculations';
 import type {
@@ -528,6 +529,8 @@ export function SupplyPlannedBudgetPage() {
   const [segmentQuery, setSegmentQuery] = useState('');
   const [segmentStatus, setSegmentStatus] = useState('all');
   const [viewMode, setViewMode] = useState<'segments' | 'items' | 'both'>('both');
+  const [storeFilter, setStoreFilter] = useState('');
+  const [storeSummaryOpen, setStoreSummaryOpen] = useState(false);
   const [segmentTotalsOpen, setSegmentTotalsOpen] = useState(false);
   const [segmentModal, setSegmentModal] = useState<PlannedBudgetSegment | 'new' | null>(null);
   const [itemModal, setItemModal] = useState<PlannedBudgetItem | 'new' | null>(null);
@@ -557,10 +560,31 @@ export function SupplyPlannedBudgetPage() {
   }, [load]);
 
   const allocations = useMemo(() => plannedBudgetAllocations(data.items), [data.items]);
-  const totalCents = allocations.reduce((sum, row) => sum + row.totalCents, 0n);
-  const coveredStores = new Set(allocations.map((row) => row.storeId)).size;
-  const activeItems = data.items.filter((item) => item.active && item.segment.active).length;
-  const activeSegments = data.segments.filter((segment) => segment.active).length;
+  const storeTotals = useMemo(() => plannedBudgetByStore(data.items), [data.items]);
+  const selectedStoreAllocations = useMemo(
+    () => (storeFilter ? allocations.filter((allocation) => allocation.storeId === storeFilter) : allocations),
+    [allocations, storeFilter],
+  );
+  const totalCents = selectedStoreAllocations.reduce((sum, row) => sum + row.totalCents, 0n);
+  const coveredStores = new Set(selectedStoreAllocations.map((row) => row.storeId)).size;
+  const activeItems = new Set(selectedStoreAllocations.map((row) => row.budgetItemId)).size;
+  const activeSegments = new Set(selectedStoreAllocations.map((row) => row.segmentId)).size;
+  const storeSummaryRows = useMemo(
+    () =>
+      stores.map((store) => {
+        const rows = allocations.filter((allocation) => allocation.storeId === store.id);
+        return {
+          store,
+          itemCount: new Set(rows.map((row) => row.budgetItemId)).size,
+          quantityTotal: rows.reduce(
+            (sum, row) => sum + quantityToThousandths(row.quantity),
+            0n,
+          ),
+          totalCents: storeTotals.get(store.id) || 0n,
+        };
+      }),
+    [allocations, storeTotals, stores],
+  );
 
   const filteredSegments = useMemo(() => {
     const q = segmentQuery.trim().toLocaleLowerCase('pt-BR');
@@ -570,6 +594,7 @@ export function SupplyPlannedBudgetPage() {
         (segmentStatus === 'active' && segment.active) ||
         (segmentStatus === 'inactive' && !segment.active);
       if (!matchesStatus) return false;
+      if (storeFilter && !segment.stores.some((store) => store.storeId === storeFilter)) return false;
       if (!q) return true;
       return [
         segment.item.code,
@@ -581,7 +606,7 @@ export function SupplyPlannedBudgetPage() {
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('pt-BR').includes(q));
     });
-  }, [data.segments, segmentQuery, segmentStatus]);
+  }, [data.segments, segmentQuery, segmentStatus, storeFilter]);
 
   const filteredItems = useMemo(() => {
     const q = itemQuery.trim().toLocaleLowerCase('pt-BR');
@@ -591,6 +616,7 @@ export function SupplyPlannedBudgetPage() {
         (itemStatus === 'active' && budgetItem.active && budgetItem.segment.active) ||
         (itemStatus === 'inactive' && (!budgetItem.active || !budgetItem.segment.active));
       if (!matchesStatus) return false;
+      if (storeFilter && !budgetItem.segment.stores.some((store) => store.storeId === storeFilter)) return false;
       if (!q) return true;
       return [
         budgetItem.item.code,
@@ -602,7 +628,7 @@ export function SupplyPlannedBudgetPage() {
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('pt-BR').includes(q));
     });
-  }, [data.items, itemQuery, itemStatus]);
+  }, [data.items, itemQuery, itemStatus, storeFilter]);
 
   const activeSegmentRows = useMemo(
     () =>
@@ -723,6 +749,25 @@ export function SupplyPlannedBudgetPage() {
             <option value="both">Ver itens e segmentos</option>
           </select>
         </label>
+        <label>
+          Loja
+          <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)}>
+            <option value="">Todas as lojas</option>
+            {stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.code} · {store.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={() => setStoreSummaryOpen(true)}
+        >
+          <StoreIcon size={16} />
+          Resumo por loja
+        </button>
       </section>
 
       {viewMode !== 'items' && <section className="planned-budget-panel planned-budget-panel--segments">
@@ -791,14 +836,31 @@ export function SupplyPlannedBudgetPage() {
                     </td>
                     <td>
                       <div className="planned-budget-store-chips">
-                        {segment.stores.map((store) => (
-                          <span key={store.id}>
-                            {store.storeCode} · {formatQuantityV2(store.quantity)}
-                          </span>
-                        ))}
+                        {segment.stores
+                          .filter((store) => !storeFilter || store.storeId === storeFilter)
+                          .map((store) => (
+                            <span key={store.id}>
+                              {store.storeCode} · {formatQuantityV2(store.quantity)}
+                            </span>
+                          ))}
                       </div>
                     </td>
-                    <td><strong>{formatQuantityV2(String(Number(segmentQuantity(segment)) / 1000))}</strong></td>
+                    <td>
+                      <strong>
+                        {formatQuantityV2(
+                          String(
+                            Number(
+                              segment.stores
+                                .filter((store) => !storeFilter || store.storeId === storeFilter)
+                                .reduce(
+                                  (sum, store) => sum + quantityToThousandths(store.quantity),
+                                  0n,
+                                ),
+                            ) / 1000,
+                          ),
+                        )}
+                      </strong>
+                    </td>
                     <td>
                       <span className={`planned-budget-status planned-budget-status--${segment.active ? 'active' : 'inactive'}`}>
                         {segment.active ? 'Ativo' : 'Inativo'}
@@ -887,7 +949,18 @@ export function SupplyPlannedBudgetPage() {
               <tbody>
                 {filteredItems.map((budgetItem) => {
                   const total = budgetItem.active && budgetItem.segment.active
-                    ? segmentTotalCents(budgetItem.segment, budgetItem.unitPrice)
+                    ? budgetItem.segment.stores
+                        .filter((store) => !storeFilter || store.storeId === storeFilter)
+                        .reduce(
+                          (sum, store) =>
+                            sum +
+                            roundedDivide(
+                              moneyToCents(budgetItem.unitPrice) *
+                                quantityToThousandths(store.quantity),
+                              1000n,
+                            ),
+                          0n,
+                        )
                     : 0n;
                   return (
                     <tr key={budgetItem.id}>
@@ -902,11 +975,13 @@ export function SupplyPlannedBudgetPage() {
                       </td>
                       <td>
                         <div className="planned-budget-store-chips">
-                          {budgetItem.segment.stores.map((store) => (
-                            <span key={store.id}>
-                              {store.storeCode} · {formatQuantityV2(store.quantity)}
-                            </span>
-                          ))}
+                          {budgetItem.segment.stores
+                            .filter((store) => !storeFilter || store.storeId === storeFilter)
+                            .map((store) => (
+                              <span key={store.id}>
+                                {store.storeCode} · {formatQuantityV2(store.quantity)}
+                              </span>
+                            ))}
                         </div>
                       </td>
                       <td><strong>{formatBRL(moneyToCents(budgetItem.unitPrice))}</strong></td>
@@ -972,6 +1047,58 @@ export function SupplyPlannedBudgetPage() {
           />
         )}
       </section>}
+
+      {storeSummaryOpen && (
+        <Modal
+          open
+          title="Resumo do orçamento por loja"
+          description="Considera somente itens e segmentos ativos, usando a quantidade prevista de cada loja."
+          onClose={() => setStoreSummaryOpen(false)}
+          className="planned-budget-modal planned-budget-store-summary-modal"
+        >
+          <div className="planned-budget-table-scroll">
+            <table className="planned-budget-table planned-budget-store-summary-table">
+              <thead>
+                <tr>
+                  <th>Loja</th>
+                  <th>Município / UF</th>
+                  <th>Itens previstos</th>
+                  <th>Qtd. total</th>
+                  <th>Orçamento total</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storeSummaryRows.map(({ store, itemCount, quantityTotal, totalCents: storeTotal }) => (
+                  <tr key={store.id}>
+                    <td>
+                      <strong>{store.code}</strong>
+                      <span>{store.name}</span>
+                    </td>
+                    <td>{store.city}/{store.state}</td>
+                    <td>{itemCount}</td>
+                    <td>{formatQuantityV2(String(Number(quantityTotal) / 1000))}</td>
+                    <td><strong>{formatBRL(storeTotal)}</strong></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button button--secondary button--small"
+                        onClick={() => {
+                          setStoreFilter(store.id);
+                          setStoreSummaryOpen(false);
+                        }}
+                      >
+                        <Eye size={14} />
+                        Filtrar loja
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
 
       {segmentTotalsOpen && (
         <Modal
