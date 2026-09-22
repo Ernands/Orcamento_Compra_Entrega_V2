@@ -344,7 +344,7 @@ export function AppShell() {
               <Landmark size={19} />
               Financeiro
             </NavLink>
-            {can('finance.payments_view') && (
+            {can('finance.payments_consolidated_view') && (
               <NavLink
                 className="nav-sub-link"
                 to="/financeiro/pagamentos"
