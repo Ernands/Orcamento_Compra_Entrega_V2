@@ -503,6 +503,24 @@
   font-size: 0.69rem;
 }
 
+.works-documents article > .works-document-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.works-document-delete {
+  color: #8d3229;
+  border-color: #eac5c0;
+}
+
+.works-document-delete:hover {
+  background: #fff0ee;
+}
+
 .works-empty-line {
   margin: 0;
   padding: 16px 12px;
@@ -893,9 +911,13 @@
     grid-template-columns: auto 1fr;
   }
 
-  .works-documents article > button,
+  .works-document-actions,
   .works-document-no-file {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .works-documents article > .works-document-actions {
+    justify-content: flex-start;
   }
 }
