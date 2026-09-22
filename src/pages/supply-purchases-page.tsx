@@ -19,7 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { ItemMultiFilter, matchesSelectedItems, type ItemFilterOption } from '../components/item-multi-filter';
 import { EmptyState, ErrorState, IconButton, InlineLoading, Modal, StatusBadge } from '../components/ui';
@@ -2753,12 +2753,17 @@ function PurchasesPortfolioModal({
 
 export function SupplyPurchasesPage() {
   const { can } = useSession();
+  const [searchParams] = useSearchParams();
   const canEdit = can('purchases.edit');
   const canApprove = can('purchases.approve');
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const referenceFilter = useMemo(
+    () => (searchParams.get('refs') || '').split(',').map((value) => value.trim()).filter(Boolean),
+    [searchParams],
+  );
+  const [query, setQuery] = useState(searchParams.get('q') || '');
   const [status, setStatus] = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [destinationFilter, setDestinationFilter] = useState('');
@@ -2805,6 +2810,7 @@ export function SupplyPurchasesPage() {
     const search = query.trim().toLocaleLowerCase('pt-BR');
     return purchases.filter((purchase) => {
       const summary = purchaseExecutionSummary(purchase);
+      if (referenceFilter.length && !referenceFilter.includes(purchase.code)) return false;
       const text = [purchase.code,purchase.quoteCode,purchase.supplierName,purchase.originCity,purchase.originState,...purchase.items.flatMap((item)=>[item.itemName,item.itemCode,item.offeredBrandModel,item.productUrl,...item.destinations.map((destination)=>destination.label)])].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');
       if (search && !text.includes(search)) return false;
       if (status && purchase.status !== status) return false;
@@ -2817,7 +2823,7 @@ export function SupplyPurchasesPage() {
       if (pendingFilter==='documents' && purchase.attachments.length>0) return false;
       return true;
     });
-  }, [purchases,query,status,stateFilter,destinationFilter,itemFilterIds,pendingFilter]);
+  }, [purchases,query,status,stateFilter,destinationFilter,itemFilterIds,pendingFilter,referenceFilter]);
 
   const portfolioBulkEligibleCount = useMemo(
     () => initialPortfolioBulkLines(purchases).filter((line) => !line.disabledReason).length,

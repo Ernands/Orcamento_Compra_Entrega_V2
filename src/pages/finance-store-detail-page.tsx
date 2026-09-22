@@ -22,6 +22,7 @@ import {
 } from '../data/exports/finance-exports';
 import { listPlannedBudget } from '../data/planned-budget/planned-budget-repository';
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
+import { buildUnifiedFinancePayments, type FinancePaymentsView } from '../domain/finance-payments';
 import {
   buildFinanceOverviewRows,
   buildFinanceStoreCompositionRows,
@@ -135,6 +136,7 @@ export function FinanceStoreDetailPage() {
   const { storeId } = useParams();
   const { can } = useSession();
   const canDocuments = can('finance.store_detail_documents_view');
+  const canPayments = can('finance.payments_view');
   const canWorks = can('works.view');
   const [stores, setStores] = useState<Store[]>([]);
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
@@ -223,10 +225,43 @@ export function FinanceStoreDetailPage() {
         .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR')),
     [storeId, works],
   );
+  const paymentRows = useMemo(
+    () => buildUnifiedFinancePayments(purchases, works),
+    [purchases, works],
+  );
   const workCategories = useMemo(
     () => [...new Set(storeWorks.map((work) => work.category))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [storeWorks],
   );
+  const paymentViewFor = (
+    predicate: (row: (typeof paymentRows)[number]) => boolean,
+  ): FinancePaymentsView => {
+    const matching = paymentRows.filter(
+      (row) => (!storeId || row.storeIds.includes(storeId)) && predicate(row),
+    );
+    if (matching.some((row) => row.status === 'paid')) return 'paid';
+    if (matching.some((row) => row.status === 'planned')) return 'planned';
+    return 'unscheduled';
+  };
+
+  const itemPaymentsHref = (row: FinanceStoreItemDetailRow) => {
+    const params = new URLSearchParams({
+      view: paymentViewFor((payment) => payment.supplyItemIds.includes(row.supplyItemId)),
+      store: storeId || '',
+      item: row.supplyItemId,
+    });
+    return `/financeiro/pagamentos?${params.toString()}`;
+  };
+
+  const workPaymentsHref = (work: WorkService) => {
+    const params = new URLSearchParams({
+      view: paymentViewFor((payment) => payment.workServiceId === work.id),
+      store: storeId || '',
+      service: work.id,
+    });
+    return `/financeiro/pagamentos?${params.toString()}`;
+  };
+
   const detailSearch = normalized(query);
   const filteredItemRows = useMemo(
     () =>
@@ -587,6 +622,7 @@ export function FinanceStoreDetailPage() {
                   <th colSpan={3}>Realização</th>
                   <th rowSpan={2}>Origem</th>
                   <th rowSpan={2}>Situação</th>
+                  {canPayments && <th rowSpan={2}>Pagamentos</th>}
                   {canDocuments && <th rowSpan={2}>Documentos</th>}
                 </tr>
                 <tr>
@@ -628,6 +664,18 @@ export function FinanceStoreDetailPage() {
                         {ITEM_STATUS_LABELS[row.purchaseStatus]}
                       </span>
                     </td>
+                    {canPayments && (
+                      <td>
+                        <Link
+                          className="finance-store-detail__payment-link"
+                          to={itemPaymentsHref(row)}
+                          title="Abrir os pagamentos relacionados a este item"
+                        >
+                          <WalletCards size={14} />
+                          Ver pagamentos
+                        </Link>
+                      </td>
+                    )}
                     {canDocuments && (
                       <td>
                         <button
@@ -681,6 +729,7 @@ export function FinanceStoreDetailPage() {
                   <th colSpan={2}>Financeiro</th>
                   <th colSpan={1}>Documentação</th>
                   <th colSpan={2}>Execução</th>
+                  {canPayments && <th rowSpan={2}>Pagamentos</th>}
                   {canDocuments && <th rowSpan={2}>Documentos</th>}
                 </tr>
                 <tr>
@@ -725,6 +774,18 @@ export function FinanceStoreDetailPage() {
                           {WORK_STATUS_LABELS[work.status]}
                         </span>
                       </td>
+                      {canPayments && (
+                        <td>
+                          <Link
+                            className="finance-store-detail__payment-link"
+                            to={workPaymentsHref(work)}
+                            title="Abrir os pagamentos relacionados a este serviço"
+                          >
+                            <WalletCards size={14} />
+                            Ver pagamentos
+                          </Link>
+                        </td>
+                      )}
                       {canDocuments && (
                         <td>
                           <button
