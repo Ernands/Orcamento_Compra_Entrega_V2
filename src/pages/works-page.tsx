@@ -1579,7 +1579,7 @@ export function WorksPage() {
                     </section>
                   )}
 
-                  <section className="works-detail-block">
+                  <section className="works-detail-block works-payments-block">
                     <header>
                       <div>
                         <WalletCards size={17} />
@@ -1636,7 +1636,7 @@ export function WorksPage() {
                   </section>
 
                   {canDocuments && (
-                    <section className="works-detail-block">
+                    <section className="works-detail-block works-documents-block">
                       <header>
                         <div>
                           <ReceiptText size={17} />
