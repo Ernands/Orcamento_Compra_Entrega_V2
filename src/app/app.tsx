@@ -5,6 +5,7 @@ import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
 import { FinancePage } from '../pages/finance-page';
+import { FinancePaymentsPage } from '../pages/finance-payments-page';
 import { FinanceStoreDetailPage } from '../pages/finance-store-detail-page';
 import { WorksPage } from '../pages/works-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
@@ -214,6 +215,16 @@ export function App() {
               element={
                 <RequireCapability capability="finance.view">
                   <FinancePage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="financeiro/pagamentos"
+              element={
+                <RequireCapability capability="finance.view">
+                  <RequireCapability capability="finance.payments_view">
+                    <FinancePaymentsPage />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />
