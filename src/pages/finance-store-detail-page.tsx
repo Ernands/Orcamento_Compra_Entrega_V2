@@ -136,7 +136,7 @@ export function FinanceStoreDetailPage() {
   const { storeId } = useParams();
   const { can } = useSession();
   const canDocuments = can('finance.store_detail_documents_view');
-  const canPayments = can('finance.payments_view');
+  const canPayments = can('finance.payments_consolidated_view');
   const canWorks = can('works.view');
   const [stores, setStores] = useState<Store[]>([]);
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
