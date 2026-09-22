@@ -21,6 +21,8 @@ export interface UnifiedFinancePaymentRow {
   originAllocations: Record<FinancePaymentOrigin, bigint>;
   referenceCodes: string[];
   purchaseIds: string[];
+  purchaseOrderIds: string[];
+  paymentIds: string[];
   workServiceId: string | null;
   supplyItemIds: string[];
   supplierName: string;
@@ -164,6 +166,8 @@ function purchasePaymentRow(
     originAllocations: allocateCents(event.amountCents, groupContext.weights),
     referenceCodes: [event.purchaseCode],
     purchaseIds: [purchase.id],
+    purchaseOrderIds: event.purchaseOrderId ? [event.purchaseOrderId] : [],
+    paymentIds: [event.paymentId],
     workServiceId: null,
     supplyItemIds: groupContext.supplyItemIds,
     supplierName: event.supplierName,
@@ -198,6 +202,8 @@ function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
     originAllocations: allocations,
     referenceCodes: unique(rows.flatMap((row) => row.referenceCodes)).sort(),
     purchaseIds: unique(rows.flatMap((row) => row.purchaseIds)),
+    purchaseOrderIds: unique(rows.flatMap((row) => row.purchaseOrderIds)),
+    paymentIds: unique(rows.flatMap((row) => row.paymentIds)),
     supplyItemIds: unique(rows.flatMap((row) => row.supplyItemIds)),
     description: unique(rows.map((row) => row.description)).join(' + '),
     amountCents: rows.reduce((sum, row) => sum + row.amountCents, 0n),
@@ -312,6 +318,8 @@ function purchaseUnscheduledRows(purchase: PurchaseV2): UnifiedFinancePaymentRow
         originAllocations: allocateCents(residual, context.weights),
         referenceCodes: [purchase.code],
         purchaseIds: [purchase.id],
+        purchaseOrderIds: [order.id],
+        paymentIds: [],
         workServiceId: null,
         supplyItemIds: context.supplyItemIds,
         supplierName: purchase.supplierName,
@@ -355,6 +363,8 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
         },
         referenceCodes: [work.code],
         purchaseIds: [],
+        purchaseOrderIds: [],
+        paymentIds: [payment.id],
         workServiceId: work.id,
         supplyItemIds: [],
         supplierName: work.providerName || 'Prestador não informado',
@@ -390,6 +400,8 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
       },
       referenceCodes: [work.code],
       purchaseIds: [],
+      purchaseOrderIds: [],
+      paymentIds: [],
       workServiceId: work.id,
       supplyItemIds: [],
       supplierName: work.providerName || 'Prestador não informado',
