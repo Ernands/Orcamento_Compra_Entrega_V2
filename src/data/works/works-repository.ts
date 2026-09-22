@@ -27,6 +27,7 @@ type WorkServiceRow = Database['public']['Tables']['works_services']['Row'];
 type WorkComponentRow = Database['public']['Tables']['works_service_components']['Row'];
 type WorkPaymentRow = Database['public']['Tables']['works_service_payments']['Row'];
 type WorkDocumentRow = Database['public']['Tables']['works_service_documents']['Row'];
+type WorkDocumentUpdate = Database['public']['Tables']['works_service_documents']['Update'];
 type BudgetRow = Database['public']['Tables']['finance_store_budgets']['Row'];
 
 function numericMoney(value: string): number {
@@ -284,6 +285,87 @@ export async function saveWorkDocument(values: WorkDocumentValues): Promise<stri
   }
 
   return data.id;
+}
+
+export async function updateWorkDocument(
+  document: WorkServiceDocument,
+  values: WorkDocumentValues,
+): Promise<void> {
+  let uploadedPath: string | null = null;
+  let originalName: string | null = null;
+  let type: string | null = null;
+  let size: number | null = null;
+
+  if (values.file) {
+    validateFile(values.file);
+    const replacementId = crypto.randomUUID();
+    uploadedPath = `obras/${values.storeId}/${values.serviceId}/${replacementId}/${safeFileName(values.file.name)}`;
+    originalName = values.file.name;
+    type = mimeType(values.file);
+    size = values.file.size;
+
+    const { error: uploadError } = await supabase.storage
+      .from(WORKS_BUCKET)
+      .upload(uploadedPath, values.file, { contentType: type, upsert: false });
+    if (uploadError) throw uploadError;
+  }
+
+  const payload: WorkDocumentUpdate = {
+    payment_id: values.paymentId || null,
+    document_type: values.documentType,
+    document_number: values.documentNumber.trim() || null,
+    document_date: values.documentDate || null,
+    document_amount: values.documentAmount.trim() ? numericMoney(values.documentAmount) : null,
+    status: values.status,
+    notes: values.notes.trim() || null,
+  };
+
+  if (uploadedPath) {
+    payload.original_name = originalName;
+    payload.storage_path = uploadedPath;
+    payload.mime_type = type;
+    payload.size_bytes = size;
+  }
+
+  const { error } = await supabase
+    .from('works_service_documents')
+    .update(payload)
+    .eq('id', document.id)
+    .eq('service_id', document.serviceId);
+
+  if (error) {
+    if (uploadedPath) {
+      await supabase.storage.from(WORKS_BUCKET).remove([uploadedPath]);
+    }
+    throw error;
+  }
+
+  if (uploadedPath && document.storagePath && document.storagePath !== uploadedPath) {
+    const { error: removeError } = await supabase.storage
+      .from(WORKS_BUCKET)
+      .remove([document.storagePath]);
+    if (removeError) {
+      throw new Error('Documento atualizado, mas o arquivo anterior não pôde ser removido.');
+    }
+  }
+}
+
+export async function deleteWorkDocument(document: WorkServiceDocument): Promise<void> {
+  const { error } = await supabase
+    .from('works_service_documents')
+    .delete()
+    .eq('id', document.id)
+    .eq('service_id', document.serviceId);
+  if (error) throw error;
+
+  if (document.storagePath) {
+    const { error: removeError } = await supabase.storage
+      .from(WORKS_BUCKET)
+      .remove([document.storagePath]);
+    if (removeError) {
+      throw new Error('Documento excluído, mas o arquivo físico não pôde ser removido do armazenamento.');
+    }
+  }
 }
 
 export async function createWorkDocumentSignedUrl(storagePath: string): Promise<string> {
