@@ -222,7 +222,7 @@ export function App() {
               path="financeiro/pagamentos"
               element={
                 <RequireCapability capability="finance.view">
-                  <RequireCapability capability="finance.payments_view">
+                  <RequireCapability capability="finance.payments_consolidated_view">
                     <FinancePaymentsPage />
                   </RequireCapability>
                 </RequireCapability>
