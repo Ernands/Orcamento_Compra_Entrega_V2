@@ -21,10 +21,12 @@ import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listStores } from '../data/stores/stores-repository';
 import {
   createWorkDocumentSignedUrl,
+  deleteWorkDocument,
   listWorkServices,
   saveWorkDocument,
   saveWorkPayments,
   saveWorkService,
+  updateWorkDocument,
 } from '../data/works/works-repository';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import type { Store } from '../domain/types';
@@ -33,6 +35,7 @@ import type {
   WorkDocumentType,
   WorkPaymentStatus,
   WorkService,
+  WorkServiceDocument,
   WorkServicePayment,
   WorkServiceStatus,
 } from '../domain/works-types';
@@ -1028,50 +1031,63 @@ function WorkPaymentModal({
 
 function WorkDocumentModal({
   service,
+  document,
   onClose,
   onSaved,
 }: {
   service: WorkService;
+  document: WorkServiceDocument | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const [documentType, setDocumentType] = useState<WorkDocumentType>('invoice');
-  const [documentNumber, setDocumentNumber] = useState('');
-  const [documentDate, setDocumentDate] = useState('');
-  const [documentAmount, setDocumentAmount] = useState('');
-  const [paymentId, setPaymentId] = useState('');
-  const [status, setStatus] = useState<WorkDocumentStatus>('pending');
-  const [notes, setNotes] = useState('');
+  const [documentType, setDocumentType] = useState<WorkDocumentType>(document?.documentType || 'invoice');
+  const [documentNumber, setDocumentNumber] = useState(document?.documentNumber || '');
+  const [documentDate, setDocumentDate] = useState(document?.documentDate || '');
+  const [documentAmount, setDocumentAmount] = useState(document?.documentAmount || '');
+  const [paymentId, setPaymentId] = useState(document?.paymentId || '');
+  const [status, setStatus] = useState<WorkDocumentStatus>(document?.status || 'pending');
+  const [notes, setNotes] = useState(document?.notes || '');
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!documentNumber.trim() && !file) {
+    if (!documentNumber.trim() && !file && !document?.originalName) {
       setError('Informe ao menos o número do documento ou anexe o arquivo.');
       return;
     }
 
     setSaving(true);
     setError(null);
+    const values = {
+      serviceId: service.id,
+      storeId: service.storeId,
+      paymentId,
+      documentType,
+      documentNumber,
+      documentDate,
+      documentAmount,
+      status,
+      notes,
+      file,
+    };
+
     try {
-      await saveWorkDocument({
-        serviceId: service.id,
-        storeId: service.storeId,
-        paymentId,
-        documentType,
-        documentNumber,
-        documentDate,
-        documentAmount,
-        status,
-        notes,
-        file,
-      });
+      if (document) {
+        await updateWorkDocument(document, values);
+      } else {
+        await saveWorkDocument(values);
+      }
       await onSaved();
       onClose();
     } catch (saveError) {
-      setError(errorMessage(saveError, 'Não foi possível salvar o documento.'));
+      setError(
+        errorMessage(
+          saveError,
+          document ? 'Não foi possível atualizar o documento.' : 'Não foi possível salvar o documento.',
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -1080,8 +1096,12 @@ function WorkDocumentModal({
   return (
     <Modal
       open
-      title="Adicionar nota / recibo"
-      description="É possível registrar quantos documentos forem necessários. O arquivo é opcional."
+      title={document ? 'Editar documento' : 'Adicionar nota / recibo'}
+      description={
+        document
+          ? `${service.code} · Altere os dados, vínculo de pagamento ou substitua o arquivo.`
+          : 'É possível registrar quantos documentos forem necessários. O arquivo é opcional.'
+      }
       onClose={onClose}
       className="works-document-modal"
     >
@@ -1144,12 +1164,15 @@ function WorkDocumentModal({
           </label>
         </div>
         <label className="field">
-          Arquivo (opcional)
+          {document ? 'Substituir arquivo (opcional)' : 'Arquivo (opcional)'}
           <input
             type="file"
             accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
           />
+          {document?.originalName && !file && (
+            <small>Arquivo atual: {document.originalName}</small>
+          )}
         </label>
         <label className="field">
           Observações
@@ -1161,7 +1184,7 @@ function WorkDocumentModal({
             Cancelar
           </button>
           <button className="button button--primary" disabled={saving}>
-            {saving ? 'Salvando...' : 'Adicionar documento'}
+            {saving ? 'Salvando...' : document ? 'Salvar alterações' : 'Adicionar documento'}
           </button>
         </div>
       </form>
@@ -1190,8 +1213,12 @@ export function WorksPage() {
     service: WorkService;
     payment: WorkServicePayment | null;
   } | null>(null);
-  const [documentService, setDocumentService] = useState<WorkService | null>(null);
+  const [documentEditor, setDocumentEditor] = useState<{
+    service: WorkService;
+    document: WorkServiceDocument | null;
+  } | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(async () => {
@@ -1295,6 +1322,24 @@ export function WorksPage() {
       setError('Não foi possível abrir o documento.');
     } finally {
       setOpeningDocumentId(null);
+    }
+  };
+
+  const removeDocument = async (document: WorkServiceDocument) => {
+    if (!canManage) return;
+    const label = `${DOCUMENT_LABELS[document.documentType]}${document.documentNumber ? ` · ${document.documentNumber}` : ''}`;
+    if (!window.confirm(`Excluir ${label}? O registro e o arquivo anexado serão removidos.`)) return;
+
+    setDeletingDocumentId(document.id);
+    setError(null);
+    try {
+      await deleteWorkDocument(document);
+      await load();
+    } catch (deleteError) {
+      setError(errorMessage(deleteError, 'Não foi possível excluir o documento.'));
+      await load();
+    } finally {
+      setDeletingDocumentId(null);
     }
   };
 
@@ -1601,7 +1646,7 @@ export function WorksPage() {
                         {canManage && (
                           <button
                             className="button button--secondary button--small"
-                            onClick={() => setDocumentService(service)}
+                            onClick={() => setDocumentEditor({ service, document: null })}
                           >
                             <Plus size={15} />
                             Adicionar documento
@@ -1631,18 +1676,41 @@ export function WorksPage() {
                                   {document.paymentId ? ' · vinculado a pagamento' : ''}
                                 </small>
                               </div>
-                              {document.storagePath ? (
-                                <button
-                                  className="button button--secondary button--small"
-                                  disabled={openingDocumentId === document.id}
-                                  onClick={() => void openDocument(service, document.id)}
-                                >
-                                  <Paperclip size={14} />
-                                  {openingDocumentId === document.id ? 'Abrindo...' : 'Arquivo'}
-                                </button>
-                              ) : (
-                                <span className="works-document-no-file">Sem arquivo</span>
-                              )}
+                              <div className="works-document-actions">
+                                {document.storagePath ? (
+                                  <button
+                                    className="button button--secondary button--small"
+                                    disabled={openingDocumentId === document.id}
+                                    onClick={() => void openDocument(service, document.id)}
+                                  >
+                                    <Paperclip size={14} />
+                                    {openingDocumentId === document.id ? 'Abrindo...' : 'Arquivo'}
+                                  </button>
+                                ) : (
+                                  <span className="works-document-no-file">Sem arquivo</span>
+                                )}
+                                {canManage && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="button button--secondary button--small"
+                                      onClick={() => setDocumentEditor({ service, document })}
+                                    >
+                                      <Pencil size={14} />
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button button--secondary button--small works-document-delete"
+                                      disabled={deletingDocumentId === document.id}
+                                      onClick={() => void removeDocument(document)}
+                                    >
+                                      <Trash2 size={14} />
+                                      {deletingDocumentId === document.id ? 'Excluindo...' : 'Excluir'}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </article>
                           ))}
                         </div>
@@ -1676,11 +1744,12 @@ export function WorksPage() {
           onSaved={load}
         />
       )}
-      {canDocuments && documentService && (
+      {canDocuments && documentEditor && (
         <WorkDocumentModal
-          key={documentService.id}
-          service={documentService}
-          onClose={() => setDocumentService(null)}
+          key={`${documentEditor.service.id}-${documentEditor.document?.id || 'new'}`}
+          service={documentEditor.service}
+          document={documentEditor.document}
+          onClose={() => setDocumentEditor(null)}
           onSaved={load}
         />
       )}
