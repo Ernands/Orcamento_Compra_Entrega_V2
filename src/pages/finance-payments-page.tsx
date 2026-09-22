@@ -5,6 +5,8 @@ import {
   ChevronUp,
   CircleAlert,
   ExternalLink,
+  FileText,
+  Paperclip,
   RefreshCcw,
   Search,
   WalletCards,
@@ -12,10 +14,10 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
-import { EmptyState, ErrorState, InlineLoading } from '../components/ui';
-import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
+import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
+import { createPurchaseAttachmentSignedUrlV2, listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
-import { listWorkServices } from '../data/works/works-repository';
+import { createWorkDocumentSignedUrl, listWorkServices } from '../data/works/works-repository';
 import {
   buildUnifiedFinancePayments,
   financePaymentOriginSummary,
@@ -121,6 +123,9 @@ export function FinancePaymentsPage() {
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [focusItemId, setFocusItemId] = useState(searchParams.get('item') || '');
   const [focusServiceId, setFocusServiceId] = useState(searchParams.get('service') || '');
+  const [documentsRow, setDocumentsRow] = useState<UnifiedFinancePaymentRow | null>(null);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,6 +219,103 @@ export function FinancePaymentsPage() {
   const clearDeepFilter = () => {
     setFocusItemId('');
     setFocusServiceId('');
+  };
+
+  const originHref = (row: UnifiedFinancePaymentRow) => {
+    const params = new URLSearchParams();
+    params.set('refs', row.referenceCodes.join(','));
+    if (row.storeIds.length === 1) params.set('store', row.storeIds[0]);
+    return `${row.workServiceId ? '/obras' : '/suprimentos/compras'}?${params.toString()}`;
+  };
+
+  const rowDocuments = (row: UnifiedFinancePaymentRow) => {
+    if (row.workServiceId) {
+      const work = works.find((entry) => entry.id === row.workServiceId);
+      if (!work) return [];
+      const related = work.documents.filter(
+        (document) =>
+          !row.paymentIds.length ||
+          !document.paymentId ||
+          row.paymentIds.includes(document.paymentId),
+      );
+      return related
+        .map((document) => ({
+          id: document.id,
+          label:
+            document.documentType === 'payment_proof'
+              ? 'Comprovante de pagamento'
+              : document.documentType === 'invoice'
+                ? 'Nota fiscal'
+                : document.documentType === 'receipt'
+                  ? 'Recibo'
+                  : document.documentType === 'quote'
+                    ? 'Orçamento'
+                    : document.documentType.toUpperCase(),
+          name: document.originalName || document.documentNumber || 'Documento',
+          type: document.documentType,
+          storagePath: document.storagePath,
+          source: 'work' as const,
+        }))
+        .sort((a, b) => {
+          const priority = (value: string) =>
+            value === 'payment_proof' ? 0 : value === 'invoice' ? 1 : value === 'receipt' ? 2 : 3;
+          return priority(a.type) - priority(b.type) || a.name.localeCompare(b.name, 'pt-BR');
+        });
+    }
+
+    const documents = row.purchaseIds.flatMap((purchaseId) => {
+      const purchase = purchases.find((entry) => entry.id === purchaseId);
+      if (!purchase) return [];
+      return purchase.attachments
+        .filter(
+          (attachment) =>
+            !row.purchaseOrderIds.length ||
+            attachment.purchaseOrderId === null ||
+            (attachment.purchaseOrderId && row.purchaseOrderIds.includes(attachment.purchaseOrderId)),
+        )
+        .map((attachment) => ({
+          id: attachment.id,
+          label:
+            attachment.documentType === 'payment_proof'
+              ? 'Comprovante de pagamento'
+              : attachment.documentType === 'invoice'
+                ? 'Nota fiscal'
+                : attachment.documentType === 'receipt'
+                  ? 'Recibo'
+                  : attachment.documentType === 'boleto'
+                    ? 'Boleto'
+                    : 'Documento',
+          name: attachment.originalName || 'Documento',
+          type: attachment.documentType,
+          storagePath: attachment.storagePath,
+          source: 'purchase' as const,
+        }));
+    });
+
+    return documents.sort((a, b) => {
+      const priority = (value: string) =>
+        value === 'payment_proof' ? 0 : value === 'invoice' ? 1 : value === 'receipt' ? 2 : value === 'boleto' ? 3 : 4;
+      return priority(a.type) - priority(b.type) || a.name.localeCompare(b.name, 'pt-BR');
+    });
+  };
+
+  const openDocument = async (
+    document: ReturnType<typeof rowDocuments>[number],
+  ) => {
+    if (!document.storagePath) return;
+    setOpeningDocumentId(document.id);
+    setDocumentError(null);
+    try {
+      const url =
+        document.source === 'work'
+          ? await createWorkDocumentSignedUrl(document.storagePath)
+          : await createPurchaseAttachmentSignedUrlV2(document.storagePath);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      setDocumentError('Não foi possível abrir o documento.');
+    } finally {
+      setOpeningDocumentId(null);
+    }
   };
 
   return (
@@ -388,7 +490,7 @@ export function FinancePaymentsPage() {
                 type="button"
                 role="tab"
                 aria-selected={view === key}
-                className={view === key ? 'is-active' : ''}
+                className={`finance-payments-tab finance-payments-tab--${key} ${view === key ? 'is-active' : ''}`}
                 onClick={() => setView(key)}
               >
                 {VIEW_LABELS[key]}
@@ -429,7 +531,6 @@ export function FinancePaymentsPage() {
                     {filteredRows.map((row) => {
                       const origin = rowOriginLabel(row);
                       const store = `${rowStoreLabel(row)} · ${row.states.join(', ') || 'UF não informada'}`;
-                      const originLink = row.workServiceId ? '/obras' : '/suprimentos/compras';
                       return (
                         <tr key={row.id}>
                           {view === 'unscheduled' ? (
@@ -469,14 +570,24 @@ export function FinancePaymentsPage() {
                           )}
                           <td className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
                           <td>
-                            {(row.workServiceId ? canWorks : canPurchases) ? (
-                              <Link className="finance-payment-origin-link" to={originLink}>
-                                Ver origem
-                                <ExternalLink size={13} />
-                              </Link>
-                            ) : (
-                              <span className="finance-payments-muted">Sem acesso</span>
-                            )}
+                            <div className="finance-payment-actions">
+                              {(row.workServiceId ? canWorks : canPurchases) ? (
+                                <Link className="finance-payment-origin-link" to={originHref(row)}>
+                                  Ver origem
+                                  <ExternalLink size={13} />
+                                </Link>
+                              ) : (
+                                <span className="finance-payments-muted">Sem acesso</span>
+                              )}
+                              <button
+                                type="button"
+                                className="finance-payment-document-link"
+                                onClick={() => setDocumentsRow(row)}
+                              >
+                                <Paperclip size={13} />
+                                Ver anexos
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -492,6 +603,47 @@ export function FinancePaymentsPage() {
             )}
           </section>
         </>
+      )}
+
+      {documentsRow && (
+        <Modal
+          open
+          title={`Anexos · ${referenceLabel(documentsRow)}`}
+          description="Comprovantes e notas aparecem primeiro."
+          onClose={() => {
+            setDocumentsRow(null);
+            setDocumentError(null);
+          }}
+          className="finance-payments-documents-modal"
+        >
+          {documentError && <div className="form-error">{documentError}</div>}
+          {rowDocuments(documentsRow).length ? (
+            <div className="finance-payments-documents-list">
+              {rowDocuments(documentsRow).map((document) => (
+                <article key={document.id}>
+                  <FileText size={18} />
+                  <div>
+                    <strong>{document.label}</strong>
+                    <small>{document.name}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    disabled={!document.storagePath || openingDocumentId === document.id}
+                    onClick={() => void openDocument(document)}
+                  >
+                    {openingDocumentId === document.id ? 'Abrindo...' : 'Abrir'}
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="Sem anexos vinculados"
+              detail="Não encontramos comprovantes, notas ou outros documentos relacionados a este pagamento."
+            />
+          )}
+        </Modal>
       )}
     </div>
   );
