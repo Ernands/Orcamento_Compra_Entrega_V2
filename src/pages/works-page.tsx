@@ -1481,7 +1481,7 @@ export function WorksPage() {
             const current = serviceTotals(service);
             return (
               <details
-                className="works-card"
+                className={`works-card works-card--${service.status}`}
                 key={service.id}
                 open={expandedServiceIds.has(service.id)}
                 onToggle={(event) => {
@@ -1669,12 +1669,20 @@ export function WorksPage() {
                                     ? formatBRL(moneyToCents(document.documentAmount))
                                     : 'Valor não informado'}
                                 </span>
-                                <small>
-                                  {document.status === 'verified'
-                                    ? 'Conferido'
-                                    : 'Pendente de conferência'}
-                                  {document.paymentId ? ' · vinculado a pagamento' : ''}
-                                </small>
+                                <div className="works-document-tags">
+                                  <span
+                                    className={`works-document-tag works-document-tag--${document.status}`}
+                                  >
+                                    {document.status === 'verified'
+                                      ? 'Conferido'
+                                      : 'Pendente de conferência'}
+                                  </span>
+                                  {document.paymentId && (
+                                    <span className="works-document-tag works-document-tag--payment">
+                                      Vinculado a pagamento
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="works-document-actions">
                                 {document.storagePath ? (
