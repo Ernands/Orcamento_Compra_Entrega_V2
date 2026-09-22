@@ -15,6 +15,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listStores } from '../data/stores/stores-repository';
@@ -1170,13 +1171,18 @@ function WorkDocumentModal({
 
 export function WorksPage() {
   const { can } = useSession();
+  const [searchParams] = useSearchParams();
   const canManage = can('works.manage');
   const canDocuments = can('works.documents_view');
   const [stores, setStores] = useState<Store[]>([]);
   const [services, setServices] = useState<WorkService[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const referenceFilter = useMemo(
+    () => (searchParams.get('refs') || '').split(',').map((value) => value.trim()).filter(Boolean),
+    [searchParams],
+  );
+  const [query, setQuery] = useState(searchParams.get('q') || '');
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
   const [serviceModal, setServiceModal] = useState<WorkService | 'new' | null>(null);
@@ -1214,6 +1220,7 @@ export function WorksPage() {
   const filtered = useMemo(() => {
     const search = normalized(query);
     return services
+      .filter((service) => !referenceFilter.length || referenceFilter.includes(service.code))
       .filter((service) => !stateFilter || service.storeState === stateFilter)
       .filter((service) => !storeFilter || service.storeId === storeFilter)
       .filter(
@@ -1232,7 +1239,7 @@ export function WorksPage() {
             ].join(' '),
           ).includes(search),
       );
-  }, [query, services, stateFilter, storeFilter]);
+  }, [query, referenceFilter, services, stateFilter, storeFilter]);
 
   const totals = useMemo(
     () =>
