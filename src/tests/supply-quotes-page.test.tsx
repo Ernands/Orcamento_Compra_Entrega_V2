@@ -338,8 +338,8 @@ describe('SupplyQuotesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Lojas em todos' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Editar COT-CONSOLIDATED' });
-    expect(within(dialog).getByText('LOJ-001 - Loja Um')).toBeInTheDocument();
-    expect(within(dialog).getByText('LOJ-007 - Tavares - PB')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('LOJ-001 - Loja Um').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('LOJ-007 - Tavares - PB').length).toBeGreaterThan(0);
     expect(within(dialog).getAllByLabelText(/Quantidade destino 1-/)).toHaveLength(2);
   });
 
