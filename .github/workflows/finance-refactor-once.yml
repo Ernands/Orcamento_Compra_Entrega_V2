@@ -21,7 +21,9 @@ jobs:
         with:
           node-version: '22'
       - name: Apply finance refactor
-        run: node scripts/refactor-finance-groups.mjs
+        run: |
+          node scripts/repair-finance-refactor.mjs
+          node scripts/refactor-finance-groups.mjs
       - name: Commit transformed files
         run: |
           git config user.name "github-actions[bot]"
