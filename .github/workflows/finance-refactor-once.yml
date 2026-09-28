@@ -1,0 +1,32 @@
+name: Finance refactor once
+
+on:
+  push:
+    branches:
+      - feature/finance-overview-equipment-furniture
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/finance-overview-equipment-furniture
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply finance refactor
+        run: node scripts/refactor-finance-groups.mjs
+      - name: Commit transformed files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/domain/finance-overview.ts src/domain/finance-payments.ts src/pages/finance-page.tsx src/pages/finance-store-detail-page.tsx src/data/exports/finance-exports.ts src/tests/finance-overview.test.ts src/tests/finance-payments.test.ts
+          git diff --cached --quiet && exit 1
+          git commit -m "feat: separar Equipamentos e Mobiliário no Financeiro"
+          git push origin HEAD:feature/finance-overview-equipment-furniture
