@@ -290,7 +290,7 @@ describe('unified finance payments', () => {
     });
   });
 
-  it('resume valores nas quatro origens financeiras', () => {
+  it('resume valores nas três origens financeiras', () => {
     const rows = buildUnifiedFinancePayments(
       [
         purchase({
