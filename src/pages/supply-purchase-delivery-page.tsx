@@ -1,6 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  CalendarDays,
+  Eye,
+  EyeOff,
+  MapPinned,
   MessageSquareText,
   PackageCheck,
   Pencil,
@@ -35,8 +39,11 @@ import {
   purchaseDeliveryPending,
 } from '../domain/purchase-delivery-types';
 import './supply-purchase-delivery-page.css';
+import './supply-purchase-delivery-enhancements.css';
 
 const EMPTY_MATRIX: PurchaseDeliveryMatrix = { destinations: [], items: [], cells: [] };
+
+type DeliveryFilter = 'all' | 'overdue' | '7' | '15' | '30' | 'no_date';
 
 const STATUS_OPTIONS: PurchaseDeliveryStatus[] = [
   'none',
@@ -68,6 +75,40 @@ function formatQuantity(value: number | null): string {
   return value.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 }
 
+function parseLocalDate(value: string): Date | null {
+  const parts = value.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function todayStart(): Date {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function formatDeliveryDate(value: string): string {
+  const date = parseLocalDate(value);
+  if (!date) return value;
+  return date.toLocaleDateString('pt-BR');
+}
+
+function deliveryDaysFromToday(value: string): number | null {
+  const date = parseLocalDate(value);
+  if (!date) return null;
+  return Math.round((date.getTime() - todayStart().getTime()) / 86_400_000);
+}
+
+function matchesDeliveryFilter(item: PurchaseDeliveryItem, filter: DeliveryFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'no_date') return !item.expectedDeliveryDate;
+  if (!item.expectedDeliveryDate) return false;
+
+  const days = deliveryDaysFromToday(item.expectedDeliveryDate);
+  if (days === null) return false;
+  if (filter === 'overdue') return days < 0;
+  return days >= 0 && days <= Number(filter);
+}
+
 function ItemModal({
   item,
   nextPosition,
@@ -82,6 +123,7 @@ function ItemModal({
   const [name, setName] = useState(item?.name || '');
   const [purchaseTotal, setPurchaseTotal] = useState(item ? String(item.purchaseTotal) : '0');
   const [acquiredQuantity, setAcquiredQuantity] = useState(item ? String(item.acquiredQuantity) : '0');
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(item?.expectedDeliveryDate || '');
   const [notes, setNotes] = useState(item?.notes || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +139,7 @@ function ItemModal({
       name,
       purchaseTotal: parseQuantity(purchaseTotal),
       acquiredQuantity: parseQuantity(acquiredQuantity),
+      expectedDeliveryDate,
       notes,
     };
 
@@ -151,6 +194,15 @@ function ItemModal({
             <input inputMode="decimal" value={acquiredQuantity} onChange={(event) => setAcquiredQuantity(event.target.value)} />
           </label>
         </div>
+        <label className="field">
+          Previsão de entrega
+          <input
+            type="date"
+            value={expectedDeliveryDate}
+            onChange={(event) => setExpectedDeliveryDate(event.target.value)}
+          />
+          <small>Opcional. Só aparece na grade quando “Mostrar previsão de entrega” estiver ativo.</small>
+        </label>
         <label className="field">
           Observação do item
           <textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
@@ -229,7 +281,7 @@ function DestinationModal({
     <Modal
       open
       title={destination ? 'Editar loja / prospector' : 'Adicionar loja / prospector'}
-      description="A coluna é independente do cadastro de lojas do sistema."
+      description="A coluna e a palavra-chave são independentes do cadastro de lojas do sistema."
       onClose={onClose}
       className="purchase-delivery-modal"
     >
@@ -240,7 +292,7 @@ function DestinationModal({
         </label>
         <label className="field">
           Palavra-chave / referência
-          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Opcional" />
+          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Opcional e editável" />
         </label>
         <label className="purchase-delivery-check">
           <input type="checkbox" checked={isVideoService} onChange={(event) => setIsVideoService(event.target.checked)} />
@@ -375,6 +427,11 @@ export function SupplyPurchaseDeliveryPage() {
   const [search, setSearch] = useState('');
   const [pendingOnly, setPendingOnly] = useState(false);
   const [showPendencies, setShowPendencies] = useState(false);
+  const [showDeliveryDates, setShowDeliveryDates] = useState(false);
+  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>('all');
+  const [showStoreFilter, setShowStoreFilter] = useState(false);
+  const [storeFilterActive, setStoreFilterActive] = useState(false);
+  const [selectedDestinationIds, setSelectedDestinationIds] = useState<string[]>([]);
   const [itemEditor, setItemEditor] = useState<PurchaseDeliveryItem | null | undefined>(undefined);
   const [destinationEditor, setDestinationEditor] = useState<PurchaseDeliveryDestination | null | undefined>(undefined);
   const [cellEditor, setCellEditor] = useState<{
@@ -405,25 +462,54 @@ export function SupplyPurchaseDeliveryPage() {
     return map;
   }, [matrix.cells]);
 
+  const visibleDestinations = useMemo(() => {
+    if (!storeFilterActive) return matrix.destinations;
+    const selected = new Set(selectedDestinationIds);
+    return matrix.destinations.filter((destination) => selected.has(destination.id));
+  }, [matrix.destinations, selectedDestinationIds, storeFilterActive]);
+
   const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
   const filteredItems = useMemo(() => matrix.items.filter((item) => {
     if (normalizedSearch && !item.name.toLocaleLowerCase('pt-BR').includes(normalizedSearch)) return false;
+    if (!matchesDeliveryFilter(item, deliveryFilter)) return false;
     if (!pendingOnly) return true;
     if (purchaseDeliveryPending(item) !== 0) return true;
     return matrix.cells.some((cell) =>
       cell.itemId === item.id &&
-      (Boolean(cell.note) || ['shipping_note', 'attention', 'issue'].includes(cell.status)),
+      (Boolean(cell.note) || ['shipping_note', 'issue'].includes(cell.status)),
     );
-  }), [matrix.items, matrix.cells, normalizedSearch, pendingOnly]);
+  }), [matrix.items, matrix.cells, normalizedSearch, pendingOnly, deliveryFilter]);
 
   const pendencies = useMemo(() => matrix.cells
-    .filter((cell) => Boolean(cell.note) || ['shipping_note', 'attention', 'issue'].includes(cell.status))
+    .filter((cell) => Boolean(cell.note) || ['shipping_note', 'issue'].includes(cell.status))
     .map((cell) => ({
       cell,
       item: matrix.items.find((item) => item.id === cell.itemId),
       destination: matrix.destinations.find((destination) => destination.id === cell.destinationId),
     }))
     .filter((entry) => entry.item && entry.destination), [matrix]);
+
+  const toggleDestination = (destinationId: string) => {
+    if (!storeFilterActive) {
+      setStoreFilterActive(true);
+      setSelectedDestinationIds([destinationId]);
+      return;
+    }
+
+    setSelectedDestinationIds((current) => {
+      if (current.includes(destinationId)) {
+        const next = current.filter((id) => id !== destinationId);
+        if (!next.length) setStoreFilterActive(false);
+        return next;
+      }
+      return [...current, destinationId];
+    });
+  };
+
+  const resetStoreFilter = () => {
+    setStoreFilterActive(false);
+    setSelectedDestinationIds([]);
+  };
 
   if (loading && !matrix.items.length) return <InlineLoading label="Carregando gerenciamento compra/entrega" />;
   if (error && !matrix.items.length) return <ErrorState message={error} onRetry={() => void load()} />;
@@ -460,20 +546,73 @@ export function SupplyPurchaseDeliveryPage() {
           <SlidersHorizontal size={16} /> {pendingOnly ? 'Mostrando pendentes' : 'Somente pendentes'}
         </button>
         <button
+          className={`button button--secondary${showStoreFilter || storeFilterActive ? ' purchase-delivery-filter--active' : ''}`}
+          onClick={() => setShowStoreFilter((current) => !current)}
+        >
+          <MapPinned size={16} /> {storeFilterActive ? `${visibleDestinations.length} loja(s)` : 'Lojas: todas'}
+        </button>
+        <label className="purchase-delivery-deadline-filter">
+          <CalendarDays size={16} />
+          <select value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value as DeliveryFilter)}>
+            <option value="all">Todos os prazos</option>
+            <option value="overdue">Atrasados</option>
+            <option value="7">Próximos 7 dias</option>
+            <option value="15">Próximos 15 dias</option>
+            <option value="30">Próximos 30 dias</option>
+            <option value="no_date">Sem previsão</option>
+          </select>
+        </label>
+        <button
+          className={`button button--secondary${showDeliveryDates ? ' purchase-delivery-filter--active' : ''}`}
+          onClick={() => setShowDeliveryDates((current) => !current)}
+        >
+          {showDeliveryDates ? <EyeOff size={16} /> : <Eye size={16} />}
+          {showDeliveryDates ? 'Ocultar previsão entrega' : 'Mostrar previsão entrega'}
+        </button>
+        <button
           className={`button button--secondary${showPendencies ? ' purchase-delivery-filter--active' : ''}`}
           onClick={() => setShowPendencies((current) => !current)}
         >
           <MessageSquareText size={16} /> Pendências ({pendencies.length})
         </button>
-        <span className="purchase-delivery-count">{filteredItems.length} itens · {matrix.destinations.length} colunas</span>
+        <span className="purchase-delivery-count">{filteredItems.length} itens · {visibleDestinations.length} colunas</span>
       </section>
+
+      {showStoreFilter && (
+        <section className="purchase-delivery-store-filter-panel">
+          <header>
+            <div>
+              <strong>Filtrar lojas / prospectores</strong>
+              <span>Selecione uma ou mais colunas para deixar visível somente o que deseja conferir.</span>
+            </div>
+            <button type="button" className="button button--secondary button--small" onClick={resetStoreFilter}>
+              Mostrar todas
+            </button>
+          </header>
+          <div className="purchase-delivery-store-filter-grid">
+            {matrix.destinations.map((destination) => (
+              <label key={destination.id} className="purchase-delivery-store-option">
+                <input
+                  type="checkbox"
+                  checked={!storeFilterActive || selectedDestinationIds.includes(destination.id)}
+                  onChange={() => toggleDestination(destination.id)}
+                />
+                <span>
+                  <strong>{destination.label}</strong>
+                  {destination.keyword && <small>{destination.keyword}</small>}
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="purchase-delivery-legend" aria-label="Legenda">
         <span><i className="purchase-delivery-swatch purchase-delivery-cell--matrix" /> Matriz / distribuir</span>
+        <span><i className="purchase-delivery-swatch purchase-delivery-cell--purchased" /> Compra realizada</span>
+        <span><i className="purchase-delivery-swatch purchase-delivery-cell--attention" /> Compra prospector</span>
         <span><i className="purchase-delivery-swatch purchase-delivery-cell--delivered" /> Entregue</span>
         <span><i className="purchase-delivery-swatch purchase-delivery-cell--shipping_note" /> Envio com observação</span>
-        <span><i className="purchase-delivery-swatch purchase-delivery-cell--purchased" /> Verde da planilha</span>
-        <span><i className="purchase-delivery-swatch purchase-delivery-cell--attention" /> Laranja da planilha</span>
         <span><i className="purchase-delivery-swatch purchase-delivery-cell--do_not_buy" /> X = não comprar</span>
         <span className="purchase-delivery-legend__video"><Video size={14} /> Nome roxo = vídeo atendimento</span>
       </section>
@@ -489,16 +628,16 @@ export function SupplyPurchaseDeliveryPage() {
                 <th className="purchase-delivery-sticky purchase-delivery-sticky--pending" rowSpan={2}>Pendente</th>
                 <th className="purchase-delivery-sticky purchase-delivery-sticky--total" rowSpan={2}>Compra Total</th>
                 <th className="purchase-delivery-sticky purchase-delivery-sticky--acquired" rowSpan={2}>Qt. Adquirida</th>
-                <th className="purchase-delivery-group-heading" colSpan={Math.max(matrix.destinations.length, 1)}>Lojas / Prospectores</th>
+                <th className="purchase-delivery-group-heading" colSpan={Math.max(visibleDestinations.length, 1)}>Lojas / Prospectores</th>
               </tr>
               <tr>
-                {matrix.destinations.map((destination) => (
+                {visibleDestinations.map((destination) => (
                   <th key={destination.id} className={`purchase-delivery-destination purchase-delivery-destination--${destination.headerTone}`}>
-                    {destination.keyword && <span className="purchase-delivery-keyword">{destination.keyword}</span>}
+                    {destination.keyword && <span className="purchase-delivery-keyword" title="Palavra-chave editável">{destination.keyword}</span>}
                     <strong>{destination.label}</strong>
                     {destination.isVideoService && <span className="purchase-delivery-video"><Video size={12} /> vídeo</span>}
                     {canManage && (
-                      <button className="purchase-delivery-edit-header" onClick={() => setDestinationEditor(destination)} title="Editar coluna">
+                      <button className="purchase-delivery-edit-header" onClick={() => setDestinationEditor(destination)} title="Editar loja e palavra-chave">
                         <Pencil size={13} />
                       </button>
                     )}
@@ -509,12 +648,20 @@ export function SupplyPurchaseDeliveryPage() {
             <tbody>
               {filteredItems.map((item) => {
                 const pending = purchaseDeliveryPending(item);
+                const daysToDelivery = item.expectedDeliveryDate ? deliveryDaysFromToday(item.expectedDeliveryDate) : null;
                 return (
                   <tr key={item.id}>
                     <td className="purchase-delivery-sticky purchase-delivery-sticky--item purchase-delivery-item-name">
-                      <span>{item.name}</span>
-                      {canManage && (
-                        <button onClick={() => setItemEditor(item)} title="Editar item"><Pencil size={13} /></button>
+                      <div className="purchase-delivery-item-main">
+                        <span>{item.name}</span>
+                        {canManage && (
+                          <button onClick={() => setItemEditor(item)} title="Editar item e previsão de entrega"><Pencil size={13} /></button>
+                        )}
+                      </div>
+                      {showDeliveryDates && item.expectedDeliveryDate && (
+                        <small className={`purchase-delivery-delivery-date${daysToDelivery !== null && daysToDelivery < 0 ? ' is-overdue' : ''}`}>
+                          <CalendarDays size={12} /> Previsão: {formatDeliveryDate(item.expectedDeliveryDate)}
+                        </small>
                       )}
                     </td>
                     <td className={`purchase-delivery-sticky purchase-delivery-sticky--pending purchase-delivery-number ${pending < 0 ? 'is-negative' : pending > 0 ? 'is-positive' : 'is-zero'}`}>
@@ -522,7 +669,7 @@ export function SupplyPurchaseDeliveryPage() {
                     </td>
                     <td className="purchase-delivery-sticky purchase-delivery-sticky--total purchase-delivery-number">{formatQuantity(item.purchaseTotal)}</td>
                     <td className="purchase-delivery-sticky purchase-delivery-sticky--acquired purchase-delivery-number">{formatQuantity(item.acquiredQuantity)}</td>
-                    {matrix.destinations.map((destination) => {
+                    {visibleDestinations.map((destination) => {
                       const cell = cellMap.get(`${item.id}:${destination.id}`) || null;
                       const status = cell?.status || 'none';
                       const text = status === 'do_not_buy' ? 'X' : formatQuantity(cell?.quantity ?? null) || '·';
@@ -547,7 +694,7 @@ export function SupplyPurchaseDeliveryPage() {
           </table>
         </div>
         {!filteredItems.length && (
-          <EmptyState title="Nenhum item encontrado" detail="Altere a busca ou retire o filtro de pendências." />
+          <EmptyState title="Nenhum item encontrado" detail="Altere a busca ou os filtros aplicados." />
         )}
       </section>
 
