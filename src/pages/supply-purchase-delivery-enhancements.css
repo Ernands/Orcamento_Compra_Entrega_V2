@@ -1,0 +1,186 @@
+.purchase-delivery-deadline-filter {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  color: #42534b;
+  background: #fff;
+  border: 1px solid #cfd9d4;
+  border-radius: 8px;
+}
+
+.purchase-delivery-deadline-filter svg {
+  flex: 0 0 auto;
+  color: #65756e;
+}
+
+.purchase-delivery-deadline-filter select {
+  min-width: 148px;
+  min-height: 36px;
+  padding: 0 24px 0 0;
+  color: #2f4038;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-weight: 750;
+}
+
+.purchase-delivery-store-filter-panel {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #cfd9d4;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(30 55 45 / 4%);
+}
+
+.purchase-delivery-store-filter-panel > header {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  background: #f5f8f6;
+  border-bottom: 1px solid #dfe5e2;
+}
+
+.purchase-delivery-store-filter-panel > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.purchase-delivery-store-filter-panel > header strong {
+  color: #183e31;
+  font-size: 0.82rem;
+}
+
+.purchase-delivery-store-filter-panel > header span {
+  color: #69776f;
+  font-size: 0.69rem;
+}
+
+.purchase-delivery-store-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 7px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.purchase-delivery-store-option {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  background: #fbfcfb;
+  border: 1px solid #dfe5e2;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.purchase-delivery-store-option:hover {
+  background: #f1f6f3;
+  border-color: #bfd1c8;
+}
+
+.purchase-delivery-store-option input {
+  margin-top: 2px;
+  accent-color: #465eff;
+}
+
+.purchase-delivery-store-option span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.purchase-delivery-store-option strong {
+  overflow: hidden;
+  color: #263b32;
+  font-size: 0.69rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchase-delivery-store-option small {
+  color: #68776f;
+  font-size: 0.6rem;
+  font-weight: 750;
+}
+
+.purchase-delivery-item-name {
+  display: block;
+}
+
+.purchase-delivery-item-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.purchase-delivery-item-main > span {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.purchase-delivery-delivery-date {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 3px 6px;
+  color: #315c85;
+  background: #edf4fb;
+  border: 1px solid #c8dceb;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.purchase-delivery-delivery-date.is-overdue {
+  color: #9e3028;
+  background: #fff0ee;
+  border-color: #edc3bf;
+}
+
+.purchase-delivery-keyword {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 2px 5px;
+  background: #fff;
+  border: 1px dashed #cbd6d0;
+  border-radius: 4px;
+}
+
+.purchase-delivery-edit-header {
+  position: relative;
+}
+
+@media (max-width: 900px) {
+  .purchase-delivery-deadline-filter {
+    width: 100%;
+  }
+
+  .purchase-delivery-deadline-filter select {
+    width: 100%;
+  }
+
+  .purchase-delivery-store-filter-panel > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .purchase-delivery-store-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
