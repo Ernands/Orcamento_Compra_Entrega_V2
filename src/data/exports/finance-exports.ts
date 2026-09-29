@@ -9,6 +9,18 @@ import type { WorkService } from '../../domain/works-types';
 const HEADER_FILL = 'FF1F6F5C';
 const HEADER_TEXT = 'FFFFFFFF';
 const SOFT_FILL = 'FFEAF3F0';
+const BUDGET_HEADER_FILL = 'FFDDEBFA';
+const BUDGET_BODY_FILL = 'FFF1F7FD';
+const BUDGET_TEXT = 'FF1E5A8A';
+const REALIZED_HEADER_FILL = 'FFDDF3E7';
+const REALIZED_BODY_FILL = 'FFF0F9F5';
+const REALIZED_TEXT = 'FF177354';
+const FINANCE_HEADER_FILL = 'FFFDEACF';
+const FINANCE_BODY_FILL = 'FFFFF8EF';
+const FINANCE_TEXT = 'FF9A5A0A';
+const DOCUMENT_HEADER_FILL = 'FFEFF2F0';
+const DOCUMENT_BODY_FILL = 'FFF7F7F5';
+const DOCUMENT_TEXT = 'FF53615C';
 const MONEY_FORMAT = 'R$ #,##0.00';
 
 function centsToNumber(value: bigint): number {
@@ -180,6 +192,9 @@ export async function createFinanceOverviewWorkbook(
     { header: 'Realizado Obras', key: 'worksRealized', width: 18, style: { numFmt: MONEY_FORMAT } },
     { header: 'Realizado Total', key: 'realized', width: 18, style: { numFmt: MONEY_FORMAT } },
     { header: 'Dif. Em Relação a Verba', key: 'realizedVariance', width: 22, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Pago', key: 'paid', width: 16, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Saldo a pagar', key: 'payable', width: 16, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Documentação', key: 'documentation', width: 18 },
   ];
   styleHeader(storesSheet.getRow(1));
   input.rows.forEach((row) => {
@@ -199,9 +214,39 @@ export async function createFinanceOverviewWorkbook(
       worksRealized: centsToNumber(row.worksContractedCents),
       realized: centsToNumber(row.realizedTotalCents),
       realizedVariance: centsToNumber(row.realizedVarianceToBbCents),
+      paid: centsToNumber(row.paidCents),
+      payable: centsToNumber(row.payableCents),
+      documentation:
+        row.documentationStatus === 'complete'
+          ? 'Completa'
+          : row.documentationStatus === 'partial'
+            ? 'Parcial'
+            : row.documentationStatus === 'pending'
+              ? 'Pendente'
+              : 'Sem obra',
     });
   });
-  storesSheet.autoFilter = `A1:O${Math.max(1, storesSheet.rowCount)}`;
+  const sectionStyles = [
+    { start: 5, end: 10, headerFill: BUDGET_HEADER_FILL, bodyFill: BUDGET_BODY_FILL, text: BUDGET_TEXT },
+    { start: 11, end: 15, headerFill: REALIZED_HEADER_FILL, bodyFill: REALIZED_BODY_FILL, text: REALIZED_TEXT },
+    { start: 16, end: 17, headerFill: FINANCE_HEADER_FILL, bodyFill: FINANCE_BODY_FILL, text: FINANCE_TEXT },
+    { start: 18, end: 18, headerFill: DOCUMENT_HEADER_FILL, bodyFill: DOCUMENT_BODY_FILL, text: DOCUMENT_TEXT },
+  ];
+  sectionStyles.forEach((section) => {
+    for (let column = section.start; column <= section.end; column += 1) {
+      const header = storesSheet.getRow(1).getCell(column);
+      header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: section.headerFill } };
+      header.font = { bold: true, color: { argb: section.text } };
+      for (let rowIndex = 2; rowIndex <= storesSheet.rowCount; rowIndex += 1) {
+        storesSheet.getRow(rowIndex).getCell(column).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: section.bodyFill },
+        };
+      }
+    }
+  });
+  storesSheet.autoFilter = `A1:R${Math.max(1, storesSheet.rowCount)}`;
 
   return workbook.xlsx.writeBuffer();
 }

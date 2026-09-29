@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   FileText,
   Landmark,
@@ -552,6 +554,7 @@ export function FinancePage() {
   const [query, setQuery] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [overviewExporting, setOverviewExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [budgetStore, setBudgetStore] = useState<FinanceOverviewStoreRow | null>(null);
   const [candidate, setCandidate] = useState<FinanceStorePurchaseRow | null>(null);
   const [editingReimbursement, setEditingReimbursement] = useState<FinanceReimbursement | null>(
@@ -1067,6 +1070,15 @@ export function FinancePage() {
                   </p>
                 </div>
                 <div className="finance-panel__tools">
+                  <button
+                    type="button"
+                    className="button button--small finance-overview-toggle"
+                    aria-expanded={showFinancialDetails}
+                    onClick={() => setShowFinancialDetails((current) => !current)}
+                  >
+                    {showFinancialDetails ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showFinancialDetails ? 'Ocultar Financeiro e Documentos' : 'Ver Financeiro e Documentos'}
+                  </button>
                   <span>{filteredOverview.length} lojas</span>
                   <button
                     type="button"
@@ -1089,15 +1101,15 @@ export function FinancePage() {
                 </div>
               </header>
               {filteredOverview.length ? (
-                <div className="finance-table-scroll">
-                  <table className="finance-table finance-overview-table">
+                <div className="finance-table-scroll finance-overview-scroll">
+                  <table className={`finance-table finance-overview-table ${showFinancialDetails ? 'is-financial-expanded' : ''}`}>
                     <thead>
                       <tr className="finance-overview-groups">
                         <th rowSpan={2}>Loja</th>
                         <th colSpan={6}>Orçamento</th>
-                        <th colSpan={5}>Realização</th>
-                        <th colSpan={2}>Financeiro</th>
-                        <th colSpan={1}>Documentação</th>
+                        <th colSpan={5}>Realizado</th>
+                        {showFinancialDetails && <th colSpan={2}>Financeiro</th>}
+                        {showFinancialDetails && <th colSpan={1}>Documentação</th>}
                       </tr>
                       <tr>
                         <th>Verba BB</th>
@@ -1111,9 +1123,9 @@ export function FinancePage() {
                         <th>Realizado Obras</th>
                         <th>Realizado Total</th>
                         <th>Dif. Em Relação a Verba</th>
-                        <th>Pago</th>
-                        <th>Saldo a pagar</th>
-                        <th>Obra</th>
+                        {showFinancialDetails && <th>Pago</th>}
+                        {showFinancialDetails && <th>Saldo a pagar</th>}
+                        {showFinancialDetails && <th>Obra</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1184,26 +1196,30 @@ export function FinancePage() {
                               {formatBRL(row.realizedVarianceToBbCents)}
                             </strong>
                           </td>
-                          <td className="finance-money">
-                            <strong>{formatBRL(row.paidCents)}</strong>
-                          </td>
-                          <td className="finance-money">
-                            <strong>{formatBRL(row.payableCents)}</strong>
-                          </td>
-                          <td>
-                            <span className={`finance-document-state finance-document-state--${row.documentationStatus}`}>
-                              {row.documentationStatus === 'complete'
-                                ? 'Completa'
-                                : row.documentationStatus === 'partial'
-                                  ? 'Parcial'
-                                  : row.documentationStatus === 'pending'
-                                    ? 'Pendente'
-                                    : 'Sem obra'}
-                            </span>
-                            {row.worksMissingDocumentsCents > 0n && (
-                              <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
-                            )}
-                          </td>
+                          {showFinancialDetails && (
+                            <>
+                              <td className="finance-money">
+                                <strong>{formatBRL(row.paidCents)}</strong>
+                              </td>
+                              <td className="finance-money">
+                                <strong>{formatBRL(row.payableCents)}</strong>
+                              </td>
+                              <td>
+                                <span className={`finance-document-state finance-document-state--${row.documentationStatus}`}>
+                                  {row.documentationStatus === 'complete'
+                                    ? 'Completa'
+                                    : row.documentationStatus === 'partial'
+                                      ? 'Parcial'
+                                      : row.documentationStatus === 'pending'
+                                        ? 'Pendente'
+                                        : 'Sem obra'}
+                                </span>
+                                {row.worksMissingDocumentsCents > 0n && (
+                                  <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
+                                )}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>

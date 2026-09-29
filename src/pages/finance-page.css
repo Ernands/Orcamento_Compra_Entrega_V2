@@ -277,9 +277,21 @@
   color: #9c4b43;
 }
 
+.finance-overview-scroll {
+  transform: rotateX(180deg);
+}
+
+.finance-overview-scroll > .finance-overview-table {
+  transform: rotateX(180deg);
+}
+
 .finance-overview-table {
-  min-width: 0;
+  min-width: 1120px;
   table-layout: fixed;
+}
+
+.finance-overview-table.is-financial-expanded {
+  min-width: 1420px;
 }
 
 .finance-overview-table th,
@@ -300,25 +312,45 @@
   background: #fff;
 }
 
-/* Zebra fixa por grupo: mantém a leitura das cores do cabeçalho sem depender de hover. */
+/* Cores fixas por bloco financeiro. Os intervalos acompanham a estrutura atual da tabela. */
+.finance-overview-table tbody td:first-child {
+  background: #fbfcfb;
+}
+
+.finance-overview-table tbody td:nth-child(n + 2):nth-child(-n + 7) {
+  background: #f7fbff;
+}
+
+.finance-overview-table tbody td:nth-child(n + 8):nth-child(-n + 12) {
+  background: #f6fcf9;
+}
+
+.finance-overview-table tbody td:nth-child(n + 13):nth-child(-n + 14) {
+  background: #fffaf4;
+}
+
+.finance-overview-table tbody td:nth-child(15) {
+  background: #fafbfa;
+}
+
 .finance-overview-table tbody tr:nth-child(even) td:first-child {
-  background: #f5f7f6;
+  background: #f3f5f4;
 }
 
-.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 2):nth-child(-n + 5) {
-  background: #f1f7fd;
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 2):nth-child(-n + 7) {
+  background: #edf5fc;
 }
 
-.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 6):nth-child(-n + 9) {
-  background: #f0f9f5;
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 8):nth-child(-n + 12) {
+  background: #edf8f2;
 }
 
-.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 10):nth-child(-n + 11) {
-  background: #fff8ef;
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 13):nth-child(-n + 14) {
+  background: #fff3e5;
 }
 
-.finance-overview-table tbody tr:nth-child(even) td:nth-child(12) {
-  background: #f7f7f5;
+.finance-overview-table tbody tr:nth-child(even) td:nth-child(15) {
+  background: #f2f4f3;
 }
 
 .finance-overview-table tbody tr:hover td {
@@ -362,30 +394,52 @@
 }
 
 .finance-overview-groups th:nth-child(5) {
-  background: #f7f7f5;
+  color: #53615c;
+  background: #eef1ef;
 }
 
-.finance-overview-table thead tr:nth-child(2) th:nth-child(-n + 4) {
+.finance-overview-toggle,
+.finance-overview-toggle.button {
+  min-height: 34px;
+  color: #7a4200 !important;
+  background: #ffead0 !important;
+  border-color: #e7ad60 !important;
+  font-weight: 850;
+}
+
+.finance-overview-toggle:hover,
+.finance-overview-toggle.button:hover {
+  color: #5f3300 !important;
+  background: #ffddb1 !important;
+  border-color: #d9953e !important;
+}
+
+.finance-overview-table thead tr:nth-child(2) th:nth-child(-n + 6) {
   color: #275f8b;
-  background: #f1f7fd;
+  background: #eaf4fd;
 }
 
-.finance-overview-table thead tr:nth-child(2) th:nth-child(n + 5):nth-child(-n + 8) {
+.finance-overview-table thead tr:nth-child(2) th:nth-child(n + 7):nth-child(-n + 11) {
   color: #1d6c51;
-  background: #f0f9f5;
+  background: #eaf7f0;
 }
 
-.finance-overview-table thead tr:nth-child(2) th:nth-child(n + 9):nth-child(-n + 10) {
+.finance-overview-table thead tr:nth-child(2) th:nth-child(n + 12):nth-child(-n + 13) {
   color: #8a570e;
-  background: #fff8ef;
+  background: #fff2df;
 }
 
-.finance-overview-table thead tr:nth-child(2) th:nth-child(4),
-.finance-overview-table thead tr:nth-child(2) th:nth-child(8),
-.finance-overview-table thead tr:nth-child(2) th:nth-child(10),
-.finance-overview-table tbody td:nth-child(5),
-.finance-overview-table tbody td:nth-child(9),
-.finance-overview-table tbody td:nth-child(11) {
+.finance-overview-table thead tr:nth-child(2) th:nth-child(14) {
+  color: #53615c;
+  background: #f1f3f2;
+}
+
+.finance-overview-table thead tr:nth-child(2) th:nth-child(6),
+.finance-overview-table thead tr:nth-child(2) th:nth-child(11),
+.finance-overview-table thead tr:nth-child(2) th:nth-child(13),
+.finance-overview-table tbody td:nth-child(7),
+.finance-overview-table tbody td:nth-child(12),
+.finance-overview-table tbody td:nth-child(14) {
   border-right: 2px solid #d8dfdc;
 }
 

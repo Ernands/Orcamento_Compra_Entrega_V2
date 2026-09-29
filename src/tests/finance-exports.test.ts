@@ -107,6 +107,14 @@ describe('exportações financeiras', () => {
     expect(stores?.getCell('L1').value).toBe('Realizado Mobiliário');
     expect(stores?.getCell('O1').value).toBe('Dif. Em Relação a Verba');
     expect(stores?.getCell('O2').value).toBe(34_215);
+    expect(stores?.getCell('P1').value).toBe('Pago');
+    expect(stores?.getCell('Q1').value).toBe('Saldo a pagar');
+    expect(stores?.getCell('R1').value).toBe('Documentação');
+    expect(stores?.getCell('R2').value).toBe('Parcial');
+    expect(stores?.getCell('E1').fill).toMatchObject({ fgColor: { argb: 'FFDDEBFA' } });
+    expect(stores?.getCell('K1').fill).toMatchObject({ fgColor: { argb: 'FFDDF3E7' } });
+    expect(stores?.getCell('P1').fill).toMatchObject({ fgColor: { argb: 'FFFDEACF' } });
+    expect(stores?.getCell('R1').fill).toMatchObject({ fgColor: { argb: 'FFEFF2F0' } });
   });
 
   it('gera PDF válido da Visão Geral', async () => {
