@@ -31,6 +31,7 @@ type ItemRow = {
   name: string;
   purchase_total: number;
   acquired_quantity: number;
+  expected_delivery_date: string | null;
   position: number;
   active: boolean;
   notes: string | null;
@@ -89,6 +90,7 @@ function itemFromRow(row: ItemRow): PurchaseDeliveryItem {
     name: row.name,
     purchaseTotal: Number(row.purchase_total || 0),
     acquiredQuantity: Number(row.acquired_quantity || 0),
+    expectedDeliveryDate: row.expected_delivery_date,
     position: row.position,
     active: row.active,
     notes: row.notes,
@@ -129,6 +131,7 @@ export async function savePurchaseDeliveryItem(
     name: values.name.trim(),
     purchase_total: values.purchaseTotal,
     acquired_quantity: values.acquiredQuantity,
+    expected_delivery_date: values.expectedDeliveryDate || null,
     notes: values.notes.trim() || null,
     position,
     updated_at: new Date().toISOString(),
