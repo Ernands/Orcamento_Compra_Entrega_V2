@@ -28,6 +28,7 @@ export interface PurchaseDeliveryItem {
   name: string;
   purchaseTotal: number;
   acquiredQuantity: number;
+  expectedDeliveryDate: string | null;
   position: number;
   active: boolean;
   notes: string | null;
@@ -52,6 +53,7 @@ export interface PurchaseDeliveryItemValues {
   name: string;
   purchaseTotal: number;
   acquiredQuantity: number;
+  expectedDeliveryDate: string;
   notes: string;
 }
 
@@ -78,12 +80,12 @@ export function purchaseDeliveryPending(item: PurchaseDeliveryItem): number {
 export const PURCHASE_DELIVERY_STATUS_LABELS: Record<PurchaseDeliveryStatus, string> = {
   none: 'Sem situação',
   matrix: 'Matriz / distribuir',
-  purchased: 'Verde da planilha',
-  green_text: 'Verde (texto)',
+  purchased: 'Compra realizada',
+  green_text: 'Compra realizada (texto)',
   delivered: 'Entregue',
   shipping_note: 'Envio com observação',
-  orange_text: 'Laranja (texto)',
-  attention: 'Atenção',
+  orange_text: 'Compra prospector (texto)',
+  attention: 'Compra prospector',
   issue: 'Alerta',
   do_not_buy: 'Não comprar',
 };
