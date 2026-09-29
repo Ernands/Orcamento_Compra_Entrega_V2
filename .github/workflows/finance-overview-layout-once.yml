@@ -21,7 +21,9 @@ jobs:
         with:
           node-version: '22'
       - name: Apply layout adjustments
-        run: node scripts/adjust-finance-overview-layout.mjs
+        run: |
+          node scripts/repair-finance-overview-layout-script.mjs
+          node scripts/adjust-finance-overview-layout.mjs
       - name: Commit adjusted files
         run: |
           git config user.name "github-actions[bot]"
