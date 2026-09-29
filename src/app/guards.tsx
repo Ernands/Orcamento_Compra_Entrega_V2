@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import type { Capability } from '../domain/types';
 import { LoadingScreen } from '../components/ui';
-import { useSession } from './session-provider';
+import { useSession, type AppCapability } from './session-provider';
 
 export function authorizedHomePath(capabilities: Capability[]): string {
   const has = (capability: Capability) => capabilities.includes(capability);
@@ -41,7 +41,7 @@ export function RequireCapability({
   capability,
   children,
 }: {
-  capability: Capability;
+  capability: AppCapability;
   children: ReactNode;
 }) {
   const { can, viewer } = useSession();
