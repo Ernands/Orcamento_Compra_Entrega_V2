@@ -23,6 +23,7 @@ jobs:
       - name: Apply layout adjustments
         run: |
           node scripts/repair-finance-overview-layout-script.mjs
+          node scripts/repair-finance-overview-layout-test.mjs
           node scripts/adjust-finance-overview-layout.mjs
       - name: Commit adjusted files
         run: |
