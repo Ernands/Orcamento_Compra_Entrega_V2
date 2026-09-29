@@ -43,6 +43,7 @@ const routeTitles: Record<string, string> = {
   '/suprimentos/fornecedores': 'Fornecedores',
   '/suprimentos/cotacoes': 'Cotacoes',
   '/suprimentos/compras': 'Compras',
+  '/suprimentos/gerenciamento-compra-entrega': 'Gerenciamento compra/entrega',
   '/suprimentos/comparativo': 'Comparativo',
   '/obras': 'Obras e Serviços',
   '/financeiro': 'Financeiro',
@@ -101,7 +102,8 @@ export function AppShell() {
     can('planned_budget.view') ||
     can('suppliers.view') ||
     can('quotes.view') ||
-    can('purchases.view');
+    can('purchases.view') ||
+    can('purchase_delivery.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
   const title = location.pathname === '/financeiro/pagamentos'
@@ -320,6 +322,12 @@ export function AppShell() {
                   <NavLink to="/suprimentos/compras" onClick={() => setMobileOpen(false)}>
                     <ShoppingCart size={19} />
                     Compras
+                  </NavLink>
+                )}
+                {can('purchase_delivery.view') && (
+                  <NavLink to="/suprimentos/gerenciamento-compra-entrega" onClick={() => setMobileOpen(false)}>
+                    <Truck size={19} />
+                    Gerenciamento compra/entrega
                   </NavLink>
                 )}
               </>
