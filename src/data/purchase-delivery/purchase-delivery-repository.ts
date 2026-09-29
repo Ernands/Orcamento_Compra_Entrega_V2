@@ -65,8 +65,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(payload?.message || payload?.details || `Falha na operação (${response.status}).`);
   }
 
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  const body = await response.text();
+  if (!body) return undefined as T;
+  return JSON.parse(body) as T;
 }
 
 function destinationFromRow(row: DestinationRow): PurchaseDeliveryDestination {
