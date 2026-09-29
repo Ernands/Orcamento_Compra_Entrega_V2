@@ -50,12 +50,18 @@ export interface FinanceOverviewStoreRow {
   city: string;
   state: string;
   budgetBbCents: bigint;
+  equipmentBudgetCents: bigint;
+  furnitureBudgetCents: bigint;
   itemsBudgetCents: bigint;
   worksBudgetCents: bigint;
   budgetTotalCents: bigint;
+  budgetVarianceToBbCents: bigint;
+  equipmentRealizedCents: bigint;
+  furnitureRealizedCents: bigint;
   itemsRealizedCents: bigint;
   worksContractedCents: bigint;
   realizedTotalCents: bigint;
+  realizedVarianceToBbCents: bigint;
   differenceCents: bigint;
   paidCents: bigint;
   payableCents: bigint;
@@ -211,7 +217,7 @@ export function buildFinanceStoreItemRows(
     .sort((a, b) => a.itemName.localeCompare(b.itemName, 'pt-BR'));
 }
 
-export type FinanceStoreCompositionKey = 'equipment' | 'furniture' | 'general' | 'works';
+export type FinanceStoreCompositionKey = 'equipment' | 'furniture' | 'works';
 
 export interface FinanceStoreCompositionRow {
   key: FinanceStoreCompositionKey;
@@ -237,7 +243,8 @@ export function financeItemCompositionGroup(
   itemName: string | null = null,
   financialGroup: 'equipment' | 'furniture' | 'general' | null = null,
 ): Exclude<FinanceStoreCompositionKey, 'works'> {
-  if (financialGroup) return financialGroup;
+  if (financialGroup === 'equipment') return 'equipment';
+  if (financialGroup === 'furniture' || financialGroup === 'general') return 'furniture';
   const normalized = normalizeCategory([subcategory, groupName, category, itemName].filter(Boolean).join(' '));
   if (
     normalized.includes('mobili') ||
@@ -263,7 +270,7 @@ export function financeItemCompositionGroup(
   ) {
     return 'equipment';
   }
-  return 'general';
+  return 'furniture';
 }
 
 function allocateCompositionCents(
@@ -318,7 +325,6 @@ export function buildFinanceStoreCompositionRows(values: {
   const rows = new Map<FinanceStoreCompositionKey, Omit<FinanceStoreCompositionRow, 'differenceCents' | 'payableCents'>>([
     ['equipment', { key: 'equipment', label: 'Equipamentos', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
     ['furniture', { key: 'furniture', label: 'Mobiliário', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
-    ['general', { key: 'general', label: 'Itens gerais', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
     ['works', { key: 'works', label: 'Obras e Serviços', budgetCents: 0n, realizedCents: 0n, paidCents: 0n }],
   ]);
 
@@ -336,6 +342,16 @@ export function buildFinanceStoreCompositionRows(values: {
   });
 
   const financeStore = values.purchaseStoreRows.find((row) => row.storeId === values.storeId);
+  const plannedItemsCents = plannedBudgetByStore(values.plannedBudgetItems).get(values.storeId) || 0n;
+  const classifiedBudgetCents =
+    rows.get('equipment')!.budgetCents + rows.get('furniture')!.budgetCents;
+  rows.get('furniture')!.budgetCents += plannedItemsCents - classifiedBudgetCents;
+
+  const realizedItemsCents = financeStore?.realizedCents || 0n;
+  const classifiedRealizedCents =
+    rows.get('equipment')!.realizedCents + rows.get('furniture')!.realizedCents;
+  rows.get('furniture')!.realizedCents += realizedItemsCents - classifiedRealizedCents;
+
   financeStore?.purchases.forEach((purchaseRow) => {
     const order = purchaseRow.purchase.orders.find((entry) => entry.id === purchaseRow.purchaseOrderId);
     if (!order || purchaseRow.paidCents <= 0n) return;
@@ -378,7 +394,7 @@ export function buildFinanceStoreCompositionRows(values: {
         .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
     });
 
-  return (['equipment', 'furniture', 'general', 'works'] as FinanceStoreCompositionKey[]).map(
+  return (['equipment', 'furniture', 'works'] as FinanceStoreCompositionKey[]).map(
     (key) => {
       const row = rows.get(key)!;
       return {
@@ -439,7 +455,6 @@ export function buildFinanceOverviewRows(values: {
   works: WorkService[];
   budgets: FinanceStoreBudget[];
 }): FinanceOverviewStoreRow[] {
-  const approved = plannedBudgetByStore(values.plannedBudgetItems);
   const works = worksByStore(values.works);
   const budgetByStore = new Map(
     values.budgets.map((budget) => [budget.storeId, moneyToCents(budget.budgetAmount)]),
@@ -455,9 +470,23 @@ export function buildFinanceOverviewRows(values: {
         paidCents: 0n,
         documentedCents: 0n,
       };
-      const itemsBudgetCents = approved.get(store.id) || 0n;
-      const itemsRealizedCents = purchase?.realizedCents || 0n;
+      const composition = buildFinanceStoreCompositionRows({
+        storeId: store.id,
+        purchases: values.purchases,
+        plannedBudgetItems: values.plannedBudgetItems,
+        purchaseStoreRows: values.purchaseStoreRows,
+        works: values.works,
+      });
+      const equipment = composition.find((row) => row.key === 'equipment')!;
+      const furniture = composition.find((row) => row.key === 'furniture')!;
+      const equipmentBudgetCents = equipment.budgetCents;
+      const furnitureBudgetCents = furniture.budgetCents;
+      const itemsBudgetCents = equipmentBudgetCents + furnitureBudgetCents;
+      const equipmentRealizedCents = equipment.realizedCents;
+      const furnitureRealizedCents = furniture.realizedCents;
+      const itemsRealizedCents = equipmentRealizedCents + furnitureRealizedCents;
       const purchasePaidCents = purchase?.paidCents || 0n;
+      const budgetBbCents = budgetByStore.get(store.id) || 0n;
       const budgetTotalCents = itemsBudgetCents + work.budgetCents;
       const realizedTotalCents = itemsRealizedCents + work.contractedCents;
       const paidCents = purchasePaidCents + work.paidCents;
@@ -481,13 +510,19 @@ export function buildFinanceOverviewRows(values: {
         name: store.name,
         city: store.city,
         state: store.state,
-        budgetBbCents: budgetByStore.get(store.id) || 0n,
+        budgetBbCents,
+        equipmentBudgetCents,
+        furnitureBudgetCents,
         itemsBudgetCents,
         worksBudgetCents: work.budgetCents,
         budgetTotalCents,
+        budgetVarianceToBbCents: budgetBbCents - budgetTotalCents,
+        equipmentRealizedCents,
+        furnitureRealizedCents,
         itemsRealizedCents,
         worksContractedCents: work.contractedCents,
         realizedTotalCents,
+        realizedVarianceToBbCents: budgetBbCents - realizedTotalCents,
         differenceCents: budgetTotalCents - realizedTotalCents,
         paidCents,
         payableCents,

@@ -68,7 +68,7 @@ const ITEM_STATUS_LABELS = {
 const FINANCIAL_GROUP_LABELS = {
   equipment: 'Equipamentos',
   furniture: 'Mobiliário',
-  general: 'Itens gerais',
+  general: 'Mobiliário',
 } as const;
 
 const PURCHASE_DOCUMENT_LABELS: Record<string, string> = {
@@ -479,10 +479,10 @@ export function FinanceStoreDetailPage() {
               <span>Realizado</span>
               <strong>{formatBRL(overview.realizedTotalCents)}</strong>
             </article>
-            <article className={overview.differenceCents < 0n ? 'is-negative' : 'is-positive'}>
+            <article className={overview.realizedVarianceToBbCents < 0n ? 'is-negative' : 'is-positive'}>
               <CheckCircle2 size={20} />
-              <span>Diferença</span>
-              <strong>{formatBRL(overview.differenceCents)}</strong>
+              <span>Dif. em relação à verba</span>
+              <strong>{formatBRL(overview.realizedVarianceToBbCents)}</strong>
             </article>
           </div>
         </div>
@@ -549,8 +549,8 @@ export function FinanceStoreDetailPage() {
                 <td><strong>{formatBRL(overview.budgetTotalCents)}</strong></td>
                 <td><strong>{formatBRL(overview.realizedTotalCents)}</strong></td>
                 <td>
-                  <strong className={overview.differenceCents < 0n ? 'value-negative' : 'value-positive'}>
-                    {formatBRL(overview.differenceCents)}
+                  <strong className={overview.realizedVarianceToBbCents < 0n ? 'value-negative' : 'value-positive'}>
+                    {formatBRL(overview.realizedVarianceToBbCents)}
                   </strong>
                 </td>
                 <td><strong>{formatBRL(overview.paidCents)}</strong></td>

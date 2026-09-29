@@ -5,12 +5,11 @@ import type { PurchaseOrderV2, PurchasePaymentV2, PurchaseV2 } from './purchase-
 import type { WorkService } from './works-types';
 
 export type FinancePaymentsView = 'paid' | 'planned' | 'unscheduled';
-export type FinancePaymentOrigin = 'equipment' | 'furniture' | 'general' | 'works';
+export type FinancePaymentOrigin = 'equipment' | 'furniture' | 'works';
 
 export const FINANCE_PAYMENT_ORIGIN_LABELS: Record<FinancePaymentOrigin, string> = {
   equipment: 'Equipamentos',
   furniture: 'Mobiliário',
-  general: 'Itens gerais',
   works: 'Obras e Serviços',
 };
 
@@ -53,10 +52,10 @@ export interface FinancePaymentTotals {
   commitmentCents: bigint;
 }
 
-const ORIGINS: FinancePaymentOrigin[] = ['equipment', 'furniture', 'general', 'works'];
+const ORIGINS: FinancePaymentOrigin[] = ['equipment', 'furniture', 'works'];
 
 function emptyAllocations(): Record<FinancePaymentOrigin, bigint> {
-  return { equipment: 0n, furniture: 0n, general: 0n, works: 0n };
+  return { equipment: 0n, furniture: 0n, works: 0n };
 }
 
 function unique(values: string[]): string[] {
@@ -358,7 +357,6 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
         originAllocations: {
           equipment: 0n,
           furniture: 0n,
-          general: 0n,
           works: amountCents,
         },
         referenceCodes: [work.code],
@@ -395,7 +393,6 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
       originAllocations: {
         equipment: 0n,
         furniture: 0n,
-        general: 0n,
         works: residual,
       },
       referenceCodes: [work.code],

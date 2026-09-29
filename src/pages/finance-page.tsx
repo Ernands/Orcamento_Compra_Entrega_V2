@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   FileText,
   Landmark,
@@ -552,6 +554,7 @@ export function FinancePage() {
   const [query, setQuery] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [overviewExporting, setOverviewExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [budgetStore, setBudgetStore] = useState<FinanceOverviewStoreRow | null>(null);
   const [candidate, setCandidate] = useState<FinanceStorePurchaseRow | null>(null);
   const [editingReimbursement, setEditingReimbursement] = useState<FinanceReimbursement | null>(
@@ -663,7 +666,7 @@ export function FinancePage() {
           totals.budgetBbCents += row.budgetBbCents;
           totals.budgetTotalCents += row.budgetTotalCents;
           totals.realizedCents += row.realizedTotalCents;
-          totals.differenceCents += row.differenceCents;
+          totals.differenceCents += row.realizedVarianceToBbCents;
           totals.paidCents += row.paidCents;
           totals.payableCents += row.payableCents;
           return totals;
@@ -844,8 +847,7 @@ export function FinancePage() {
           <span className="eyebrow">Financeiro</span>
           <h2>Visão geral, pagamentos, custos e reembolsos</h2>
           <p>
-            Consolide orçamento x realizado de itens e obras, fluxo de pagamentos e reembolsos por
-            loja.
+            Consolide Equipamentos, Mobiliário e Obras, fluxo de pagamentos e reembolsos por loja.
           </p>
         </div>
         <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
@@ -895,7 +897,7 @@ export function FinancePage() {
               </article>
               <article className={overviewKpis.differenceCents < 0n ? 'finance-kpi--negative' : ''}>
                 <CheckCircle2 size={21} />
-                <span>Diferença orçamento</span>
+                <span>Dif. em relação à verba</span>
                 <strong>{formatBRL(overviewKpis.differenceCents)}</strong>
               </article>
             </div>
@@ -1064,10 +1066,19 @@ export function FinancePage() {
                 <div>
                   <h3>Orçamento x realizado por loja</h3>
                   <p>
-                    Itens e obras permanecem em módulos separados, mas são consolidados nesta visão.
+                    Equipamentos, Mobiliário e Obras permanecem consolidados nesta visão financeira.
                   </p>
                 </div>
                 <div className="finance-panel__tools">
+                  <button
+                    type="button"
+                    className="button button--small finance-overview-toggle"
+                    aria-expanded={showFinancialDetails}
+                    onClick={() => setShowFinancialDetails((current) => !current)}
+                  >
+                    {showFinancialDetails ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showFinancialDetails ? 'Ocultar Financeiro e Documentos' : 'Ver Financeiro e Documentos'}
+                  </button>
                   <span>{filteredOverview.length} lojas</span>
                   <button
                     type="button"
@@ -1090,28 +1101,31 @@ export function FinancePage() {
                 </div>
               </header>
               {filteredOverview.length ? (
-                <div className="finance-table-scroll">
-                  <table className="finance-table finance-overview-table">
+                <div className="finance-table-scroll finance-overview-scroll">
+                  <table className={`finance-table finance-overview-table ${showFinancialDetails ? 'is-financial-expanded' : ''}`}>
                     <thead>
                       <tr className="finance-overview-groups">
                         <th rowSpan={2}>Loja</th>
-                        <th colSpan={4}>Orçamento</th>
-                        <th colSpan={4}>Realização</th>
-                        <th colSpan={2}>Financeiro</th>
-                        <th colSpan={1}>Documentação</th>
+                        <th colSpan={6}>Orçamento</th>
+                        <th colSpan={5}>Realizado</th>
+                        {showFinancialDetails && <th colSpan={2}>Financeiro</th>}
+                        {showFinancialDetails && <th colSpan={1}>Documentação</th>}
                       </tr>
                       <tr>
                         <th>Verba BB</th>
-                        <th>Orçado itens</th>
+                        <th>Orçado Equipamentos</th>
+                        <th>Orçado Mobiliário</th>
                         <th>Orçado obra</th>
                         <th>Orçado total</th>
-                        <th>Comprado itens</th>
-                        <th>Obra contratada</th>
-                        <th>Realizado</th>
-                        <th>Diferença</th>
-                        <th>Pago</th>
-                        <th>Saldo a pagar</th>
-                        <th>Obra</th>
+                        <th>Dif. Em Relação a Verba</th>
+                        <th>Realizado Equipamentos</th>
+                        <th>Realizado Mobiliário</th>
+                        <th>Realizado Obras</th>
+                        <th>Realizado Total</th>
+                        <th>Dif. Em Relação a Verba</th>
+                        {showFinancialDetails && <th>Pago</th>}
+                        {showFinancialDetails && <th>Saldo a pagar</th>}
+                        {showFinancialDetails && <th>Obra</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1144,7 +1158,10 @@ export function FinancePage() {
                             )}
                           </td>
                           <td className="finance-money">
-                            <strong>{formatBRL(row.itemsBudgetCents)}</strong>
+                            <strong>{formatBRL(row.equipmentBudgetCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.furnitureBudgetCents)}</strong>
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.worksBudgetCents)}</strong>
@@ -1157,8 +1174,16 @@ export function FinancePage() {
                               </small>
                             )}
                           </td>
+                          <td>
+                            <strong className={row.budgetVarianceToBbCents < 0n ? 'finance-difference--negative' : 'finance-difference--positive'}>
+                              {formatBRL(row.budgetVarianceToBbCents)}
+                            </strong>
+                          </td>
                           <td className="finance-money">
-                            <strong>{formatBRL(row.itemsRealizedCents)}</strong>
+                            <strong>{formatBRL(row.equipmentRealizedCents)}</strong>
+                          </td>
+                          <td className="finance-money">
+                            <strong>{formatBRL(row.furnitureRealizedCents)}</strong>
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.worksContractedCents)}</strong>
@@ -1167,30 +1192,34 @@ export function FinancePage() {
                             <strong>{formatBRL(row.realizedTotalCents)}</strong>
                           </td>
                           <td>
-                            <strong className={row.differenceCents < 0n ? 'finance-difference--negative' : 'finance-difference--positive'}>
-                              {formatBRL(row.differenceCents)}
+                            <strong className={row.realizedVarianceToBbCents < 0n ? 'finance-difference--negative' : 'finance-difference--positive'}>
+                              {formatBRL(row.realizedVarianceToBbCents)}
                             </strong>
                           </td>
-                          <td className="finance-money">
-                            <strong>{formatBRL(row.paidCents)}</strong>
-                          </td>
-                          <td className="finance-money">
-                            <strong>{formatBRL(row.payableCents)}</strong>
-                          </td>
-                          <td>
-                            <span className={`finance-document-state finance-document-state--${row.documentationStatus}`}>
-                              {row.documentationStatus === 'complete'
-                                ? 'Completa'
-                                : row.documentationStatus === 'partial'
-                                  ? 'Parcial'
-                                  : row.documentationStatus === 'pending'
-                                    ? 'Pendente'
-                                    : 'Sem obra'}
-                            </span>
-                            {row.worksMissingDocumentsCents > 0n && (
-                              <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
-                            )}
-                          </td>
+                          {showFinancialDetails && (
+                            <>
+                              <td className="finance-money">
+                                <strong>{formatBRL(row.paidCents)}</strong>
+                              </td>
+                              <td className="finance-money">
+                                <strong>{formatBRL(row.payableCents)}</strong>
+                              </td>
+                              <td>
+                                <span className={`finance-document-state finance-document-state--${row.documentationStatus}`}>
+                                  {row.documentationStatus === 'complete'
+                                    ? 'Completa'
+                                    : row.documentationStatus === 'partial'
+                                      ? 'Parcial'
+                                      : row.documentationStatus === 'pending'
+                                        ? 'Pendente'
+                                        : 'Sem obra'}
+                                </span>
+                                {row.worksMissingDocumentsCents > 0n && (
+                                  <small>{formatBRL(row.worksMissingDocumentsCents)} sem documento</small>
+                                )}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>

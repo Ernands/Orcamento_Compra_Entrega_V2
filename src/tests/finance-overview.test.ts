@@ -313,16 +313,17 @@ describe('finance overview', () => {
     ).toBe('equipment');
   });
 
-  it('prioriza o grupo financeiro explícito sobre nome e categoria do item', () => {
+  it('move Itens gerais para Mobiliário e preserva Equipamentos', () => {
     expect(
       financeItemCompositionGroup('Equipamentos', null, null, 'Suporte para Notebook', 'general'),
-    ).toBe('general');
+    ).toBe('furniture');
     expect(
       financeItemCompositionGroup('Material Escritório', null, null, 'Calculadora de mesa', 'equipment'),
     ).toBe('equipment');
     expect(
       financeItemCompositionGroup('Mobiliário', null, null, 'Capa preferencial com braços', 'general'),
-    ).toBe('general');
+    ).toBe('furniture');
+    expect(financeItemCompositionGroup('Itens gerais', null, null, 'Lixeira')).toBe('furniture');
   });
 
   it('usa Orçamento Previsto como origem do orçado, sem consumir o aprovado da compra', () => {
@@ -382,6 +383,7 @@ describe('finance overview', () => {
       ]),
     );
 
+    expect(rows.map((row) => row.key)).toEqual(['equipment', 'furniture', 'works']);
     expect(rows.reduce((sum, row) => sum + row.budgetCents, 0n)).toBe(655001n);
     expect(rows.reduce((sum, row) => sum + row.realizedCents, 0n)).toBe(620000n);
     expect(rows.reduce((sum, row) => sum + row.paidCents, 0n)).toBe(310000n);
@@ -438,12 +440,18 @@ describe('finance overview', () => {
 
     expect(row).toBeDefined();
     expect(row?.budgetBbCents).toBe(5000000n);
+    expect(row?.equipmentBudgetCents).toBe(5001n);
+    expect(row?.furnitureBudgetCents).toBe(0n);
     expect(row?.itemsBudgetCents).toBe(5001n);
     expect(row?.worksBudgetCents).toBe(650000n);
     expect(row?.budgetTotalCents).toBe(655001n);
+    expect(row?.budgetVarianceToBbCents).toBe(4344999n);
+    expect(row?.equipmentRealizedCents).toBe(0n);
+    expect(row?.furnitureRealizedCents).toBe(9000n);
     expect(row?.itemsRealizedCents).toBe(9000n);
     expect(row?.worksContractedCents).toBe(620000n);
     expect(row?.realizedTotalCents).toBe(629000n);
+    expect(row?.realizedVarianceToBbCents).toBe(4371000n);
     expect(row?.differenceCents).toBe(26001n);
     expect(row?.paidCents).toBe(314000n);
     expect(row?.payableCents).toBe(315000n);

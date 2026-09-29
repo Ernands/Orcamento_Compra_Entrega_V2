@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { calculateQuoteLine, calculateQuoteTotals, formatBRL } from '../domain/supply-calculations';
+import {
+  calculateQuoteLine,
+  calculateQuoteTotals,
+  formatBRL,
+  moneyToCents,
+} from '../domain/supply-calculations';
 
 const baseLine = {
   quantity: '3',
@@ -47,5 +52,20 @@ describe('calculos de cotacao', () => {
     expect(result.itemsCents).toBe(1026n);
     expect(result.totalCents).toBe(1026n);
     expect(formatBRL(result.totalCents)).toBe('R$ 10,26');
+  });
+
+  it('aceita formatos monetarios usados em Obras e Servicos', () => {
+    expect(moneyToCents('1234,56')).toBe(123456n);
+    expect(moneyToCents('1234.56')).toBe(123456n);
+    expect(moneyToCents('1.234,56')).toBe(123456n);
+    expect(moneyToCents('1,234.56')).toBe(123456n);
+    expect(moneyToCents('R$ 1.234,56')).toBe(123456n);
+    expect(moneyToCents('12.345.678,90')).toBe(1234567890n);
+    expect(moneyToCents('1.234.567')).toBe(123456700n);
+  });
+
+  it('mantem ponto decimal em valores monetarios simples', () => {
+    expect(moneyToCents('10.50')).toBe(1050n);
+    expect(moneyToCents('0.125')).toBe(13n);
   });
 });

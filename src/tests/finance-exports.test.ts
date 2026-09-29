@@ -19,12 +19,18 @@ const overviewRow: FinanceOverviewStoreRow = {
   city: 'Brasília',
   state: 'DF',
   budgetBbCents: 5_000_000n,
+  equipmentBudgetCents: 300_000n,
+  furnitureBudgetCents: 198_788n,
   itemsBudgetCents: 498_788n,
   worksBudgetCents: 1_080_000n,
   budgetTotalCents: 1_578_788n,
+  budgetVarianceToBbCents: 3_421_212n,
+  equipmentRealizedCents: 295_000n,
+  furnitureRealizedCents: 193_500n,
   itemsRealizedCents: 488_500n,
   worksContractedCents: 1_090_000n,
   realizedTotalCents: 1_578_500n,
+  realizedVarianceToBbCents: 3_421_500n,
   differenceCents: 288n,
   paidCents: 560_600n,
   payableCents: 1_017_900n,
@@ -83,7 +89,7 @@ const work = {
 } as unknown as WorkService;
 
 describe('exportações financeiras', () => {
-  it('gera Excel da Visão Geral com resumo e lojas', async () => {
+  it('gera Excel da Visão Geral com resumo e lojas no novo agrupamento', async () => {
     const bytes = await createFinanceOverviewWorkbook({
       rows: [overviewRow],
       generatedAt: new Date('2026-09-18T12:00:00-03:00'),
@@ -93,8 +99,22 @@ describe('exportações financeiras', () => {
     await workbook.xlsx.load(bytes);
 
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Visão Geral', 'Lojas']);
-    expect(workbook.getWorksheet('Lojas')?.getCell('A2').value).toBe('LOJ-001');
-    expect(workbook.getWorksheet('Lojas')?.getCell('O2').value).toBe('Parcial');
+    const stores = workbook.getWorksheet('Lojas');
+    expect(stores?.getCell('A2').value).toBe('LOJ-001');
+    expect(stores?.getCell('F1').value).toBe('Orçado Equipamentos');
+    expect(stores?.getCell('G1').value).toBe('Orçado Mobiliário');
+    expect(stores?.getCell('K1').value).toBe('Realizado Equipamentos');
+    expect(stores?.getCell('L1').value).toBe('Realizado Mobiliário');
+    expect(stores?.getCell('O1').value).toBe('Dif. Em Relação a Verba');
+    expect(stores?.getCell('O2').value).toBe(34_215);
+    expect(stores?.getCell('P1').value).toBe('Pago');
+    expect(stores?.getCell('Q1').value).toBe('Saldo a pagar');
+    expect(stores?.getCell('R1').value).toBe('Documentação');
+    expect(stores?.getCell('R2').value).toBe('Parcial');
+    expect(stores?.getCell('E1').fill).toMatchObject({ fgColor: { argb: 'FFDDEBFA' } });
+    expect(stores?.getCell('K1').fill).toMatchObject({ fgColor: { argb: 'FFDDF3E7' } });
+    expect(stores?.getCell('P1').fill).toMatchObject({ fgColor: { argb: 'FFFDEACF' } });
+    expect(stores?.getCell('R1').fill).toMatchObject({ fgColor: { argb: 'FFEFF2F0' } });
   });
 
   it('gera PDF válido da Visão Geral', async () => {

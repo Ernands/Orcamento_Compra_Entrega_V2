@@ -14,6 +14,43 @@ function normalizeDecimal(value: DecimalInput): string {
   return raw.replace(',', '.');
 }
 
+function normalizeMoneyDecimal(value: DecimalInput): string {
+  let raw = String(value).trim().replace(/\s/g, '').replace(/R\$/gi, '');
+  if (!raw) return '0';
+
+  const negative = raw.startsWith('-');
+  if (negative) raw = raw.slice(1);
+  if (!raw || !/^[\d.,]+$/.test(raw)) throw new Error('Valor monetario invalido');
+
+  const sign = negative ? '-' : '';
+  const lastComma = raw.lastIndexOf(',');
+  const lastDot = raw.lastIndexOf('.');
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalIndex = Math.max(lastComma, lastDot);
+    const whole = raw.slice(0, decimalIndex).replace(/[.,]/g, '') || '0';
+    const fraction = raw.slice(decimalIndex + 1).replace(/[.,]/g, '');
+    return `${sign}${whole}${fraction ? `.${fraction}` : ''}`;
+  }
+
+  const separator = lastComma >= 0 ? ',' : lastDot >= 0 ? '.' : null;
+  if (!separator) return `${sign}${raw}`;
+
+  const parts = raw.split(separator);
+  if (parts.length === 2) {
+    const [whole, fraction] = parts;
+    return `${sign}${whole || '0'}${fraction ? `.${fraction}` : ''}`;
+  }
+
+  const fraction = parts.at(-1) || '';
+  if (fraction.length <= 2) {
+    const whole = parts.slice(0, -1).join('') || '0';
+    return `${sign}${whole}${fraction ? `.${fraction}` : ''}`;
+  }
+
+  return `${sign}${parts.join('')}`;
+}
+
 export function decimalToScaledInteger(value: DecimalInput, scale: number): bigint {
   const normalized = normalizeDecimal(value);
   const match = normalized.match(/^(-?)(\d+)(?:\.(\d+))?$/);
@@ -29,7 +66,7 @@ export function decimalToScaledInteger(value: DecimalInput, scale: number): bigi
 }
 
 export function moneyToCents(value: DecimalInput): bigint {
-  return decimalToScaledInteger(value, 2);
+  return decimalToScaledInteger(normalizeMoneyDecimal(value), 2);
 }
 
 export function quantityToThousandths(value: DecimalInput): bigint {
