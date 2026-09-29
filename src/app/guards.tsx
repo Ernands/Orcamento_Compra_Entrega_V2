@@ -5,7 +5,8 @@ import { LoadingScreen } from '../components/ui';
 import { useSession, type AppCapability } from './session-provider';
 
 export function authorizedHomePath(capabilities: Capability[]): string {
-  const has = (capability: Capability) => capabilities.includes(capability);
+  const has = (capability: AppCapability) =>
+    (capabilities as readonly string[]).includes(capability);
   if (has('dashboard.view')) return '/dashboard';
   if (has('stores.view')) return '/lojas';
   if (has('implementation.view')) return '/implantacao/pendencias';
@@ -15,6 +16,7 @@ export function authorizedHomePath(capabilities: Capability[]): string {
   if (has('suppliers.view')) return '/suprimentos/fornecedores';
   if (has('quotes.view')) return '/suprimentos/cotacoes';
   if (has('purchases.view')) return '/suprimentos/compras';
+  if (has('purchase_delivery.view')) return '/suprimentos/gerenciamento-compra-entrega';
   if (has('works.view')) return '/obras';
   if (has('finance.view')) return '/financeiro';
   if (has('access.view')) return '/acessos';
