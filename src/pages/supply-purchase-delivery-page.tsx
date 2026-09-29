@@ -296,7 +296,7 @@ function CellModal({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    let parsedQuantity: number | null = null;
+    let parsedQuantity: number | null;
     try {
       parsedQuantity = status === 'do_not_buy' || !quantity.trim() ? null : parseQuantity(quantity);
     } catch (quantityError) {
