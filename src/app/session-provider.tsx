@@ -12,6 +12,8 @@ import { loadViewer, loginWithCpf, logout } from '../data/auth/auth-repository';
 import { supabase } from '../data/supabase/client';
 import type { Capability, Viewer } from '../domain/types';
 
+export type AppCapability = Capability | 'purchase_delivery.view' | 'purchase_delivery.manage';
+
 interface SessionContextValue {
   session: Session | null;
   viewer: Viewer | null;
@@ -20,7 +22,7 @@ interface SessionContextValue {
   login: (cpf: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshViewer: () => Promise<void>;
-  can: (capability: Capability) => boolean;
+  can: (capability: AppCapability) => boolean;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -104,7 +106,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       login,
       signOut,
       refreshViewer,
-      can: (capability) => viewer?.capabilities.includes(capability) || false,
+      can: (capability) => viewer?.capabilities.some((current) => current === capability) || false,
     }),
     [session, viewer, loading, error, login, signOut, refreshViewer],
   );
