@@ -432,10 +432,8 @@ function RegisterPurchaseModal({
     setInstallmentMethod('boleto');
     nextPaymentKey.current = 2;
     previousSuggestedPayment.current = '';
-    setFile(null);
-    setDocumentType('invoice');
-    setDocumentNumber('');
-    setDocumentDescription('');
+    setAttachments([purchaseAttachmentDraft()]);
+    nextAttachmentKey.current = 2;
     setStoreAllocations({});
     setUploadWarning(null);
     setError(null);
@@ -777,7 +775,7 @@ function RegisterPurchaseModal({
       setSavedOrderId(result.orderId);
 
       const attachmentsToUpload = attachments.flatMap((attachment) =>
-        attachment.files.map((attachmentFile, fileIndex) => ({ attachment, attachmentFile, fileIndex })),
+        attachment.files.map((attachmentFile) => ({ attachment, attachmentFile })),
       );
       if (attachmentsToUpload.length) {
         try {
@@ -795,7 +793,7 @@ function RegisterPurchaseModal({
                 })
                 .map((store) => store.storeId);
 
-          for (const { attachment, attachmentFile, fileIndex } of attachmentsToUpload) {
+          for (const [uploadIndex, { attachment, attachmentFile }] of attachmentsToUpload.entries()) {
             await uploadPurchaseAttachmentV3({
               purchaseId: purchase.id,
               purchaseOrderId: result.orderId,
@@ -804,7 +802,7 @@ function RegisterPurchaseModal({
               documentType: attachment.documentType,
               documentNumber: attachment.documentNumber,
               documentDate: purchasedOn,
-              documentAmount: fileIndex === 0 && total !== null ? centsToInput(total) : '',
+              documentAmount: uploadIndex === 0 && total !== null ? centsToInput(total) : '',
               storeIds,
             });
           }
@@ -1400,12 +1398,12 @@ function BulkRegisterPurchaseModal({
       });
 
       const attachmentsToUpload = attachments.flatMap((attachment) =>
-        attachment.files.map((attachmentFile, fileIndex) => ({ attachment, attachmentFile, fileIndex })),
+        attachment.files.map((attachmentFile) => ({ attachment, attachmentFile })),
       );
       if (attachmentsToUpload.length) {
         const storeIds = [...new Set(rpcLines.flatMap((line) => (line.storeAllocations || []).map((allocation) => allocation.storeId)))];
         try {
-          for (const { attachment, attachmentFile, fileIndex } of attachmentsToUpload) {
+          for (const [uploadIndex, { attachment, attachmentFile }] of attachmentsToUpload.entries()) {
             await uploadPurchaseAttachmentV3({
               purchaseId: purchase.id,
               purchaseOrderId: result.orderId,
@@ -1414,7 +1412,7 @@ function BulkRegisterPurchaseModal({
               documentType: attachment.documentType,
               documentNumber: attachment.documentNumber,
               documentDate: purchasedOn,
-              documentAmount: fileIndex === 0 && total !== null ? centsToInput(total) : '',
+              documentAmount: uploadIndex === 0 && total !== null ? centsToInput(total) : '',
               storeIds,
             });
           }
