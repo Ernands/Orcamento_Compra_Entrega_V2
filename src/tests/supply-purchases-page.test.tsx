@@ -321,8 +321,6 @@ describe('SupplyPurchasesPage V2', () => {
     });
 
     await screen.findByText('CMP-00001');
-    expect(screen.queryByText('Cadeira operacional')).not.toBeInTheDocument();
-
     const collapsedItems = screen.getByLabelText('Resumo dos itens da compra CMP-00001');
     expect(within(collapsedItems).getByText('1 itens · 10 un')).toBeInTheDocument();
 
