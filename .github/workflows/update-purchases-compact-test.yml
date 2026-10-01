@@ -1,0 +1,35 @@
+name: Update purchases compact test
+
+on:
+  push:
+    branches:
+      - hotfix/purchases-store-filter
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/purchases-store-filter
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Update compact purchase test
+        run: python .github/scripts/update-purchases-compact-test.py
+      - name: Commit test update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/tests/supply-purchases-page.test.tsx
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "test: atualizar compra recolhida para modo compacto"
+          git push origin HEAD:hotfix/purchases-store-filter
