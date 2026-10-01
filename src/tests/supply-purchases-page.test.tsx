@@ -313,23 +313,22 @@ describe('SupplyPurchasesPage V2', () => {
     ]);
   });
 
-  it('mostra item, quantidades e link do produto com a compra recolhida', async () => {
+  it('mantem a compra recolhida compacta e mostra os itens sob demanda', async () => {
+    const user = userEvent.setup();
     renderPage({
       ...purchase,
-      items: [{ ...baseItem, productUrl: 'https://example.com/produto' }],
+      items: [{ ...baseItem, productUrl: 'https://example.com/cadeira' }],
     });
 
     await screen.findByText('CMP-00001');
-    const collapsedItems = screen.getByLabelText('Itens da compra CMP-00001');
+    expect(screen.queryByText('Cadeira operacional')).not.toBeInTheDocument();
+
+    const collapsedItems = screen.getByLabelText('Resumo dos itens da compra CMP-00001');
+    expect(within(collapsedItems).getByText('1 itens · 10 un')).toBeInTheDocument();
+
+    await user.click(within(collapsedItems).getByRole('button', { name: 'Ver itens (1)' }));
     expect(within(collapsedItems).getByText('Cadeira operacional')).toBeInTheDocument();
-    expect(within(collapsedItems).getByText(/Aprovado/)).toHaveTextContent('10 un');
-    expect(within(collapsedItems).getByText(/Comprado/)).toHaveTextContent('4 un');
-    expect(within(collapsedItems).getByText(/Falta/)).toHaveTextContent('6 un');
-    expect(within(collapsedItems).getByRole('link', { name: 'Ver produto' })).toHaveAttribute(
-      'href',
-      'https://example.com/produto',
-    );
-    expect(screen.queryByText('Registros realizados')).not.toBeInTheDocument();
+    expect(within(collapsedItems).getByRole('link', { name: 'Ver produto' })).toHaveAttribute('href', 'https://example.com/cadeira');
   });
 
   it('mantem o reembolso fora da operacao e exibe os pagamentos', async () => {
