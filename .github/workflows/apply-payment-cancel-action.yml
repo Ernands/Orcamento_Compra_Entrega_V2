@@ -1,0 +1,86 @@
+name: Apply payment cancel action
+
+on:
+  push:
+    branches:
+      - feature/batch-purchase-multiple-files-freight
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/batch-purchase-multiple-files-freight
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch payment cancel action
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/pages/supply-purchases-page.tsx')
+          text = path.read_text()
+
+          old = "  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);\n"
+          new = old + "  const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);\n"
+          if old not in text:
+              raise SystemExit('cancellingOrderId state not found')
+          text = text.replace(old, new, 1)
+
+          old = """    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+  const openQuoteDocument = async (id: string, path: string) => {"""
+          new = """    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+  const cancelPaymentFromOperation = async (payment: PurchasePaymentV2) => {
+    const prompt = payment.status === 'paid'
+      ? 'Informe o motivo do estorno/cancelamento deste pagamento:'
+      : 'Informe o motivo do cancelamento deste pagamento:';
+    const reason = window.prompt(prompt);
+    if (!reason?.trim()) return;
+    setCancellingPaymentId(payment.id);
+    setError(null);
+    try {
+      await cancelPurchasePaymentV2(payment.id, reason);
+      await onSaved();
+    } catch (failure) {
+      setError(errorMessage(failure, 'Nao foi possivel cancelar/estornar o pagamento.'));
+    } finally {
+      setCancellingPaymentId(null);
+    }
+  };
+  const openQuoteDocument = async (id: string, path: string) => {"""
+          if old not in text:
+              raise SystemExit('cancelOrder handler anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = """<span className={`purchase-v2-pill ${payment.status === 'paid' ? 'is-ok' : payment.status === 'planned' ? 'is-warning' : ''}`}>{payment.status === 'paid' ? 'Pago' : payment.status === 'planned' ? 'Previsto' : 'Cancelado'}</span></div>) : <span className=\"purchase-v2-inline-warning\">Nenhum pagamento vinculado.</span>}"""
+          new = """<span className={`purchase-v2-pill ${payment.status === 'paid' ? 'is-ok' : payment.status === 'planned' ? 'is-warning' : ''}`}>{payment.status === 'paid' ? 'Pago' : payment.status === 'planned' ? 'Previsto' : 'Cancelado'}</span>{canEdit && payment.status !== 'cancelled' && <button type=\"button\" className=\"button button--secondary button--small\" disabled={cancellingPaymentId === payment.id} onClick={() => void cancelPaymentFromOperation(payment)}><XCircle size={14}/>{payment.status === 'paid' ? 'Estornar' : 'Cancelar'}</button>}</div>) : <span className=\"purchase-v2-inline-warning\">Nenhum pagamento vinculado.</span>}"""
+          if old not in text:
+              raise SystemExit('payment operation rendering anchor not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/supply-purchases-page.tsx
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "feat: expor estorno de pagamento na compra"
+          git push origin HEAD:feature/batch-purchase-multiple-files-freight
