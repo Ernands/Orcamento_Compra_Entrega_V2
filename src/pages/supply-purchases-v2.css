@@ -21,8 +21,8 @@
   background: #eff6ff;
 }
 .purchase-v2-card.is-realized {
-  border-color: #b9d8c4;
-  box-shadow: inset 4px 0 0 #238451;
+  border-color: #9fd7b3;
+  box-shadow: inset 6px 0 0 #16a34a;
 }
 .purchase-v2-card.is-realized .purchase-v2-card__header {
   background: #edf7f1;
@@ -30,12 +30,12 @@
 .purchase-v2-card--approved { border-left-color: #3478b8; }
 .purchase-v2-card--in_progress,
 .purchase-v2-card--partially_purchased { border-left-color: #d18b18; }
-.purchase-v2-card--purchased { border-left-color: #23835f; }
+.purchase-v2-card--purchased { border-left-color: #16a34a; }
 .purchase-v2-card--returned { border-left-color: #7a55a5; }
 .purchase-v2-card--cancelled { border-left-color: #b84a43; }
 .purchase-v2-card__header {
   display: grid;
-  grid-template-columns: minmax(90px,.6fr) minmax(180px,1.3fr) minmax(135px,.8fr) minmax(200px,1fr) auto auto;
+  grid-template-columns: minmax(90px,.6fr) minmax(180px,1.2fr) minmax(185px,.95fr) minmax(220px,1.1fr) auto auto;
   gap: 14px;
   align-items: center;
   padding: 14px 16px;
@@ -44,6 +44,11 @@
 }
 .purchase-v2-card__header > div:not(.row-actions) { min-width: 0; display: grid; gap: 3px; }
 .purchase-v2-card__header small { color: var(--muted); font-size: .72rem; }
+.purchase-v2-store-heading { line-height: 1.2; word-break: normal; overflow-wrap: normal; }
+.purchase-v2-card__amount { align-content: start; }
+.purchase-v2-card__amount > strong { font-size: 1.02rem; line-height: 1.1; }
+.purchase-v2-card__amount-label { color: #247447 !important; font-size: .61rem !important; font-weight: 900; letter-spacing: .045em; text-transform: uppercase; }
+.purchase-v2-card__amount small:not(.purchase-v2-card__amount-label) { line-height: 1.25; }
 .purchase-v2-card-actions { flex-wrap: wrap; justify-content: flex-end; }
 .purchase-v2-card__collapsed-items {
   display: grid;

@@ -313,6 +313,33 @@ describe('SupplyPurchasesPage V2', () => {
     ]);
   });
 
+  it('exibe total pago e separa itens sem frete no cabecalho', async () => {
+    renderPage({
+      ...purchase,
+      status: 'purchased',
+      stores: [{ ...purchase.stores[0], city: 'Santa Maria de Itabira', state: 'MG' }],
+      orders: [{
+        ...purchase.orders[0],
+        lines: [{
+          ...partialLine,
+          shippingType: 'informed',
+          actualShippingType: 'informed',
+          shippingAmount: '25',
+          lineTotal: '425',
+        }],
+      }],
+      payments: [{ ...purchase.payments[0], amount: '425' }],
+    });
+
+    await screen.findByText('CMP-00001');
+    const card = screen.getByText('CMP-00001').closest('article');
+    expect(card).not.toBeNull();
+    expect(within(card!).getByText('Total pago')).toBeInTheDocument();
+    expect(within(card!).getAllByText('R$ 425,00').length).toBeGreaterThan(0);
+    expect(within(card!).getByText('Itens sem frete R$ 400,00 · frete R$ 25,00')).toBeInTheDocument();
+    expect(within(card!).getByText(/SANTA MARIA DE ITABIRA/)).toBeInTheDocument();
+  });
+
   it('mantem a compra recolhida compacta e mostra os itens sob demanda', async () => {
     const user = userEvent.setup();
     renderPage({
