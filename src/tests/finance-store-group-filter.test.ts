@@ -1,10 +1,7 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const source = fs.readFileSync(
-  new URL('../pages/finance-store-detail-page.tsx', import.meta.url),
-  'utf8',
-);
+const source = fs.readFileSync('src/pages/finance-store-detail-page.tsx', 'utf8');
 
 describe('filtro por grupo no detalhe financeiro da loja', () => {
   it('oferece Equipamentos, Mobiliário e Obras e Serviços', () => {
