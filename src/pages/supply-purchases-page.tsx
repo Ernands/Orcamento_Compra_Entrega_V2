@@ -183,6 +183,18 @@ type PurchasePaymentDraft = {
   notes: string;
 };
 
+type PurchaseAttachmentDraft = {
+  key: string;
+  documentType: PurchaseDocumentType;
+  documentNumber: string;
+  description: string;
+  files: File[];
+};
+
+function purchaseAttachmentDraft(key = 'attachment-1'): PurchaseAttachmentDraft {
+  return { key, documentType: 'invoice', documentNumber: '', description: '', files: [] };
+}
+
 function paymentDraft(purchase: PurchaseV2, key = 'payment-1'): PurchasePaymentDraft {
   return {
     key,
@@ -290,10 +302,8 @@ function RegisterPurchaseModal({
   const [installmentMethod, setInstallmentMethod] = useState<PaymentMethod>('boleto');
   const nextPaymentKey = useRef(2);
   const previousSuggestedPayment = useRef('');
-  const [file, setFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] = useState<PurchaseDocumentType>('invoice');
-  const [documentNumber, setDocumentNumber] = useState('');
-  const [documentDescription, setDocumentDescription] = useState('');
+  const [attachments, setAttachments] = useState<PurchaseAttachmentDraft[]>(() => [purchaseAttachmentDraft()]);
+  const nextAttachmentKey = useRef(2);
   const [savedOrderId, setSavedOrderId] = useState<string | null>(null);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -422,10 +432,8 @@ function RegisterPurchaseModal({
     setInstallmentMethod('boleto');
     nextPaymentKey.current = 2;
     previousSuggestedPayment.current = '';
-    setFile(null);
-    setDocumentType('invoice');
-    setDocumentNumber('');
-    setDocumentDescription('');
+    setAttachments([purchaseAttachmentDraft()]);
+    nextAttachmentKey.current = 2;
     setStoreAllocations({});
     setUploadWarning(null);
     setError(null);
@@ -574,6 +582,14 @@ function RegisterPurchaseModal({
     setPayments((current) => current.map((payment) => payment.key === key ? { ...payment, ...change } : payment));
   };
 
+  const updateAttachment = (key: string, change: Partial<PurchaseAttachmentDraft>) => {
+    setAttachments((current) => current.map((attachment) => attachment.key === key ? { ...attachment, ...change } : attachment));
+  };
+  const addAttachment = () => {
+    const key = `attachment-${nextAttachmentKey.current++}`;
+    setAttachments((current) => [...current, purchaseAttachmentDraft(key)]);
+  };
+
   const generateInstallmentPayments = () => {
     if (total === null) {
       setError('Calcule primeiro o total da compra.');
@@ -692,9 +708,11 @@ function RegisterPurchaseModal({
         if (payment.installments && Number(payment.installments) < 1) throw new Error('Revise a quantidade de parcelas.');
       }
       if (total === null || paymentTotal === null || paymentTotal !== total) throw new Error('A soma dos pagamentos deve ser igual ao total da compra.');
-      if (file) {
-        const validation = validatePurchaseAttachmentV2(file);
-        if (validation) throw new Error(validation);
+      for (const attachment of attachments) {
+        for (const attachmentFile of attachment.files) {
+          const validation = validatePurchaseAttachmentV2(attachmentFile);
+          if (validation) throw new Error(validation);
+        }
       }
     } catch (failure) {
       setError(errorMessage(failure, 'Revise os valores informados.'));
@@ -756,7 +774,10 @@ function RegisterPurchaseModal({
       });
       setSavedOrderId(result.orderId);
 
-      if (file) {
+      const attachmentsToUpload = attachments.flatMap((attachment) =>
+        attachment.files.map((attachmentFile) => ({ attachment, attachmentFile })),
+      );
+      if (attachmentsToUpload.length) {
         try {
           const storeIds = hasMultipleDestinations
             ? [...new Set(multiLines.flatMap((line) => line.entry.stores
@@ -772,19 +793,21 @@ function RegisterPurchaseModal({
                 })
                 .map((store) => store.storeId);
 
-          await uploadPurchaseAttachmentV3({
-            purchaseId: purchase.id,
-            purchaseOrderId: result.orderId,
-            file,
-            description: documentDescription,
-            documentType,
-            documentNumber,
-            documentDate: purchasedOn,
-            documentAmount: total === null ? '' : centsToInput(total),
-            storeIds,
-          });
+          for (const [uploadIndex, { attachment, attachmentFile }] of attachmentsToUpload.entries()) {
+            await uploadPurchaseAttachmentV3({
+              purchaseId: purchase.id,
+              purchaseOrderId: result.orderId,
+              file: attachmentFile,
+              description: attachment.description,
+              documentType: attachment.documentType,
+              documentNumber: attachment.documentNumber,
+              documentDate: purchasedOn,
+              documentAmount: uploadIndex === 0 && total !== null ? centsToInput(total) : '',
+              storeIds,
+            });
+          }
         } catch (failure) {
-          setUploadWarning(errorMessage(failure, 'A compra e o pagamento foram salvos, mas o arquivo nao foi enviado.'));
+          setUploadWarning(errorMessage(failure, 'A compra e o pagamento foram salvos, mas um ou mais arquivos nao foram enviados.'));
         }
       }
       await onSaved(result.orderId);
@@ -1002,13 +1025,19 @@ function RegisterPurchaseModal({
       </section>
 
       <section className="purchase-v2-operation-section">
-        <header><span>4</span><div><strong>Arquivo da compra</strong><small>Opcional. Nota fiscal, recibo ou comprovante ficara na mesma operacao.</small></div></header>
-        <div className="form-grid form-grid--three">
-          <label className="field">Tipo de documento<select value={documentType} onChange={(event) => setDocumentType(event.target.value as PurchaseDocumentType)}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
-          <label className="field">Numero do documento<input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></label>
-          <label className="field">Arquivo<input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+        <header><span>4</span><div><strong>Arquivos da compra</strong><small>Opcional. Selecione varias notas de uma vez ou adicione grupos para recibos e comprovantes.</small></div></header>
+        <div className="purchase-v2-payment-drafts">
+          {attachments.map((attachment, index) => <div className="purchase-v2-payment-draft" key={attachment.key}>
+            <header><strong>Documento {index + 1}</strong>{attachments.length > 1 && <button type="button" className="button button--secondary button--small" onClick={() => setAttachments((current) => current.filter((entry) => entry.key !== attachment.key))}><XCircle size={15}/>Remover</button>}</header>
+            <div className="form-grid form-grid--three">
+              <label className="field">Tipo de documento<select value={attachment.documentType} onChange={(event) => updateAttachment(attachment.key, { documentType: event.target.value as PurchaseDocumentType })}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
+              <label className="field">Numero do documento<input value={attachment.documentNumber} onChange={(event) => updateAttachment(attachment.key, { documentNumber: event.target.value })} /></label>
+              <label className="field">Arquivos<input type="file" multiple onChange={(event) => updateAttachment(attachment.key, { files: Array.from(event.target.files || []) })} /><small>{attachment.files.length ? `${attachment.files.length} arquivo(s) selecionado(s)` : 'Nenhum arquivo selecionado'}</small></label>
+            </div>
+            <label className="field">Descricao do arquivo<input value={attachment.description} onChange={(event) => updateAttachment(attachment.key, { description: event.target.value })} /></label>
+          </div>)}
         </div>
-        <label className="field">Descricao do arquivo<input value={documentDescription} onChange={(event) => setDocumentDescription(event.target.value)} /></label>
+        <button type="button" className="button button--secondary button--small" onClick={addAttachment}><Plus size={15}/>Adicionar novos arquivos</button>
       </section>
       {error && <div className="form-error">{error}</div>}
       <div className="modal-actions">
@@ -1162,10 +1191,10 @@ function BulkRegisterPurchaseModal({
   const [installmentMethod, setInstallmentMethod] = useState<PaymentMethod>('boleto');
   const nextPaymentKey = useRef(2);
   const previousSuggestedPayment = useRef('');
-  const [file, setFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] = useState<PurchaseDocumentType>('invoice');
-  const [documentNumber, setDocumentNumber] = useState('');
-  const [documentDescription, setDocumentDescription] = useState('');
+  const [bulkShippingMode, setBulkShippingMode] = useState<'total' | 'individual'>('individual');
+  const [totalShipping, setTotalShipping] = useState('');
+  const [attachments, setAttachments] = useState<PurchaseAttachmentDraft[]>(() => [purchaseAttachmentDraft()]);
+  const nextAttachmentKey = useRef(2);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1181,29 +1210,53 @@ function BulkRegisterPurchaseModal({
     setInstallmentFirstDueDate('');
     setInstallmentEntryMethod('pix');
     setInstallmentMethod('boleto');
-    setFile(null);
-    setDocumentType('invoice');
-    setDocumentNumber('');
-    setDocumentDescription('');
+    setBulkShippingMode('individual');
+    setTotalShipping('');
+    setAttachments([purchaseAttachmentDraft()]);
+    nextAttachmentKey.current = 2;
     setError(null);
     nextPaymentKey.current = 2;
     previousSuggestedPayment.current = '';
   }, [purchase]);
 
   const selectedLines = lines.filter((line) => line.selected && !line.disabledReason);
-  const lineTotal = (line: BulkPurchaseDraftLine): bigint | null => {
+  const lineSubtotal = (line: BulkPurchaseDraftLine): bigint | null => {
     try {
-      if (!line.quantity.trim() || !line.unitPrice.trim() || !line.shipping.trim()) return null;
+      if (!line.quantity.trim() || !line.unitPrice.trim()) return null;
       return calculateRegistrationTotal({
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountAmount: '0',
-        shippingAmount: line.shipping,
+        shippingAmount: '0',
         otherCosts: '0',
       });
     } catch {
       return null;
     }
+  };
+  const totalShippingCents = (() => {
+    try {
+      return totalShipping.trim() ? moneyToCents(totalShipping) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const totalShippingAllocations = bulkShippingMode === 'total' && totalShippingCents !== null && selectedLines.length
+    ? allocateCentsByWeights(totalShippingCents, selectedLines.map((line) => lineSubtotal(line) || 0n))
+    : [];
+  const effectiveShipping = (line: BulkPurchaseDraftLine): bigint | null => {
+    try {
+      if (bulkShippingMode === 'individual') return line.shipping.trim() ? moneyToCents(line.shipping) : null;
+      const index = selectedLines.findIndex((entry) => entry.key === line.key);
+      return index >= 0 && totalShippingCents !== null ? totalShippingAllocations[index] || 0n : null;
+    } catch {
+      return null;
+    }
+  };
+  const lineTotal = (line: BulkPurchaseDraftLine): bigint | null => {
+    const subtotal = lineSubtotal(line);
+    const shippingCents = effectiveShipping(line);
+    return subtotal === null || shippingCents === null ? null : subtotal + shippingCents;
   };
   const total = selectedLines.length && selectedLines.every((line) => lineTotal(line) !== null)
     ? selectedLines.reduce((sum, line) => sum + (lineTotal(line) || 0n), 0n)
@@ -1233,6 +1286,14 @@ function BulkRegisterPurchaseModal({
   };
   const updatePayment = (key: string, change: Partial<PurchasePaymentDraft>) => {
     setPayments((current) => current.map((payment) => payment.key === key ? { ...payment, ...change } : payment));
+  };
+
+  const updateAttachment = (key: string, change: Partial<PurchaseAttachmentDraft>) => {
+    setAttachments((current) => current.map((attachment) => attachment.key === key ? { ...attachment, ...change } : attachment));
+  };
+  const addAttachment = () => {
+    const key = `bulk-attachment-${nextAttachmentKey.current++}`;
+    setAttachments((current) => [...current, purchaseAttachmentDraft(key)]);
   };
   const selectAll = () => {
     setLines((current) => current.map((line) => ({ ...line, selected: line.disabledReason ? false : true })));
@@ -1276,10 +1337,15 @@ function BulkRegisterPurchaseModal({
     try {
       if (!selectedLines.length) throw new Error('Selecione ao menos um item para esta compra.');
       if (expectedDeliveryDate && expectedDeliveryDate < purchasedOn) throw new Error('A previsao de entrega nao pode ser anterior a data da compra.');
+      if (bulkShippingMode === 'total') {
+        if (!totalShipping.trim()) throw new Error('Informe o frete total da compra. Use 0 quando o frete for gratis.');
+        if (totalShippingCents === null || totalShippingCents < 0n) throw new Error('Revise o frete total da compra.');
+      }
       const rpcLines = selectedLines.map((line) => {
         const qty = quantityToThousandths(line.quantity);
         if (qty <= 0n || qty > line.remaining) throw new Error(`Revise a quantidade de ${line.item.itemName}.`);
-        if (moneyToCents(line.unitPrice) < 0n || moneyToCents(line.shipping) < 0n) throw new Error('Valores negativos nao sao permitidos.');
+        if (moneyToCents(line.unitPrice) < 0n) throw new Error('Valores negativos nao sao permitidos.');
+        if (bulkShippingMode === 'individual' && moneyToCents(line.shipping) < 0n) throw new Error('Valores negativos nao sao permitidos.');
         if (lineTotal(line) === null) throw new Error(`Informe preco e frete de ${line.item.itemName}. Use 0 quando o frete for gratis.`);
         const weights = bulkLineStoreWeights(purchase, line.item, line.destination);
         const allocations = allocateBulkQuantity(qty, weights);
@@ -1291,7 +1357,7 @@ function BulkRegisterPurchaseModal({
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           discountAmount: '0',
-          shippingAmount: line.shipping,
+          shippingAmount: centsToInput(effectiveShipping(line) || 0n),
           otherCosts: '0',
           expectedDeliveryDate,
           notes: '',
@@ -1303,9 +1369,11 @@ function BulkRegisterPurchaseModal({
         if (moneyToCents(payment.amount) <= 0n) throw new Error('Todos os pagamentos precisam ter valor maior que zero.');
       }
       if (total === null || paymentTotal === null || total !== paymentTotal) throw new Error('A soma dos pagamentos deve ser igual ao total da compra.');
-      if (file) {
-        const validation = validatePurchaseAttachmentV2(file);
-        if (validation) throw new Error(validation);
+      for (const attachment of attachments) {
+        for (const attachmentFile of attachment.files) {
+          const validation = validatePurchaseAttachmentV2(attachmentFile);
+          if (validation) throw new Error(validation);
+        }
       }
 
       setSaving(true);
@@ -1329,22 +1397,27 @@ function BulkRegisterPurchaseModal({
         })),
       });
 
-      if (file) {
+      const attachmentsToUpload = attachments.flatMap((attachment) =>
+        attachment.files.map((attachmentFile) => ({ attachment, attachmentFile })),
+      );
+      if (attachmentsToUpload.length) {
         const storeIds = [...new Set(rpcLines.flatMap((line) => (line.storeAllocations || []).map((allocation) => allocation.storeId)))];
         try {
-          await uploadPurchaseAttachmentV3({
-            purchaseId: purchase.id,
-            purchaseOrderId: result.orderId,
-            file,
-            description: documentDescription,
-            documentType,
-            documentNumber,
-            documentDate: purchasedOn,
-            documentAmount: total === null ? '' : centsToInput(total),
-            storeIds,
-          });
+          for (const [uploadIndex, { attachment, attachmentFile }] of attachmentsToUpload.entries()) {
+            await uploadPurchaseAttachmentV3({
+              purchaseId: purchase.id,
+              purchaseOrderId: result.orderId,
+              file: attachmentFile,
+              description: attachment.description,
+              documentType: attachment.documentType,
+              documentNumber: attachment.documentNumber,
+              documentDate: purchasedOn,
+              documentAmount: uploadIndex === 0 && total !== null ? centsToInput(total) : '',
+              storeIds,
+            });
+          }
         } catch {
-          setError('A compra foi salva, mas o arquivo nao foi enviado. Voce pode anexar o documento depois.');
+          setError('A compra foi salva, mas um ou mais arquivos nao foram enviados. Voce pode anexar os documentos depois.');
           await onSaved();
           return;
         }
@@ -1372,7 +1445,9 @@ function BulkRegisterPurchaseModal({
           <label className="purchase-v2-bulk-check"><input type="checkbox" checked={line.selected} disabled={Boolean(line.disabledReason)} onChange={(event) => updateLine(line.key, { selected: event.target.checked })}/><span><strong>{line.item.itemCode} · {line.item.itemName}</strong><small>{line.destination ? `${line.destination.label} · ${line.destination.state}` : line.item.storeCode || 'Destino direto'} · saldo {formatQuantityV2(decimalFromThousandths(line.remaining))} {line.item.unit}</small>{line.disabledReason && <small className="is-warning">{line.disabledReason}</small>}</span></label>
           <label className="field">Quantidade<input value={line.quantity} disabled={!line.selected} onChange={(event) => updateLine(line.key, { quantity: event.target.value })}/></label>
           <label className="field">Preco unitario<input value={line.unitPrice} disabled={!line.selected} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })}/></label>
-          <label className="field">Frete<input value={line.shipping} disabled={!line.selected} onChange={(event) => updateLine(line.key, { shipping: event.target.value })} placeholder="0 para gratis"/></label>
+          <label className="field">Frete{bulkShippingMode === 'total'
+            ? <input value={line.selected && effectiveShipping(line) !== null ? centsToInput(effectiveShipping(line) || 0n) : ''} disabled placeholder="Rateado do frete total"/>
+            : <input value={line.shipping} disabled={!line.selected} onChange={(event) => updateLine(line.key, { shipping: event.target.value })} placeholder="0 para gratis"/>}</label>
           <div className="purchase-v2-bulk-line-total"><small>Total</small><strong>{line.selected && lineTotal(line) !== null ? formatBRL(lineTotal(line)!) : '—'}</strong></div>
         </div>)}
       </div>
@@ -1390,6 +1465,15 @@ function BulkRegisterPurchaseModal({
 
     <section className="purchase-v2-operation-section">
       <header><span>3</span><div><strong>Pagamento</strong><small>Use o parcelamento para separar entrada paga das parcelas futuras.</small></div></header>
+      <div className="purchase-v2-shipping-mode">
+        <strong>Frete da compra em lote</strong>
+        <div className="segmented">
+          <button type="button" className={bulkShippingMode === 'individual' ? 'is-active' : ''} onClick={() => setBulkShippingMode('individual')}>Frete por item</button>
+          <button type="button" className={bulkShippingMode === 'total' ? 'is-active' : ''} onClick={() => setBulkShippingMode('total')}>Frete total da compra</button>
+        </div>
+        {bulkShippingMode === 'total' && <label className="field">Frete total realizado<input value={totalShipping} onChange={(event) => setTotalShipping(event.target.value)} placeholder="Informe o total · 0 = gratis" /></label>}
+        {bulkShippingMode === 'total' && selectedLines.length > 1 && <small className="purchase-v2-muted">O frete total sera rateado proporcionalmente entre os itens selecionados e ja entrara no total do pagamento.</small>}
+      </div>
       <div className="purchase-v2-installment-builder">
         <div className="form-grid form-grid--three">
           <label className="field">Entrada paga<input value={installmentEntry} onChange={(event) => setInstallmentEntry(event.target.value)} placeholder="0,00" /></label>
@@ -1420,13 +1504,19 @@ function BulkRegisterPurchaseModal({
     </section>
 
     <section className="purchase-v2-operation-section">
-      <header><span>4</span><div><strong>Arquivo geral da compra</strong><small>Opcional; fica vinculado ao pedido completo e as lojas dos itens selecionados.</small></div></header>
-      <div className="form-grid form-grid--three">
-        <label className="field">Tipo<select value={documentType} onChange={(event) => setDocumentType(event.target.value as PurchaseDocumentType)}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
-        <label className="field">Numero do documento<input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></label>
-        <label className="field">Arquivo<input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+      <header><span>4</span><div><strong>Arquivos da compra</strong><small>Selecione varias notas de uma vez e use + Adicionar novos arquivos para recibos, comprovantes ou outros tipos.</small></div></header>
+      <div className="purchase-v2-payment-drafts">
+        {attachments.map((attachment, index) => <div className="purchase-v2-payment-draft" key={attachment.key}>
+          <header><strong>Documento {index + 1}</strong>{attachments.length > 1 && <button type="button" className="button button--secondary button--small" onClick={() => setAttachments((current) => current.filter((entry) => entry.key !== attachment.key))}><XCircle size={15}/>Remover</button>}</header>
+          <div className="form-grid form-grid--three">
+            <label className="field">Tipo de documento<select value={attachment.documentType} onChange={(event) => updateAttachment(attachment.key, { documentType: event.target.value as PurchaseDocumentType })}>{OPERATIONAL_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{DOCUMENT_LABELS[value]}</option>)}</select></label>
+            <label className="field">Numero do documento<input value={attachment.documentNumber} onChange={(event) => updateAttachment(attachment.key, { documentNumber: event.target.value })} /></label>
+            <label className="field">Arquivos<input type="file" multiple onChange={(event) => updateAttachment(attachment.key, { files: Array.from(event.target.files || []) })} /><small>{attachment.files.length ? `${attachment.files.length} arquivo(s) selecionado(s)` : 'Nenhum arquivo selecionado'}</small></label>
+          </div>
+          <label className="field">Descricao<input value={attachment.description} onChange={(event) => updateAttachment(attachment.key, { description: event.target.value })} /></label>
+        </div>)}
       </div>
-      <label className="field">Descricao<input value={documentDescription} onChange={(event) => setDocumentDescription(event.target.value)} /></label>
+      <button type="button" className="button button--secondary button--small" onClick={addAttachment}><Plus size={15}/>Adicionar novos arquivos</button>
     </section>
 
     {error && <div className="form-error">{error}</div>}
@@ -2769,6 +2859,7 @@ export function SupplyPurchasesPage() {
   const [destinationFilter, setDestinationFilter] = useState('');
   const [itemFilterIds, setItemFilterIds] = useState<string[]>([]);
   const [pendingFilter, setPendingFilter] = useState('');
+  const [hideReturned, setHideReturned] = useState(false);
   const [management, setManagement] = useState<{purchase: PurchaseV2; tab: PurchaseManagementTab; itemId?: string} | null>(null);
   const [historyPurchase, setHistoryPurchase] = useState<PurchaseV2 | null>(null);
   const [distribution, setDistribution] = useState<PurchaseDestinationV2 | null>(null);
@@ -2813,6 +2904,7 @@ export function SupplyPurchasesPage() {
       if (referenceFilter.length && !referenceFilter.includes(purchase.code)) return false;
       const text = [purchase.code,purchase.quoteCode,purchase.supplierName,purchase.originCity,purchase.originState,...purchase.items.flatMap((item)=>[item.itemName,item.itemCode,item.offeredBrandModel,item.productUrl,...item.destinations.map((destination)=>destination.label)])].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');
       if (search && !text.includes(search)) return false;
+      if (hideReturned && purchase.status === 'returned') return false;
       if (status && purchase.status !== status) return false;
       if (!matchesSelectedItems(purchase.items.map((item) => item.supplyItemId), itemFilterIds)) return false;
       if (stateFilter && !purchase.stores.some((store)=>store.state===stateFilter) && !purchase.items.some((item)=>item.destinations.some((destination)=>destination.state===stateFilter))) return false;
@@ -2823,7 +2915,7 @@ export function SupplyPurchasesPage() {
       if (pendingFilter==='documents' && purchase.attachments.length>0) return false;
       return true;
     });
-  }, [purchases,query,status,stateFilter,destinationFilter,itemFilterIds,pendingFilter,referenceFilter]);
+  }, [purchases,query,status,stateFilter,destinationFilter,itemFilterIds,pendingFilter,referenceFilter,hideReturned]);
 
   const portfolioBulkEligibleCount = useMemo(
     () => initialPortfolioBulkLines(purchases).filter((line) => !line.disabledReason).length,
@@ -2856,7 +2948,7 @@ export function SupplyPurchasesPage() {
 
   return <section className="page-stack purchase-v2-page">
     <header className="page-header"><div><span className="eyebrow">Suprimentos</span><h2>Compras</h2><p>Execucao do aprovado: registros de compra, pagamentos, historico, destinos, distribuicao fisica e documentos.</p></div><div className="page-heading__actions">{canEdit&&<button className="button button--primary" title="Registrar varios itens de CMPs diferentes" disabled={!portfolioBulkEligibleCount} onClick={()=>setPortfolioBulkOpen(true)}><ShoppingCart size={17}/>Compra em lote</button>}<button className="button button--secondary" disabled={!filtered.length} onClick={()=>setPortfolioOpen(true)}><LayoutDashboard size={17}/>Resumo de compras</button><button className="button button--secondary" disabled={!filtered.length} onClick={toggleAllDetails}><ChevronsUpDown size={17}/>{allDetailsVisible ? 'Recolher todas as compras' : 'Expandir todas as compras'}</button><button className="button button--secondary" onClick={()=>void load()}><RefreshCcw size={17}/>Atualizar</button></div></header>
-    <div className="filter-bar purchase-v2-filters"><label className="search-field"><Search size={18}/><input placeholder="Buscar compra, cotacao, fornecedor, item ou destino" value={query} onChange={(event)=>setQuery(event.target.value)}/></label><ItemMultiFilter label="Filtrar itens em compras" options={purchaseItemOptions} selectedIds={itemFilterIds} onChange={setItemFilterIds}/><select aria-label="Status da compra" value={status} onChange={(event)=>setStatus(event.target.value)}><option value="">Todos os status</option><option value="approved">Aprovada</option><option value="in_progress">Em andamento</option><option value="partially_purchased">Parcialmente comprada</option><option value="purchased">Comprada</option><option value="returned">Devolvida</option><option value="cancelled">Cancelada</option></select><select aria-label="UF" value={stateFilter} onChange={(event)=>setStateFilter(event.target.value)}><option value="">Todas as UFs</option>{states.map((state)=><option key={state} value={state}>{state}</option>)}</select><select aria-label="Prospector ou destino" value={destinationFilter} onChange={(event)=>setDestinationFilter(event.target.value)}><option value="">Todos os destinos</option>{destinationLabels.map((label)=><option key={label} value={label}>{label}</option>)}</select><select aria-label="Pendencia operacional" value={pendingFilter} onChange={(event)=>setPendingFilter(event.target.value)}><option value="">Todas as pendencias</option><option value="destination">Distribuicao mestre pendente</option><option value="line">Distribuicao realizada pendente</option><option value="shipping">Frete realizado pendente</option><option value="documents">Sem documento de Compra</option></select></div>
+    <div className="filter-bar purchase-v2-filters"><label className="search-field"><Search size={18}/><input placeholder="Buscar compra, cotacao, fornecedor, item ou destino" value={query} onChange={(event)=>setQuery(event.target.value)}/></label><ItemMultiFilter label="Filtrar itens em compras" options={purchaseItemOptions} selectedIds={itemFilterIds} onChange={setItemFilterIds}/><label className="button button--secondary button--small"><input type="checkbox" checked={hideReturned} onChange={(event)=>setHideReturned(event.target.checked)}/>Omitir devolvidas para cotacao</label><select aria-label="Status da compra" value={status} onChange={(event)=>setStatus(event.target.value)}><option value="">Todos os status</option><option value="approved">Aprovada</option><option value="in_progress">Em andamento</option><option value="partially_purchased">Parcialmente comprada</option><option value="purchased">Comprada</option><option value="returned">Devolvida para cotacao</option><option value="cancelled">Cancelada</option></select><select aria-label="UF" value={stateFilter} onChange={(event)=>setStateFilter(event.target.value)}><option value="">Todas as UFs</option>{states.map((state)=><option key={state} value={state}>{state}</option>)}</select><select aria-label="Prospector ou destino" value={destinationFilter} onChange={(event)=>setDestinationFilter(event.target.value)}><option value="">Todos os destinos</option>{destinationLabels.map((label)=><option key={label} value={label}>{label}</option>)}</select><select aria-label="Pendencia operacional" value={pendingFilter} onChange={(event)=>setPendingFilter(event.target.value)}><option value="">Todas as pendencias</option><option value="destination">Distribuicao mestre pendente</option><option value="line">Distribuicao realizada pendente</option><option value="shipping">Frete realizado pendente</option><option value="documents">Sem documento de Compra</option></select></div>
     {loading ? <InlineLoading label="Carregando compras"/> : error ? <ErrorState message={error} onRetry={()=>void load()}/> : filtered.length ? <div className="purchase-v2-list">{filtered.map((purchase)=>{const summary=purchaseExecutionSummary(purchase);const active=purchase.orders.filter((order)=>order.status==='active');const pendingStores=summary.pendingDestinationDistributions+summary.pendingLineDistributions;const expanded=expandedIds.has(purchase.id);const operationSummaries=active.map((order)=>({financial:purchaseOrderFinancialSummary(purchase,order),costs:purchaseOrderStoreCosts(order)}));const linkedPaid=operationSummaries.reduce((sum,entry)=>sum+entry.financial.paidCents,0n);const incompleteOperations=operationSummaries.filter((entry)=>!entry.financial.isReconciled||!entry.costs.isConfirmed).length;const unlinkedPayments=purchaseUnlinkedPayments(purchase).payments.filter((payment)=>payment.status!=='cancelled').length;const cardTone=purchase.status==='purchased'&&incompleteOperations===0?'is-realized':['approved','in_progress','partially_purchased','purchased'].includes(purchase.status)?'is-pending':'';return <article key={purchase.id} className={`purchase-v2-card purchase-v2-card--${purchase.status} ${cardTone}`}>
       <header className="purchase-v2-card__header"><div className="supply-identity"><small>{purchase.code}</small><strong>{purchase.quoteCode}</strong></div><div><strong>{purchase.supplierName}</strong><small>{channelLabel(purchase)}</small></div><div title={purchase.stores.map((store)=>`${store.code} - ${store.city}/${store.state}${store.address?` - ${store.address}`:''}`).join('\n')}><strong>{purchaseStoresLabel(purchase)}</strong><small>{purchase.stores.length===1?`${purchase.stores[0].city}/${purchase.stores[0].state}`:'Passe para ver as lojas'}</small></div><div><strong>{formatBRL(summary.approvedCents)}</strong><small>Comprado {formatBRL(summary.realizedCents)} · pago vinculado {formatBRL(linkedPaid)} · saldo para comprar {formatBRL(summary.balanceCents)}</small></div><div className="purchase-v2-status-spotlight"><small>Status</small><StatusBadge status={purchase.status}/>{incompleteOperations>0&&<span className="purchase-v2-pill is-warning">{incompleteOperations} operacoes incompletas</span>}</div><div className="row-actions purchase-v2-card-actions"><button type="button" aria-label={`Gerenciar compra ${purchase.code}`} className="button button--primary button--small" onClick={()=>setManagement({purchase,tab:'purchase'})}><PackageCheck size={16}/>Gerenciar compra</button>{canEdit&&pendingStores>0&&purchase.status!=='returned'&&purchase.status!=='cancelled'&&<button type="button" aria-label={`Confirmar lojas ${purchase.code} (${pendingStores})`} className="button button--secondary button--small" onClick={()=>setBulkPurchase(purchase)}><CheckCheck size={16}/>Confirmar lojas ({pendingStores})</button>}<IconButton label={expanded ? `Recolher ${purchase.code}` : `Detalhar ${purchase.code}`} onClick={()=>togglePurchaseDetails(purchase.id)}>{expanded ? <ChevronUp size={17}/> : <ChevronDown size={17}/>}</IconButton><IconButton label={`Resumo ${purchase.code}`} onClick={()=>setSummaryPurchase(purchase)}><ShoppingCart size={17}/></IconButton><IconButton label={`Historico ${purchase.code}`} onClick={()=>setHistoryPurchase(purchase)}><History size={17}/></IconButton><Link className="icon-button" aria-label={`Abrir cotacao ${purchase.quoteCode}`} title="Abrir cotacao de origem" to={`/suprimentos/cotacoes?quote=${purchase.quoteId}`}><ArrowLeft size={17}/></Link>{canApprove && purchase.status!=='returned' && purchase.status!=='cancelled' && <IconButton label={`Voltar ${purchase.code} para cotacao`} disabled={returningId===purchase.id} onClick={()=>void returnToQuote(purchase)}><RefreshCcw size={17}/></IconButton>}</div></header>
       {!expanded && <div className="purchase-v2-card__collapsed-items" aria-label={`Itens da compra ${purchase.code}`}>
