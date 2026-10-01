@@ -363,7 +363,8 @@ describe('SupplyPurchasesPage V2', () => {
     expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     expect(screen.getByText('1 compras realizadas')).toBeInTheDocument();
-    expect(screen.getByText(/pago vinculado R\$ 400,00/)).toBeInTheDocument();
+    expect(screen.getByText('Total pago')).toBeInTheDocument();
+    expect(screen.getAllByText('R$ 400,00').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirmar lojas CMP-00001 (1)' })).toBeInTheDocument();
     expect(purchaseCode.closest('article')).toHaveClass('purchase-v2-card--partially_purchased');
