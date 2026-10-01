@@ -27,6 +27,7 @@ import {
   buildFinanceOverviewRows,
   buildFinanceStoreCompositionRows,
   buildFinanceStoreItemRows,
+  financeItemCompositionGroup,
   type FinanceOverviewStoreRow,
   type FinanceStoreItemDetailRow,
 } from '../domain/finance-overview';
@@ -70,6 +71,14 @@ const FINANCIAL_GROUP_LABELS = {
   furniture: 'Mobiliário',
   general: 'Mobiliário',
 } as const;
+
+const DETAIL_GROUP_LABELS = {
+  equipment: 'Equipamentos',
+  furniture: 'Mobiliário',
+  works: 'Obras e Serviços',
+} as const;
+
+type DetailGroupFilter = '' | keyof typeof DETAIL_GROUP_LABELS;
 
 const PURCHASE_DOCUMENT_LABELS: Record<string, string> = {
   invoice: 'Nota fiscal',
@@ -146,6 +155,7 @@ export function FinanceStoreDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [groupFilter, setGroupFilter] = useState<DetailGroupFilter>('');
   const [itemStatusFilter, setItemStatusFilter] = useState('');
   const [workStatusFilter, setWorkStatusFilter] = useState('');
   const [workCategoryFilter, setWorkCategoryFilter] = useState('');
@@ -266,6 +276,18 @@ export function FinanceStoreDetailPage() {
   const filteredItemRows = useMemo(
     () =>
       itemRows
+        .filter(
+          (row) =>
+            !groupFilter ||
+            (groupFilter !== 'works' &&
+              financeItemCompositionGroup(
+                row.itemCategory,
+                row.itemSubcategory,
+                row.itemGroupName,
+                row.itemName,
+                row.itemFinancialGroup || null,
+              ) === groupFilter),
+        )
         .filter((row) => !itemStatusFilter || row.purchaseStatus === itemStatusFilter)
         .filter(
           (row) =>
@@ -280,11 +302,12 @@ export function FinanceStoreDetailPage() {
               ].join(' '),
             ).includes(detailSearch),
         ),
-    [detailSearch, itemRows, itemStatusFilter],
+    [detailSearch, groupFilter, itemRows, itemStatusFilter],
   );
   const filteredStoreWorks = useMemo(
     () =>
       storeWorks
+        .filter(() => !groupFilter || groupFilter === 'works')
         .filter((work) => !workStatusFilter || work.status === workStatusFilter)
         .filter((work) => !workCategoryFilter || work.category === workCategoryFilter)
         .filter(
@@ -294,7 +317,7 @@ export function FinanceStoreDetailPage() {
               [work.code, work.category, work.description, work.providerName || ''].join(' '),
             ).includes(detailSearch),
         ),
-    [detailSearch, storeWorks, workCategoryFilter, workStatusFilter],
+    [detailSearch, groupFilter, storeWorks, workCategoryFilter, workStatusFilter],
   );
   const itemDocuments = (row: FinanceStoreItemDetailRow): PurchaseAttachmentV2[] => {
     if (!storeId || !row.purchaseRefs.length) return [];
@@ -334,13 +357,14 @@ export function FinanceStoreDetailPage() {
   const filtersText = useMemo(() => {
     const parts: string[] = [];
     if (query.trim()) parts.push(`Busca: ${query.trim()}`);
+    if (groupFilter) parts.push(`Grupo: ${DETAIL_GROUP_LABELS[groupFilter]}`);
     if (itemStatusFilter)
       parts.push(`Itens: ${ITEM_STATUS_LABELS[itemStatusFilter as keyof typeof ITEM_STATUS_LABELS]}`);
     if (workStatusFilter)
       parts.push(`Obras: ${WORK_STATUS_LABELS[workStatusFilter as WorkService['status']]}`);
     if (workCategoryFilter) parts.push(`Categoria: ${workCategoryFilter}`);
     return parts.length ? parts.join(' | ') : 'Sem filtros';
-  }, [itemStatusFilter, query, workCategoryFilter, workStatusFilter]);
+  }, [groupFilter, itemStatusFilter, query, workCategoryFilter, workStatusFilter]);
 
   const openPurchaseDocument = async (attachment: PurchaseAttachmentV2) => {
     if (!canDocuments) return;
@@ -571,6 +595,19 @@ export function FinanceStoreDetailPage() {
           />
         </label>
         <label>
+          Grupo
+          <select
+            aria-label="Grupo"
+            value={groupFilter}
+            onChange={(event) => setGroupFilter(event.target.value as DetailGroupFilter)}
+          >
+            <option value="">Todos os grupos</option>
+            {Object.entries(DETAIL_GROUP_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
           Situação dos itens
           <select value={itemStatusFilter} onChange={(event) => setItemStatusFilter(event.target.value)}>
             <option value="">Todas</option>
@@ -601,6 +638,7 @@ export function FinanceStoreDetailPage() {
         </label>
       </section>
 
+      {groupFilter !== 'works' && (
       <section className="finance-store-detail__panel finance-store-detail__panel--items">
         <header>
           <div>
@@ -703,7 +741,9 @@ export function FinanceStoreDetailPage() {
           />
         )}
       </section>
+      )}
 
+      {(!groupFilter || groupFilter === 'works') && (
       <section className="finance-store-detail__panel finance-store-detail__panel--works">
         <header>
           <div>
@@ -814,6 +854,7 @@ export function FinanceStoreDetailPage() {
           />
         )}
       </section>
+      )}
 
       {canDocuments && documentPopup && (
         <Modal
