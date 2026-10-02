@@ -313,6 +313,33 @@ describe('SupplyPurchasesPage V2', () => {
     ]);
   });
 
+  it('exibe total pago e separa itens sem frete no cabecalho', async () => {
+    renderPage({
+      ...purchase,
+      status: 'purchased',
+      stores: [{ ...purchase.stores[0], city: 'Santa Maria de Itabira', state: 'MG' }],
+      orders: [{
+        ...purchase.orders[0],
+        lines: [{
+          ...partialLine,
+          shippingType: 'informed',
+          actualShippingType: 'informed',
+          shippingAmount: '25',
+          lineTotal: '425',
+        }],
+      }],
+      payments: [{ ...purchase.payments[0], amount: '425' }],
+    });
+
+    await screen.findByText('CMP-00001');
+    const card = screen.getByText('CMP-00001').closest('article');
+    expect(card).not.toBeNull();
+    expect(within(card!).getByText('Total pago')).toBeInTheDocument();
+    expect(within(card!).getAllByText('R$ 425,00').length).toBeGreaterThan(0);
+    expect(within(card!).getByText('Itens sem frete R$ 400,00 · frete R$ 25,00')).toBeInTheDocument();
+    expect(within(card!).getByText(/SANTA MARIA DE ITABIRA/)).toBeInTheDocument();
+  });
+
   it('mantem a compra recolhida compacta e mostra os itens sob demanda', async () => {
     const user = userEvent.setup();
     renderPage({
@@ -336,7 +363,8 @@ describe('SupplyPurchasesPage V2', () => {
     expect(screen.getByText(/Execucao do aprovado/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
     expect(screen.getByText('1 compras realizadas')).toBeInTheDocument();
-    expect(screen.getByText(/pago vinculado R\$ 400,00/)).toBeInTheDocument();
+    expect(screen.getByText('Total pago')).toBeInTheDocument();
+    expect(screen.getAllByText('R$ 400,00').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirmar lojas CMP-00001 (1)' })).toBeInTheDocument();
     expect(purchaseCode.closest('article')).toHaveClass('purchase-v2-card--partially_purchased');

@@ -243,6 +243,13 @@ export function FinanceStoreDetailPage() {
     () => [...new Set(storeWorks.map((work) => work.category))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [storeWorks],
   );
+  const hasPaymentRowsFor = (
+    predicate: (row: (typeof paymentRows)[number]) => boolean,
+  ) =>
+    paymentRows.some(
+      (row) => (!storeId || row.storeIds.includes(storeId)) && predicate(row),
+    );
+
   const paymentViewFor = (
     predicate: (row: (typeof paymentRows)[number]) => boolean,
   ): FinancePaymentsView => {
@@ -704,14 +711,26 @@ export function FinanceStoreDetailPage() {
                     </td>
                     {canPayments && (
                       <td>
-                        <Link
-                          className="finance-store-detail__payment-link"
-                          to={itemPaymentsHref(row)}
-                          title="Abrir os pagamentos relacionados a este item"
-                        >
-                          <WalletCards size={14} />
-                          Ver pagamentos
-                        </Link>
+                        {hasPaymentRowsFor((payment) => payment.supplyItemIds.includes(row.supplyItemId)) ? (
+                          <Link
+                            className="finance-store-detail__payment-link"
+                            to={itemPaymentsHref(row)}
+                            title="Abrir os pagamentos relacionados a este item"
+                          >
+                            <WalletCards size={14} />
+                            Ver pagamentos
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            className="finance-store-detail__payment-link is-disabled"
+                            disabled
+                            title="Nenhum pagamento relacionado a este item"
+                          >
+                            <WalletCards size={14} />
+                            Ver pagamentos
+                          </button>
+                        )}
                       </td>
                     )}
                     {canDocuments && (
@@ -816,14 +835,26 @@ export function FinanceStoreDetailPage() {
                       </td>
                       {canPayments && (
                         <td>
-                          <Link
-                            className="finance-store-detail__payment-link"
-                            to={workPaymentsHref(work)}
-                            title="Abrir os pagamentos relacionados a este serviço"
-                          >
-                            <WalletCards size={14} />
-                            Ver pagamentos
-                          </Link>
+                          {hasPaymentRowsFor((payment) => payment.workServiceId === work.id) ? (
+                            <Link
+                              className="finance-store-detail__payment-link"
+                              to={workPaymentsHref(work)}
+                              title="Abrir os pagamentos relacionados a este serviço"
+                            >
+                              <WalletCards size={14} />
+                              Ver pagamentos
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              className="finance-store-detail__payment-link is-disabled"
+                              disabled
+                              title="Nenhum pagamento relacionado a este serviço"
+                            >
+                              <WalletCards size={14} />
+                              Ver pagamentos
+                            </button>
+                          )}
                         </td>
                       )}
                       {canDocuments && (

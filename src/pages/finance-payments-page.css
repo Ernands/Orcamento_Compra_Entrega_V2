@@ -7,6 +7,21 @@
   align-items: center;
 }
 
+.finance-payments-filter-indicator {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  color: #2947ba;
+  background: #eef3ff;
+  border: 1px solid #c5d2f7;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
 .finance-payments-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
