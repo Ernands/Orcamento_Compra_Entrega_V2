@@ -22,7 +22,9 @@
 }
 .purchase-v2-card.is-realized {
   border-color: #9fd7b3;
-  box-shadow: inset 6px 0 0 #16a34a;
+  border-left-width: 7px;
+  border-left-color: #087a36;
+  box-shadow: inset 3px 0 0 #087a36;
 }
 .purchase-v2-card.is-realized .purchase-v2-card__header {
   background: #edf7f1;
@@ -30,7 +32,7 @@
 .purchase-v2-card--approved { border-left-color: #3478b8; }
 .purchase-v2-card--in_progress,
 .purchase-v2-card--partially_purchased { border-left-color: #d18b18; }
-.purchase-v2-card--purchased { border-left-color: #16a34a; }
+.purchase-v2-card--purchased { border-left-color: #087a36; }
 .purchase-v2-card--returned { border-left-color: #7a55a5; }
 .purchase-v2-card--cancelled { border-left-color: #b84a43; }
 .purchase-v2-card__header {
