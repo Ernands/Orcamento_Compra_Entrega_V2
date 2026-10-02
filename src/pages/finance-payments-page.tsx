@@ -155,8 +155,6 @@ export function FinancePaymentsPage() {
   }, [load]);
 
   const rows = useMemo(() => buildUnifiedFinancePayments(purchases, works), [purchases, works]);
-  const totals = useMemo(() => financePaymentTotals(rows), [rows]);
-  const originSummary = useMemo(() => financePaymentOriginSummary(rows), [rows]);
   const states = useMemo(() => [...new Set(stores.map((store) => store.state))].sort(), [stores]);
   const suppliers = useMemo(
     () => [...new Set(rows.map((row) => row.supplierName).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
@@ -167,10 +165,9 @@ export function FinancePaymentsPage() {
     [rows],
   );
 
-  const filteredRows = useMemo(() => {
+  const summaryRows = useMemo(() => {
     const search = normalized(query);
     return rows
-      .filter((row) => row.status === view)
       .filter(
         (row) =>
           !originFilter ||
@@ -198,8 +195,7 @@ export function FinancePaymentsPage() {
               ...row.states,
             ].join(' '),
           ).includes(search),
-      )
-      .sort((a, b) => dateSort(a, b, view));
+      );
   }, [
     dateFrom,
     dateTo,
@@ -212,8 +208,29 @@ export function FinancePaymentsPage() {
     stateFilter,
     storeFilter,
     supplierFilter,
-    view,
   ]);
+
+  const totals = useMemo(() => financePaymentTotals(summaryRows), [summaryRows]);
+  const originSummary = useMemo(() => financePaymentOriginSummary(summaryRows), [summaryRows]);
+  const filteredRows = useMemo(
+    () =>
+      summaryRows
+        .filter((row) => row.status === view)
+        .sort((a, b) => dateSort(a, b, view)),
+    [summaryRows, view],
+  );
+  const activeFilterCount = [
+    originFilter,
+    storeFilter,
+    stateFilter,
+    supplierFilter,
+    methodFilter,
+    dateFrom,
+    dateTo,
+    query.trim(),
+    focusItemId,
+    focusServiceId,
+  ].filter(Boolean).length;
 
   const hasDeepFilter = Boolean(focusItemId || focusServiceId);
   const clearDeepFilter = () => {
@@ -325,6 +342,11 @@ export function FinancePaymentsPage() {
           <span className="eyebrow">Financeiro</span>
           <h2>Pagamentos</h2>
           <p>Visão consolidada dos pagamentos realizados e dos compromissos a realizar.</p>
+          {activeFilterCount > 0 && (
+            <span className="finance-payments-filter-indicator" role="status">
+              {activeFilterCount === 1 ? '1 filtro ativo' : `${activeFilterCount} filtros ativos`}
+            </span>
+          )}
         </div>
         <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
           <RefreshCcw size={17} className={loading ? 'spin' : undefined} />
@@ -373,7 +395,11 @@ export function FinancePaymentsPage() {
             >
               <div>
                 <strong>Origem dos valores</strong>
-                <span>Equipamentos, mobiliário, itens gerais e obras e serviços.</span>
+                <span>
+                  {activeFilterCount > 0
+                    ? 'Valores considerando os filtros ativos.'
+                    : 'Equipamentos, mobiliário, itens gerais e obras e serviços.'}
+                </span>
               </div>
               <span className="finance-payment-origins__action">
                 {originOpen ? 'Recolher' : 'Expandir'}

@@ -650,6 +650,16 @@
   border-color: #aebfe9;
 }
 
+.finance-store-detail__payment-link.is-disabled,
+.finance-store-detail__payment-link:disabled {
+  color: #87918d;
+  background: #f2f4f3;
+  border-color: #d8ddda;
+  cursor: not-allowed;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
 .modal.finance-store-documents-modal {
   width: min(94vw, 760px);
 }

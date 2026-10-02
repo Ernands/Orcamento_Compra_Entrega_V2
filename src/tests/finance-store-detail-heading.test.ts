@@ -15,4 +15,13 @@ describe('finance store detail heading', () => {
     expect(styles).toContain('display: grid');
     expect(styles).toContain('justify-items: start');
   });
+
+  it('desabilita Ver pagamentos quando nao ha linha financeira relacionada', () => {
+    expect(page).toContain('const hasPaymentRowsFor');
+    expect(page).toContain('finance-store-detail__payment-link is-disabled');
+    expect(page).toContain('Nenhum pagamento relacionado a este item');
+    expect(page).toContain('Nenhum pagamento relacionado a este serviço');
+    expect(styles).toContain('.finance-store-detail__payment-link:disabled');
+  });
+
 });
