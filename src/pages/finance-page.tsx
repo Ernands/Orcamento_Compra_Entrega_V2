@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinancePaymentsExportActions } from '../components/finance-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceOverviewExcel,
@@ -395,10 +396,9 @@ function ReimbursementModal({
                           current.map((value, itemIndex) =>
                             itemIndex === index ? event.target.value : value,
                           ),
-                        )
-                      }
-                    />
-                  </label>
+                      )
+                    }
+                  />
                 )}
                 {status === 'received' && (
                   <label className="field">
@@ -410,10 +410,10 @@ function ReimbursementModal({
                           current.map((value, itemIndex) =>
                             itemIndex === index ? event.target.value : value,
                           ),
-                        )
-                      }
-                    />
-                  </label>
+                        ),
+                      )
+                    }
+                  />
                 )}
               </article>
             );
@@ -1244,7 +1244,15 @@ export function FinancePage() {
                     vencimento.
                   </p>
                 </div>
-                <span>{filteredPayments.length} lancamentos</span>
+                <FinancePaymentsExportActions
+                  rows={filteredPayments}
+                  stores={stores}
+                  month={month}
+                  query={query}
+                  stateFilter={stateFilter}
+                  storeFilter={storeFilter}
+                  onError={setError}
+                />
               </header>
               {filteredPayments.length ? (
                 <div className="finance-table-scroll">
