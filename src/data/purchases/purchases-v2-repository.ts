@@ -61,6 +61,16 @@ function stringValue(value: Numeric | null): string {
 function nullableStringValue(value: Numeric | null): string | null {
   return value === null ? null : String(value);
 }
+function groupRowsBy<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  rows.forEach((row) => {
+    const key = keyOf(row);
+    const entries = grouped.get(key);
+    if (entries) entries.push(row);
+    else grouped.set(key, [row]);
+  });
+  return grouped;
+}
 function safeFileName(name: string): string {
   return name
     .normalize('NFD')
@@ -220,6 +230,18 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
   const attachmentStores = attachmentStoreResult.data as unknown as AttachmentStoreRow[];
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
 
+  const storesByPurchase = groupRowsBy(stores, (row) => row.purchase_id);
+  const itemsByPurchase = groupRowsBy(items, (row) => row.purchase_id);
+  const destinationsByItem = groupRowsBy(destinations, (row) => row.purchase_item_id);
+  const destinationStoresByDestination = groupRowsBy(destinationStores, (row) => row.purchase_destination_id);
+  const ordersByPurchase = groupRowsBy(orders, (row) => row.purchase_id);
+  const linesByOrder = groupRowsBy(lines, (row) => row.order_id);
+  const lineStoresByLine = groupRowsBy(lineStores, (row) => row.order_line_id);
+  const paymentsByPurchase = groupRowsBy(payments, (row) => row.purchase_id);
+  const attachmentsByPurchase = groupRowsBy(attachments, (row) => row.purchase_id);
+  const attachmentStoresByAttachment = groupRowsBy(attachmentStores, (row) => row.attachment_id);
+  const quoteAttachmentsByQuote = groupRowsBy(quoteAttachments, (row) => row.quote_id);
+
   return purchases.map((purchase): PurchaseV2 => ({
     id: purchase.id, code: purchase.codigo_negocio, quoteId: purchase.quote_id, quoteCode: purchase.quote_code_snapshot,
     supplierId: purchase.supplier_id, supplierName: purchase.supplier_name_snapshot, quoteDate: purchase.quote_date_snapshot,
@@ -230,8 +252,8 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     supplierChannelId: purchase.supplier_channel_id_snapshot, channelType: purchase.channel_type_snapshot,
     originCity: purchase.origin_city_snapshot, originState: purchase.origin_state_snapshot, contact: purchase.contact_snapshot,
     quoteContextSnapshotSource: purchase.quote_context_snapshot_source,
-    stores: stores.filter((row) => row.purchase_id === purchase.id).map(mapStore),
-    items: items.filter((item) => item.purchase_id === purchase.id).map((item): PurchaseItemV2 => ({
+    stores: (storesByPurchase.get(purchase.id) || []).map(mapStore),
+    items: (itemsByPurchase.get(purchase.id) || []).map((item): PurchaseItemV2 => ({
       id: item.id, purchaseId: item.purchase_id, sourceQuoteItemId: item.source_quote_item_id, supplyItemId: item.supply_item_id,
       itemCode: item.item_code_snapshot, itemName: item.item_name_snapshot, itemDescription: item.item_description_snapshot,
       itemCategory: item.item_category_snapshot,
@@ -247,7 +269,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
       quotedOtherCosts: stringValue(item.quoted_other_costs), quotedDeliveryDays: item.quoted_delivery_days,
       approvedLineTotal: stringValue(item.approved_line_total), actualTotal: stringValue(item.actual_total),
       itemContextSnapshotSource: item.item_context_snapshot_source, quoteItemNotes: item.quote_item_notes_snapshot,
-      destinations: destinations.filter((destination) => destination.purchase_item_id === item.id).map((destination): PurchaseDestinationV2 => ({
+      destinations: (destinationsByItem.get(item.id) || []).map((destination): PurchaseDestinationV2 => ({
         id: destination.id, purchaseItemId: destination.purchase_item_id, sourceQuoteDestinationId: destination.source_quote_destination_id,
         destinationType: destination.destination_type, profileId: destination.profile_id, storeId: destination.store_id,
         label: destination.label_snapshot, state: destination.state_snapshot, destinationCount: destination.destination_count,
@@ -255,16 +277,16 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
         quotedShippingAmount: nullableStringValue(destination.quoted_shipping_amount), quotedDeliveryDays: destination.quoted_delivery_days,
         notes: destination.notes_snapshot, position: destination.position, distributionStatus: destination.distribution_status,
         snapshotSource: destination.snapshot_source,
-        stores: destinationStores.filter((store) => store.purchase_destination_id === destination.id).map(mapDestinationStore),
+        stores: (destinationStoresByDestination.get(destination.id) || []).map(mapDestinationStore),
       })),
     })),
-    orders: orders.filter((order) => order.purchase_id === purchase.id).map((order): PurchaseOrderV2 => ({
+    orders: (ordersByPurchase.get(purchase.id) || []).map((order): PurchaseOrderV2 => ({
       id: order.id, purchaseId: order.purchase_id, purchasedOn: order.purchased_on, supplierOrderRef: order.supplier_order_ref,
       expectedDeliveryDate: order.expected_delivery_date, status: order.status, source: order.source, notes: order.notes,
       createdBy: order.created_by, createdByName: order.created_by_name_snapshot, createdAt: order.created_at,
       cancelledBy: order.cancelled_by, cancelledByName: order.cancelled_by_name_snapshot, cancelledAt: order.cancelled_at,
       cancellationReason: order.cancellation_reason,
-      lines: lines.filter((line) => line.order_id === order.id).map((line): PurchaseOrderLineV2 => ({
+      lines: (linesByOrder.get(order.id) || []).map((line): PurchaseOrderLineV2 => ({
         id: line.id, orderId: line.order_id, purchaseItemId: line.purchase_item_id, purchaseDestinationId: line.purchase_destination_id,
         itemCode: line.item_code_snapshot, itemName: line.item_name_snapshot, destinationLabel: line.destination_label_snapshot,
         destinationState: line.destination_state_snapshot, quantity: stringValue(line.quantity), unit: line.unit,
@@ -272,10 +294,10 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
         actualShippingType: line.actual_shipping_type, shippingAmount: nullableStringValue(line.shipping_amount),
         otherCosts: stringValue(line.other_costs), lineTotal: nullableStringValue(line.line_total),
         expectedDeliveryDate: line.expected_delivery_date, notes: line.notes, storeDistributionStatus: line.store_distribution_status,
-        stores: lineStores.filter((store) => store.order_line_id === line.id).map(mapLineStore),
+        stores: (lineStoresByLine.get(line.id) || []).map(mapLineStore),
       })),
     })),
-    payments: payments.filter((payment) => payment.purchase_id === purchase.id).map((payment): PurchasePaymentV2 => ({
+    payments: (paymentsByPurchase.get(purchase.id) || []).map((payment): PurchasePaymentV2 => ({
       id: payment.id, purchaseId: payment.purchase_id, purchaseOrderId: payment.purchase_order_id,
       paymentMethod: payment.payment_method,
       sourceLabel: payment.source_label, amount: stringValue(payment.amount), entryAmount: nullableStringValue(payment.entry_amount),
@@ -283,15 +305,15 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
       paidAt: payment.paid_at, notes: payment.notes, createdAt: payment.created_at,
       cancelledBy: payment.cancelled_by, cancelledAt: payment.cancelled_at, cancellationReason: payment.cancellation_reason,
     })),
-    attachments: attachments.filter((attachment) => attachment.purchase_id === purchase.id).map((attachment): PurchaseAttachmentV2 => ({
+    attachments: (attachmentsByPurchase.get(purchase.id) || []).map((attachment): PurchaseAttachmentV2 => ({
       id: attachment.id, purchaseId: attachment.purchase_id, purchaseOrderId: attachment.purchase_order_id,
       originalName: attachment.original_name, storagePath: attachment.storage_path, mimeType: attachment.mime_type,
       sizeBytes: attachment.size_bytes, description: attachment.description, documentType: attachment.document_type,
       documentNumber: attachment.document_number, documentDate: attachment.document_date,
       documentAmount: nullableStringValue(attachment.document_amount), createdAt: attachment.created_at,
-      stores: attachmentStores.filter((store) => store.attachment_id === attachment.id).map(mapAttachmentStore),
+      stores: (attachmentStoresByAttachment.get(attachment.id) || []).map(mapAttachmentStore),
     })),
-    quoteAttachments: quoteAttachments.filter((attachment) => attachment.quote_id === purchase.quote_id).map((attachment): QuoteAttachmentReadOnlyV2 => ({
+    quoteAttachments: (quoteAttachmentsByQuote.get(purchase.quote_id) || []).map((attachment): QuoteAttachmentReadOnlyV2 => ({
       id: attachment.id, quoteId: attachment.quote_id, originalName: attachment.original_name, storagePath: attachment.storage_path,
       mimeType: attachment.mime_type, sizeBytes: attachment.size_bytes, description: attachment.description,
       documentType: attachment.document_type, createdAt: attachment.created_at,
