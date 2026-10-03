@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { createPurchaseAttachmentSignedUrlV2, listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
@@ -348,10 +349,28 @@ export function FinancePaymentsPage() {
             </span>
           )}
         </div>
-        <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
-          <RefreshCcw size={17} className={loading ? 'spin' : undefined} />
-          Atualizar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <FinanceUnifiedPaymentsExportActions
+            rows={filteredRows}
+            summaryRows={summaryRows}
+            stores={stores}
+            view={view}
+            originFilter={originFilter}
+            storeFilter={storeFilter}
+            stateFilter={stateFilter}
+            supplierFilter={supplierFilter}
+            methodFilter={methodFilter}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            query={query}
+            hasDeepFilter={hasDeepFilter}
+            onError={setError}
+          />
+          <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
+            <RefreshCcw size={17} className={loading ? 'spin' : undefined} />
+            Atualizar
+          </button>
+        </div>
       </header>
 
       {error && <ErrorState message={error} onRetry={() => void load()} />}

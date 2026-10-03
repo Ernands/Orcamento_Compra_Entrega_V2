@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinancePaymentsExportActions } from '../components/finance-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceOverviewExcel,
@@ -1244,7 +1245,15 @@ export function FinancePage() {
                     vencimento.
                   </p>
                 </div>
-                <span>{filteredPayments.length} lancamentos</span>
+                <FinancePaymentsExportActions
+                  rows={filteredPayments}
+                  stores={stores}
+                  month={month}
+                  query={query}
+                  stateFilter={stateFilter}
+                  storeFilter={storeFilter}
+                  onError={setError}
+                />
               </header>
               {filteredPayments.length ? (
                 <div className="finance-table-scroll">
