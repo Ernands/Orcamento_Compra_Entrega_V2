@@ -22,6 +22,7 @@ import { SupplyPlannedBudgetDetailPage } from '../pages/supply-planned-budget-de
 import { SupplyItemDetailPage } from '../pages/supply-item-detail-page';
 import { SupplyNeedsPage } from '../pages/supply-needs-page';
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
+import { SupplyPurchaseDeliveryPage } from '../pages/supply-purchase-delivery-page';
 import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
 import {
@@ -199,6 +200,14 @@ export function App() {
               element={
                 <RequireCapability capability="purchases.view">
                   <SupplyPurchasesPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="suprimentos/gerenciamento-compra-entrega"
+              element={
+                <RequireCapability capability="purchase_delivery.view">
+                  <SupplyPurchaseDeliveryPage />
                 </RequireCapability>
               }
             />
