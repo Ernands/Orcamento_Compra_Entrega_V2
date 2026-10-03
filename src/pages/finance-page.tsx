@@ -396,9 +396,10 @@ function ReimbursementModal({
                           current.map((value, itemIndex) =>
                             itemIndex === index ? event.target.value : value,
                           ),
-                      )
-                    }
-                  />
+                        )
+                      }
+                    />
+                  </label>
                 )}
                 {status === 'received' && (
                   <label className="field">
@@ -410,10 +411,10 @@ function ReimbursementModal({
                           current.map((value, itemIndex) =>
                             itemIndex === index ? event.target.value : value,
                           ),
-                        ),
-                      )
-                    }
-                  />
+                        )
+                      }
+                    />
+                  </label>
                 )}
               </article>
             );
