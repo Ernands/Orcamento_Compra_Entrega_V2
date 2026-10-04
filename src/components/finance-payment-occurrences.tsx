@@ -1,16 +1,16 @@
 import { CalendarClock, CircleAlert, Pencil, Plus, Save, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { EmptyState, Modal } from './ui';
+import { useSession } from '../app/session-provider';
+import { replaceSupplyPurchasePaymentOccurrencesV2 } from '../data/purchases/payment-occurrences-repository';
 import {
-  financePaymentHasOccurrenceDivergence,
-  financePaymentOccurrenceDifference,
   financePaymentOccurrences,
   financePaymentOfficialAmount,
+  type FinancePaymentOccurrenceDisplay,
   type UnifiedFinancePaymentRowWithOccurrences,
 } from '../domain/finance-payment-occurrences';
-import type { PurchasePaymentOccurrenceInputV2 } from '../domain/payment-occurrences';
 import type { PaymentMethod } from '../domain/purchase-v2-types';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
+import { EmptyState, Modal } from './ui';
 import './finance-payment-occurrences.css';
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -50,8 +50,11 @@ type OccurrenceDraft = {
   attachmentId: string | null;
 };
 
-function draftsFromRow(row: UnifiedFinancePaymentRowWithOccurrences): OccurrenceDraft[] {
-  return financePaymentOccurrences(row).map((occurrence, index) => ({
+function draftsFromOccurrences(
+  row: UnifiedFinancePaymentRowWithOccurrences,
+  occurrences: FinancePaymentOccurrenceDisplay[],
+): OccurrenceDraft[] {
+  return occurrences.map((occurrence, index) => ({
     key: occurrence.id || `occurrence-${index + 1}`,
     occurredOn: occurrence.date,
     amount: centsToInput(occurrence.amountCents),
@@ -61,9 +64,31 @@ function draftsFromRow(row: UnifiedFinancePaymentRowWithOccurrences): Occurrence
   }));
 }
 
+function displayFromDrafts(drafts: OccurrenceDraft[]): FinancePaymentOccurrenceDisplay[] {
+  return drafts.flatMap((draft, index) => {
+    try {
+      if (!draft.occurredOn || !draft.amount.trim()) return [];
+      return [{
+        id: draft.key,
+        paymentId: null,
+        attachmentId: draft.attachmentId,
+        date: draft.occurredOn,
+        amountCents: moneyToCents(draft.amount),
+        paymentMethod: draft.paymentMethod,
+        referenceLabel: draft.referenceLabel || null,
+        source: 'manual' as const,
+        notes: 'Detalhamento informado manualmente no Financeiro.',
+        position: index,
+      } as FinancePaymentOccurrenceDisplay & { position: number }];
+    } catch {
+      return [];
+    }
+  });
+}
+
 export function FinancePaymentDatesCell({ row }: { row: UnifiedFinancePaymentRowWithOccurrences }) {
-  const divergence = financePaymentHasOccurrenceDivergence(row);
   const dates = row.paymentDates.length ? row.paymentDates : row.date ? [row.date] : [];
+  const divergence = row.occurrenceDifferenceCents !== 0n;
   if (!dates.length) return <span className="finance-payment-missing">Não informado</span>;
 
   return (
@@ -94,27 +119,30 @@ export function FinancePaymentDatesAction({ onClick }: { onClick: () => void }) 
 export function FinancePaymentOccurrencesModal({
   row,
   onClose,
-  canEdit = false,
-  onSave,
 }: {
   row: UnifiedFinancePaymentRowWithOccurrences | null;
   onClose: () => void;
-  canEdit?: boolean;
-  onSave?: (paymentId: string, occurrences: PurchasePaymentOccurrenceInputV2[]) => Promise<void>;
 }) {
+  const { can } = useSession();
+  const canEdit = can('purchases.edit');
   const [editing, setEditing] = useState(false);
   const [drafts, setDrafts] = useState<OccurrenceDraft[]>([]);
+  const [savedOccurrences, setSavedOccurrences] = useState<FinancePaymentOccurrenceDisplay[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nextKey = useRef(1);
 
   useEffect(() => {
     if (!row) return;
-    const next = draftsFromRow(row);
+    const current = financePaymentOccurrences(row);
+    const next = draftsFromOccurrences(row, current);
     setDrafts(next);
+    setSavedOccurrences(null);
     nextKey.current = next.length + 1;
     setEditing(false);
     setSaving(false);
+    setSaved(false);
     setError(null);
   }, [row]);
 
@@ -130,12 +158,12 @@ export function FinancePaymentOccurrencesModal({
   }, [drafts]);
 
   if (!row) return null;
-  const occurrences = financePaymentOccurrences(row);
+  const occurrences = savedOccurrences || financePaymentOccurrences(row);
   const official = financePaymentOfficialAmount(row);
   const detailed = occurrences.reduce((sum, occurrence) => sum + occurrence.amountCents, 0n);
-  const difference = financePaymentOccurrenceDifference(row);
+  const difference = detailed - official;
   const divergence = difference !== 0n;
-  const editable = canEdit && row.workServiceId === null && row.paymentIds.length === 1 && Boolean(onSave);
+  const editable = canEdit && row.workServiceId === null && row.paymentIds.length === 1;
   const editDifference = draftTotal === null ? null : draftTotal - official;
 
   const updateDraft = (key: string, change: Partial<OccurrenceDraft>) => {
@@ -154,12 +182,19 @@ export function FinancePaymentOccurrencesModal({
     }]);
   };
 
+  const startEditing = () => {
+    setDrafts(draftsFromOccurrences(row, occurrences));
+    setSaved(false);
+    setError(null);
+    setEditing(true);
+  };
+
   const save = async () => {
-    if (!editable || !onSave) return;
+    if (!editable) return;
     setError(null);
     try {
       if (!drafts.length) throw new Error('Informe ao menos uma ocorrência de pagamento.');
-      const values: PurchasePaymentOccurrenceInputV2[] = drafts.map((draft) => {
+      const values = drafts.map((draft) => {
         if (!draft.occurredOn) throw new Error('Informe a data de todas as ocorrências.');
         const amountCents = moneyToCents(draft.amount);
         if (amountCents <= 0n) throw new Error('Todos os valores precisam ser maiores que zero.');
@@ -169,13 +204,15 @@ export function FinancePaymentOccurrencesModal({
           paymentMethod: draft.paymentMethod,
           referenceLabel: draft.referenceLabel,
           attachmentId: draft.attachmentId,
-          source: 'manual',
+          source: 'manual' as const,
           notes: 'Detalhamento informado manualmente no Financeiro.',
         };
       });
       setSaving(true);
-      await onSave(row.paymentIds[0], values);
-      onClose();
+      await replaceSupplyPurchasePaymentOccurrencesV2(row.paymentIds[0], values);
+      setSavedOccurrences(displayFromDrafts(drafts));
+      setEditing(false);
+      setSaved(true);
     } catch (failure) {
       setError(failure instanceof Error && failure.message ? failure.message : 'Não foi possível salvar o detalhamento.');
     } finally {
@@ -207,7 +244,13 @@ export function FinancePaymentOccurrencesModal({
         </div>
       )}
 
-      {row.occurrenceDetailsSource === 'fallback' && !editing && (
+      {saved && (
+        <div className="finance-payment-occurrence-saved" role="status">
+          Detalhamento salvo. A próxima atualização da tela usará essas datas também na coluna, filtros e exportação.
+        </div>
+      )}
+
+      {row.occurrenceDetailsSource === 'fallback' && !editing && !savedOccurrences && (
         <div className="finance-payment-occurrence-fallback">
           Este pagamento ainda não possui detalhamento estruturado. A linha abaixo usa a data e o valor já cadastrados no pagamento.
         </div>
@@ -264,7 +307,7 @@ export function FinancePaymentOccurrencesModal({
           {error && <div className="form-error">{error}</div>}
           <div className="modal-actions">
             <button type="button" className="button button--secondary" onClick={() => {
-              setDrafts(draftsFromRow(row));
+              setDrafts(draftsFromOccurrences(row, occurrences));
               setEditing(false);
               setError(null);
             }}>Cancelar edição</button>
@@ -299,13 +342,13 @@ export function FinancePaymentOccurrencesModal({
 
           {editable && (
             <div className="finance-payment-occurrence-edit-action">
-              <button type="button" className="button button--secondary" onClick={() => setEditing(true)}>
+              <button type="button" className="button button--secondary" onClick={startEditing}>
                 <Pencil size={16} />Editar / informar datas
               </button>
-              <small>Para novas compras, use este detalhamento para manter data, valor e forma estruturados sem depender da leitura do PDF.</small>
+              <small>Para novas compras, informe aqui as movimentações reais; o comprovante permanece somente como evidência.</small>
             </div>
           )}
-          {!editable && canEdit && row.paymentIds.length > 1 && (
+          {canEdit && row.paymentIds.length > 1 && (
             <div className="finance-payment-occurrence-fallback">
               Este lançamento consolida mais de um pagamento. Edite o detalhamento na origem individual de cada pagamento.
             </div>
