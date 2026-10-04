@@ -173,7 +173,6 @@ function lineOrigin(
 }
 
 function buildOrderCostContext(
-  purchase: PurchaseV2,
   order: PurchaseOrderV2,
   itemById: Map<string, PurchaseV2['items'][number]>,
 ): PurchaseCostContext {
@@ -266,7 +265,7 @@ function buildPurchasePaymentContext(purchase: PurchaseV2): PurchasePaymentConte
   const itemById = new Map(purchase.items.map((item) => [item.id, item]));
   const activeOrders = purchase.orders
     .filter((order) => order.status === 'active')
-    .map((order) => ({ order, cost: buildOrderCostContext(purchase, order, itemById) }));
+    .map((order) => ({ order, cost: buildOrderCostContext(order, itemById) }));
   return {
     activeOrders,
     orderById: new Map(activeOrders.map((entry) => [entry.order.id, entry.cost])),
