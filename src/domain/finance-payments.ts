@@ -13,6 +13,14 @@ export const FINANCE_PAYMENT_ORIGIN_LABELS: Record<FinancePaymentOrigin, string>
   works: 'Obras e Serviços',
 };
 
+export interface UnifiedFinancePaymentStoreAllocation {
+  storeId: string;
+  storeCode: string;
+  state: string;
+  amountCents: bigint;
+  originAllocations: Record<FinancePaymentOrigin, bigint>;
+}
+
 export interface UnifiedFinancePaymentRow {
   id: string;
   status: FinancePaymentsView;
@@ -33,6 +41,8 @@ export interface UnifiedFinancePaymentRow {
   storeIds: string[];
   storeCodes: string[];
   states: string[];
+  storeAllocations: UnifiedFinancePaymentStoreAllocation[];
+  unallocatedCents: bigint;
   notes: string | null;
 }
 
@@ -53,6 +63,7 @@ export interface FinancePaymentTotals {
 }
 
 const ORIGINS: FinancePaymentOrigin[] = ['equipment', 'furniture', 'works'];
+const UNALLOCATED_KEY = '__unallocated__';
 
 function emptyAllocations(): Record<FinancePaymentOrigin, bigint> {
   return { equipment: 0n, furniture: 0n, works: 0n };
@@ -74,13 +85,12 @@ function orderLineTotalCents(line: PurchaseOrderV2['lines'][number]): bigint {
   );
 }
 
-function allocateCents(
+function allocateWeightedCents(
   totalCents: bigint,
-  weights: Array<{ key: FinancePaymentOrigin; weight: bigint }>,
-): Record<FinancePaymentOrigin, bigint> {
-  const result = emptyAllocations();
-  const positive = weights.filter((entry) => entry.weight > 0n);
-  if (totalCents <= 0n || positive.length === 0) return result;
+  entries: Array<{ key: string; weight: bigint }>,
+): Map<string, bigint> {
+  const positive = entries.filter((entry) => entry.weight > 0n);
+  if (totalCents <= 0n || positive.length === 0) return new Map();
 
   const totalWeight = positive.reduce((sum, entry) => sum + entry.weight, 0n);
   const interim = positive.map((entry) => {
@@ -92,6 +102,7 @@ function allocateCents(
     };
   });
   let remaining = totalCents - interim.reduce((sum, entry) => sum + entry.base, 0n);
+  const result = new Map<string, bigint>();
   interim
     .sort((a, b) =>
       a.remainder === b.remainder
@@ -101,36 +112,201 @@ function allocateCents(
           : 1,
     )
     .forEach((entry) => {
-      result[entry.key] += entry.base + (remaining > 0n ? 1n : 0n);
+      result.set(entry.key, entry.base + (remaining > 0n ? 1n : 0n));
       if (remaining > 0n) remaining -= 1n;
     });
   return result;
 }
 
-function groupWeightsForOrders(purchase: PurchaseV2, orders: PurchaseOrderV2[]) {
-  const weights = new Map<FinancePaymentOrigin, bigint>();
-  const itemIds = new Set<string>();
+function allocateOrigins(
+  totalCents: bigint,
+  weights: Map<FinancePaymentOrigin, bigint>,
+): Record<FinancePaymentOrigin, bigint> {
+  const allocated = allocateWeightedCents(
+    totalCents,
+    [...weights.entries()].map(([key, weight]) => ({ key, weight })),
+  );
+  return {
+    equipment: allocated.get('equipment') || 0n,
+    furniture: allocated.get('furniture') || 0n,
+    works: allocated.get('works') || 0n,
+  };
+}
 
-  orders.forEach((order) => {
-    order.lines.forEach((line) => {
-      const item = line.purchaseItemId
-        ? purchase.items.find((entry) => entry.id === line.purchaseItemId)
-        : null;
-      if (item?.supplyItemId) itemIds.add(item.supplyItemId);
-      const group = financeItemCompositionGroup(
-        item?.itemCategory || null,
-        item?.catalogSubcategory || null,
-        item?.catalogGroupName || null,
-        item?.itemName || line.itemName,
-        item?.catalogFinancialGroup || null,
-      );
-      weights.set(group, (weights.get(group) || 0n) + orderLineTotalCents(line));
+interface StoreMeta {
+  storeId: string;
+  storeCode: string;
+  state: string;
+}
+
+interface StoreOriginWeight extends StoreMeta {
+  origin: FinancePaymentOrigin;
+  weight: bigint;
+}
+
+interface PurchaseCostContext {
+  totalCents: bigint;
+  originWeights: Map<FinancePaymentOrigin, bigint>;
+  supplyItemIds: string[];
+  storeOriginWeights: Map<string, StoreOriginWeight>;
+  storeMeta: Map<string, StoreMeta>;
+}
+
+interface PurchasePaymentContext {
+  activeOrders: Array<{ order: PurchaseOrderV2; cost: PurchaseCostContext }>;
+  orderById: Map<string, PurchaseCostContext>;
+  combined: PurchaseCostContext;
+}
+
+function lineOrigin(
+  itemById: Map<string, PurchaseV2['items'][number]>,
+  line: PurchaseOrderV2['lines'][number],
+): FinancePaymentOrigin {
+  const item = line.purchaseItemId ? itemById.get(line.purchaseItemId) || null : null;
+  return financeItemCompositionGroup(
+    item?.itemCategory || null,
+    item?.catalogSubcategory || null,
+    item?.catalogGroupName || null,
+    item?.itemName || line.itemName,
+    item?.catalogFinancialGroup || null,
+  );
+}
+
+function buildOrderCostContext(
+  order: PurchaseOrderV2,
+  itemById: Map<string, PurchaseV2['items'][number]>,
+): PurchaseCostContext {
+  const originWeights = new Map<FinancePaymentOrigin, bigint>();
+  const supplyItemIds = new Set<string>();
+  const storeOriginWeights = new Map<string, StoreOriginWeight>();
+  const storeMeta = new Map<string, StoreMeta>();
+  let totalCents = 0n;
+
+  order.lines.forEach((line) => {
+    const total = orderLineTotalCents(line);
+    totalCents += total;
+    const origin = lineOrigin(itemById, line);
+    originWeights.set(origin, (originWeights.get(origin) || 0n) + total);
+
+    const item = line.purchaseItemId ? itemById.get(line.purchaseItemId) || null : null;
+    if (item?.supplyItemId) supplyItemIds.add(item.supplyItemId);
+
+    if (line.storeDistributionStatus !== 'confirmed' || !line.stores.length) return;
+    const allocation = allocateWeightedCents(
+      total,
+      line.stores.map((store) => ({
+        key: store.storeId,
+        weight: quantityToThousandths(store.quantity),
+      })),
+    );
+    const distributed = [...allocation.values()].reduce((sum, value) => sum + value, 0n);
+    if (distributed !== total) return;
+
+    line.stores.forEach((store) => {
+      storeMeta.set(store.storeId, {
+        storeId: store.storeId,
+        storeCode: store.code,
+        state: store.state,
+      });
+      const key = `${store.storeId}|${origin}`;
+      const current = storeOriginWeights.get(key);
+      storeOriginWeights.set(key, {
+        storeId: store.storeId,
+        storeCode: store.code,
+        state: store.state,
+        origin,
+        weight: (current?.weight || 0n) + (allocation.get(store.storeId) || 0n),
+      });
     });
   });
 
   return {
-    weights: [...weights.entries()].map(([key, weight]) => ({ key, weight })),
-    supplyItemIds: [...itemIds],
+    totalCents,
+    originWeights,
+    supplyItemIds: [...supplyItemIds],
+    storeOriginWeights,
+    storeMeta,
+  };
+}
+
+function combineCostContexts(contexts: PurchaseCostContext[]): PurchaseCostContext {
+  const originWeights = new Map<FinancePaymentOrigin, bigint>();
+  const supplyItemIds = new Set<string>();
+  const storeOriginWeights = new Map<string, StoreOriginWeight>();
+  const storeMeta = new Map<string, StoreMeta>();
+  let totalCents = 0n;
+
+  contexts.forEach((context) => {
+    totalCents += context.totalCents;
+    context.originWeights.forEach((weight, origin) => {
+      originWeights.set(origin, (originWeights.get(origin) || 0n) + weight);
+    });
+    context.supplyItemIds.forEach((id) => supplyItemIds.add(id));
+    context.storeMeta.forEach((meta, storeId) => storeMeta.set(storeId, meta));
+    context.storeOriginWeights.forEach((entry, key) => {
+      const current = storeOriginWeights.get(key);
+      storeOriginWeights.set(key, {
+        ...entry,
+        weight: (current?.weight || 0n) + entry.weight,
+      });
+    });
+  });
+
+  return {
+    totalCents,
+    originWeights,
+    supplyItemIds: [...supplyItemIds],
+    storeOriginWeights,
+    storeMeta,
+  };
+}
+
+function buildPurchasePaymentContext(purchase: PurchaseV2): PurchasePaymentContext {
+  const itemById = new Map(purchase.items.map((item) => [item.id, item]));
+  const activeOrders = purchase.orders
+    .filter((order) => order.status === 'active')
+    .map((order) => ({ order, cost: buildOrderCostContext(order, itemById) }));
+  return {
+    activeOrders,
+    orderById: new Map(activeOrders.map((entry) => [entry.order.id, entry.cost])),
+    combined: combineCostContexts(activeOrders.map((entry) => entry.cost)),
+  };
+}
+
+function allocatePaymentToStores(
+  totalCents: bigint,
+  context: PurchaseCostContext,
+): { allocations: UnifiedFinancePaymentStoreAllocation[]; unallocatedCents: bigint } {
+  const storeWeights = [...context.storeOriginWeights.entries()].map(([key, entry]) => ({
+    key,
+    weight: entry.weight,
+  }));
+  const knownWeight = storeWeights.reduce((sum, entry) => sum + entry.weight, 0n);
+  const unallocatedWeight = context.totalCents > knownWeight ? context.totalCents - knownWeight : 0n;
+  if (unallocatedWeight > 0n) storeWeights.push({ key: UNALLOCATED_KEY, weight: unallocatedWeight });
+
+  const allocated = allocateWeightedCents(totalCents, storeWeights);
+  const byStore = new Map<string, UnifiedFinancePaymentStoreAllocation>();
+  context.storeOriginWeights.forEach((entry, key) => {
+    const amount = allocated.get(key) || 0n;
+    if (amount <= 0n) return;
+    const current = byStore.get(entry.storeId) || {
+      storeId: entry.storeId,
+      storeCode: entry.storeCode,
+      state: entry.state,
+      amountCents: 0n,
+      originAllocations: emptyAllocations(),
+    };
+    current.amountCents += amount;
+    current.originAllocations[entry.origin] += amount;
+    byStore.set(entry.storeId, current);
+  });
+
+  const allocations = [...byStore.values()].sort((a, b) => a.storeCode.localeCompare(b.storeCode, 'pt-BR'));
+  const allocatedCents = allocations.reduce((sum, entry) => sum + entry.amountCents, 0n);
+  return {
+    allocations,
+    unallocatedCents: totalCents > allocatedCents ? totalCents - allocatedCents : 0n,
   };
 }
 
@@ -141,11 +317,12 @@ function paymentNotes(purchase: PurchaseV2, paymentId: string): string | null {
 function purchasePaymentRow(
   purchase: PurchaseV2,
   event: ReturnType<typeof buildFinancePaymentEvents>[number],
+  paymentContext: PurchasePaymentContext,
 ): UnifiedFinancePaymentRow {
-  const orders = event.purchaseOrderId
-    ? purchase.orders.filter((order) => order.id === event.purchaseOrderId)
-    : purchase.orders.filter((order) => order.status === 'active');
-  const groupContext = groupWeightsForOrders(purchase, orders);
+  const context = event.purchaseOrderId
+    ? paymentContext.orderById.get(event.purchaseOrderId) || paymentContext.combined
+    : paymentContext.combined;
+  const storeResult = allocatePaymentToStores(event.amountCents, context);
   const notes = paymentNotes(purchase, event.paymentId);
   const fallbackStores = purchase.stores;
   const storeIds = event.storeIds.length ? event.storeIds : fallbackStores.map((store) => store.storeId);
@@ -162,13 +339,13 @@ function purchasePaymentRow(
     id: `purchase:${event.id}`,
     status: event.status,
     date: event.date,
-    originAllocations: allocateCents(event.amountCents, groupContext.weights),
+    originAllocations: allocateOrigins(event.amountCents, context.originWeights),
     referenceCodes: [event.purchaseCode],
     purchaseIds: [purchase.id],
     purchaseOrderIds: event.purchaseOrderId ? [event.purchaseOrderId] : [],
     paymentIds: [event.paymentId],
     workServiceId: null,
-    supplyItemIds: groupContext.supplyItemIds,
+    supplyItemIds: context.supplyItemIds,
     supplierName: event.supplierName,
     description: event.itemSummary,
     paymentMethod: event.paymentMethod,
@@ -178,6 +355,8 @@ function purchasePaymentRow(
     storeIds: unique(storeIds),
     storeCodes,
     states: unique(states),
+    storeAllocations: storeResult.allocations,
+    unallocatedCents: storeResult.unallocatedCents,
     notes,
   };
 }
@@ -185,6 +364,25 @@ function purchasePaymentRow(
 function isCombinedPurchasePayment(row: UnifiedFinancePaymentRow): boolean {
   const normalized = (row.notes || '').toLocaleLowerCase('pt-BR');
   return normalized.includes('compra única') || normalized.includes('parcela combinada');
+}
+
+function mergeStoreAllocations(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentStoreAllocation[] {
+  const result = new Map<string, UnifiedFinancePaymentStoreAllocation>();
+  rows.flatMap((row) => row.storeAllocations).forEach((entry) => {
+    const current = result.get(entry.storeId) || {
+      storeId: entry.storeId,
+      storeCode: entry.storeCode,
+      state: entry.state,
+      amountCents: 0n,
+      originAllocations: emptyAllocations(),
+    };
+    current.amountCents += entry.amountCents;
+    ORIGINS.forEach((origin) => {
+      current.originAllocations[origin] += entry.originAllocations[origin];
+    });
+    result.set(entry.storeId, current);
+  });
+  return [...result.values()].sort((a, b) => a.storeCode.localeCompare(b.storeCode, 'pt-BR'));
 }
 
 function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
@@ -209,6 +407,8 @@ function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
     storeIds: unique(rows.flatMap((row) => row.storeIds)),
     storeCodes: unique(rows.flatMap((row) => row.storeCodes)).sort(),
     states: unique(rows.flatMap((row) => row.states)).sort(),
+    storeAllocations: mergeStoreAllocations(rows),
+    unallocatedCents: rows.reduce((sum, row) => sum + row.unallocatedCents, 0n),
   };
 }
 
@@ -235,58 +435,30 @@ function consolidatePurchaseRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinan
   return result;
 }
 
-function activeOrderTotals(purchase: PurchaseV2) {
-  const orders = purchase.orders.filter((order) => order.status === 'active');
-  return orders.map((order) => ({
-    order,
-    totalCents: order.lines.reduce((sum, line) => sum + orderLineTotalCents(line), 0n),
-  }));
-}
-
 function genericPaymentAllocations(
   payments: PurchasePaymentV2[],
-  orders: Array<{ order: PurchaseOrderV2; totalCents: bigint }>,
+  orders: Array<{ order: PurchaseOrderV2; cost: PurchaseCostContext }>,
 ) {
   const activeGeneralCents = payments
     .filter((payment) => payment.status !== 'cancelled' && !payment.purchaseOrderId)
     .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
   if (activeGeneralCents <= 0n) return new Map<string, bigint>();
 
-  const weights = orders.filter((entry) => entry.totalCents > 0n);
-  const totalWeight = weights.reduce((sum, entry) => sum + entry.totalCents, 0n);
-  const result = new Map<string, bigint>();
-  if (totalWeight <= 0n) return result;
-
-  const interim = weights.map((entry) => {
-    const numerator = activeGeneralCents * entry.totalCents;
-    return {
-      id: entry.order.id,
-      base: numerator / totalWeight,
-      remainder: numerator % totalWeight,
-    };
-  });
-  let remaining = activeGeneralCents - interim.reduce((sum, entry) => sum + entry.base, 0n);
-  interim
-    .sort((a, b) =>
-      a.remainder === b.remainder
-        ? a.id.localeCompare(b.id)
-        : a.remainder > b.remainder
-          ? -1
-          : 1,
-    )
-    .forEach((entry) => {
-      result.set(entry.id, entry.base + (remaining > 0n ? 1n : 0n));
-      if (remaining > 0n) remaining -= 1n;
-    });
-  return result;
+  return allocateWeightedCents(
+    activeGeneralCents,
+    orders.map((entry) => ({ key: entry.order.id, weight: entry.cost.totalCents })),
+  );
 }
 
-function purchaseUnscheduledRows(purchase: PurchaseV2): UnifiedFinancePaymentRow[] {
+function purchaseUnscheduledRows(
+  purchase: PurchaseV2,
+  paymentContext: PurchasePaymentContext,
+): UnifiedFinancePaymentRow[] {
   if (['returned', 'cancelled'].includes(purchase.status)) return [];
-  const orders = activeOrderTotals(purchase);
-  const genericAllocations = genericPaymentAllocations(purchase.payments, orders);
+  const genericAllocations = genericPaymentAllocations(purchase.payments, paymentContext.activeOrders);
 
-  return orders.flatMap(({ order, totalCents }) => {
+  return paymentContext.activeOrders.flatMap(({ order, cost }) => {
+    const totalCents = cost.totalCents;
     if (totalCents <= 0n) return [];
     const linkedPayments = purchase.payments
       .filter(
@@ -298,29 +470,31 @@ function purchaseUnscheduledRows(purchase: PurchaseV2): UnifiedFinancePaymentRow
     const residual = totalCents > registered ? totalCents - registered : 0n;
     if (residual <= 0n) return [];
 
-    const context = groupWeightsForOrders(purchase, [order]);
-    const stores = unique(order.lines.flatMap((line) => line.stores.map((store) => store.storeId)));
+    const storeResult = allocatePaymentToStores(residual, cost);
+    const exactStoreIds = storeResult.allocations.map((entry) => entry.storeId);
     const fallbackStores = purchase.stores;
-    const storeIds = stores.length ? stores : fallbackStores.map((store) => store.storeId);
-    const storeCodes = unique(
-      order.lines.flatMap((line) => line.stores.map((store) => store.code)),
-    );
-    const states = unique(
-      order.lines.flatMap((line) => line.stores.map((store) => store.state)),
-    );
+    const storeIds = exactStoreIds.length
+      ? exactStoreIds
+      : unique(order.lines.flatMap((line) => line.stores.map((store) => store.storeId)));
+    const storeCodes = exactStoreIds.length
+      ? storeResult.allocations.map((entry) => entry.storeCode)
+      : unique(order.lines.flatMap((line) => line.stores.map((store) => store.code)));
+    const states = exactStoreIds.length
+      ? unique(storeResult.allocations.map((entry) => entry.state))
+      : unique(order.lines.flatMap((line) => line.stores.map((store) => store.state)));
 
     return [
       {
         id: `purchase-unscheduled:${purchase.id}:${order.id}`,
         status: 'unscheduled' as const,
         date: null,
-        originAllocations: allocateCents(residual, context.weights),
+        originAllocations: allocateOrigins(residual, cost.originWeights),
         referenceCodes: [purchase.code],
         purchaseIds: [purchase.id],
         purchaseOrderIds: [order.id],
         paymentIds: [],
         workServiceId: null,
-        supplyItemIds: context.supplyItemIds,
+        supplyItemIds: cost.supplyItemIds,
         supplierName: purchase.supplierName,
         description:
           unique(order.lines.map((line) => line.itemName)).join(', ') || 'Itens da compra',
@@ -328,13 +502,11 @@ function purchaseUnscheduledRows(purchase: PurchaseV2): UnifiedFinancePaymentRow
         sourceLabel: null,
         installmentLabel: 'Saldo sem programação',
         amountCents: residual,
-        storeIds: unique(storeIds),
-        storeCodes: storeCodes.length
-          ? storeCodes
-          : unique(fallbackStores.filter((store) => storeIds.includes(store.storeId)).map((store) => store.code)),
-        states: states.length
-          ? states
-          : unique(fallbackStores.filter((store) => storeIds.includes(store.storeId)).map((store) => store.state)),
+        storeIds: storeIds.length ? storeIds : fallbackStores.map((store) => store.storeId),
+        storeCodes: storeCodes.length ? storeCodes : fallbackStores.map((store) => store.code),
+        states: states.length ? states : unique(fallbackStores.map((store) => store.state)),
+        storeAllocations: storeResult.allocations,
+        unallocatedCents: storeResult.unallocatedCents,
         notes: 'Saldo da compra ainda sem pagamento programado.',
       },
     ];
@@ -349,16 +521,13 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
     const paid = payment.status === 'paid';
     const date = (paid ? payment.paidAt : payment.dueDate)?.slice(0, 10) || null;
     const amountCents = moneyToCents(payment.amount);
+    const originAllocations = { equipment: 0n, furniture: 0n, works: amountCents };
     return [
       {
         id: `work:${payment.id}`,
         status: paid ? ('paid' as const) : ('planned' as const),
         date,
-        originAllocations: {
-          equipment: 0n,
-          furniture: 0n,
-          works: amountCents,
-        },
+        originAllocations,
         referenceCodes: [work.code],
         purchaseIds: [],
         purchaseOrderIds: [],
@@ -374,6 +543,16 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
         storeIds: [work.storeId],
         storeCodes: [work.storeCode],
         states: [work.storeState],
+        storeAllocations: [
+          {
+            storeId: work.storeId,
+            storeCode: work.storeCode,
+            state: work.storeState,
+            amountCents,
+            originAllocations: { ...originAllocations },
+          },
+        ],
+        unallocatedCents: 0n,
         notes: payment.notes,
       },
     ];
@@ -386,15 +565,12 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
   const residual = contracted > registered ? contracted - registered : 0n;
 
   if (residual > 0n) {
+    const originAllocations = { equipment: 0n, furniture: 0n, works: residual };
     paymentRows.push({
       id: `work-unscheduled:${work.id}`,
       status: 'unscheduled',
       date: null,
-      originAllocations: {
-        equipment: 0n,
-        furniture: 0n,
-        works: residual,
-      },
+      originAllocations,
       referenceCodes: [work.code],
       purchaseIds: [],
       purchaseOrderIds: [],
@@ -410,6 +586,16 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
       storeIds: [work.storeId],
       storeCodes: [work.storeCode],
       states: [work.storeState],
+      storeAllocations: [
+        {
+          storeId: work.storeId,
+          storeCode: work.storeCode,
+          state: work.storeState,
+          amountCents: residual,
+          originAllocations: { ...originAllocations },
+        },
+      ],
+      unallocatedCents: 0n,
       notes: 'Saldo contratado ainda sem pagamento programado.',
     });
   }
@@ -421,15 +607,19 @@ export function buildUnifiedFinancePayments(
   purchases: PurchaseV2[],
   works: WorkService[],
 ): UnifiedFinancePaymentRow[] {
-  const purchaseRows = consolidatePurchaseRows(
-    purchases.flatMap((purchase) =>
-      buildFinancePaymentEvents([purchase]).map((event) => purchasePaymentRow(purchase, event)),
-    ),
-  );
-  const purchaseResiduals = purchases.flatMap(purchaseUnscheduledRows);
-  const workRows = works.flatMap(workPaymentRows);
+  const purchaseRows: UnifiedFinancePaymentRow[] = [];
+  const purchaseResiduals: UnifiedFinancePaymentRow[] = [];
 
-  return [...purchaseRows, ...purchaseResiduals, ...workRows].sort((a, b) => {
+  purchases.forEach((purchase) => {
+    const paymentContext = buildPurchasePaymentContext(purchase);
+    buildFinancePaymentEvents([purchase]).forEach((event) => {
+      purchaseRows.push(purchasePaymentRow(purchase, event, paymentContext));
+    });
+    purchaseResiduals.push(...purchaseUnscheduledRows(purchase, paymentContext));
+  });
+
+  const workRows = works.flatMap(workPaymentRows);
+  return [...consolidatePurchaseRows(purchaseRows), ...purchaseResiduals, ...workRows].sort((a, b) => {
     if (a.status === 'unscheduled' && b.status !== 'unscheduled') return 1;
     if (a.status !== 'unscheduled' && b.status === 'unscheduled') return -1;
     const aDate = a.date || '9999-12-31';
@@ -438,6 +628,39 @@ export function buildUnifiedFinancePayments(
       aDate.localeCompare(bDate) ||
       a.referenceCodes.join(' ').localeCompare(b.referenceCodes.join(' '), 'pt-BR')
     );
+  });
+}
+
+export function scopeFinancePaymentsByStores(
+  rows: UnifiedFinancePaymentRow[],
+  storeIds: string[],
+): UnifiedFinancePaymentRow[] {
+  const selected = new Set(storeIds);
+  if (!selected.size) return [];
+
+  return rows.flatMap((row) => {
+    const storeAllocations = row.storeAllocations.filter((entry) => selected.has(entry.storeId));
+    if (!storeAllocations.length) return [];
+    const amountCents = storeAllocations.reduce((sum, entry) => sum + entry.amountCents, 0n);
+    if (amountCents <= 0n) return [];
+    const originAllocations = emptyAllocations();
+    storeAllocations.forEach((entry) => {
+      ORIGINS.forEach((origin) => {
+        originAllocations[origin] += entry.originAllocations[origin];
+      });
+    });
+    return [
+      {
+        ...row,
+        amountCents,
+        originAllocations,
+        storeIds: storeAllocations.map((entry) => entry.storeId),
+        storeCodes: unique(storeAllocations.map((entry) => entry.storeCode)).sort(),
+        states: unique(storeAllocations.map((entry) => entry.state)).sort(),
+        storeAllocations,
+        unallocatedCents: 0n,
+      },
+    ];
   });
 }
 

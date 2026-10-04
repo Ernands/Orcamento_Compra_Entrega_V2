@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { createPurchaseAttachmentSignedUrlV2, listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
@@ -24,6 +25,7 @@ import {
   financePaymentPrimaryOrigin,
   financePaymentTotals,
   FINANCE_PAYMENT_ORIGIN_LABELS,
+  scopeFinancePaymentsByStores,
   type FinancePaymentOrigin,
   type FinancePaymentsView,
   type UnifiedFinancePaymentRow,
@@ -164,17 +166,29 @@ export function FinancePaymentsPage() {
     () => [...new Set(rows.map((row) => row.paymentMethod).filter((value): value is string => Boolean(value)))].sort(),
     [rows],
   );
+  const locationStoreIds = useMemo(() => {
+    if (storeFilter) {
+      const selectedStore = stores.find((store) => store.id === storeFilter);
+      if (!selectedStore || (stateFilter && selectedStore.state !== stateFilter)) return [];
+      return [selectedStore.id];
+    }
+    if (stateFilter) {
+      return stores.filter((store) => store.state === stateFilter).map((store) => store.id);
+    }
+    return null;
+  }, [stateFilter, storeFilter, stores]);
 
   const summaryRows = useMemo(() => {
     const search = normalized(query);
-    return rows
+    const locationRows = locationStoreIds === null
+      ? rows
+      : scopeFinancePaymentsByStores(rows, locationStoreIds);
+    return locationRows
       .filter(
         (row) =>
           !originFilter ||
           row.originAllocations[originFilter as FinancePaymentOrigin] > 0n,
       )
-      .filter((row) => !storeFilter || row.storeIds.includes(storeFilter))
-      .filter((row) => !stateFilter || row.states.includes(stateFilter))
       .filter((row) => !supplierFilter || row.supplierName === supplierFilter)
       .filter((row) => !methodFilter || row.paymentMethod === methodFilter)
       .filter((row) => !focusItemId || row.supplyItemIds.includes(focusItemId))
@@ -201,12 +215,11 @@ export function FinancePaymentsPage() {
     dateTo,
     focusItemId,
     focusServiceId,
+    locationStoreIds,
     methodFilter,
     originFilter,
     query,
     rows,
-    stateFilter,
-    storeFilter,
     supplierFilter,
   ]);
 
@@ -348,10 +361,28 @@ export function FinancePaymentsPage() {
             </span>
           )}
         </div>
-        <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
-          <RefreshCcw size={17} className={loading ? 'spin' : undefined} />
-          Atualizar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <FinanceUnifiedPaymentsExportActions
+            rows={filteredRows}
+            summaryRows={summaryRows}
+            stores={stores}
+            view={view}
+            originFilter={originFilter}
+            storeFilter={storeFilter}
+            stateFilter={stateFilter}
+            supplierFilter={supplierFilter}
+            methodFilter={methodFilter}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            query={query}
+            hasDeepFilter={hasDeepFilter}
+            onError={setError}
+          />
+          <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
+            <RefreshCcw size={17} className={loading ? 'spin' : undefined} />
+            Atualizar
+          </button>
+        </div>
       </header>
 
       {error && <ErrorState message={error} onRetry={() => void load()} />}

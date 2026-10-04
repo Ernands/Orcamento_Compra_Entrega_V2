@@ -42,6 +42,17 @@ function nullableStringValue(value: number | string | null | undefined): string 
   return value === null || value === undefined ? null : String(value);
 }
 
+function groupRowsBy<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  rows.forEach((row) => {
+    const key = keyOf(row);
+    const entries = grouped.get(key);
+    if (entries) entries.push(row);
+    else grouped.set(key, [row]);
+  });
+  return grouped;
+}
+
 function mapPayment(row: WorkPaymentRow): WorkServicePayment {
   return {
     id: row.id,
@@ -123,15 +134,12 @@ function mapService(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     payments: payments
-      .filter((payment) => payment.service_id === row.id)
       .map(mapPayment)
       .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '') || a.createdAt.localeCompare(b.createdAt)),
     documents: documents
-      .filter((document) => document.service_id === row.id)
       .map(mapDocument)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     components: components
-      .filter((component) => component.service_id === row.id)
       .map(mapComponent)
       .sort((a, b) => a.sortOrder - b.sortOrder),
   };
@@ -152,11 +160,17 @@ export async function listWorkServices(): Promise<WorkService[]> {
     servicesResult.error || paymentsResult.error || documentsResult.error || componentsResult.error;
   if (error) throw error;
 
-  const payments = paymentsResult.data || [];
-  const documents = documentsResult.data || [];
-  const components = componentsResult.data || [];
+  const paymentsByService = groupRowsBy(paymentsResult.data || [], (payment) => payment.service_id);
+  const documentsByService = groupRowsBy(documentsResult.data || [], (document) => document.service_id);
+  const componentsByService = groupRowsBy(componentsResult.data || [], (component) => component.service_id);
+
   return (servicesResult.data || []).map((service) =>
-    mapService(service, payments, documents, components),
+    mapService(
+      service,
+      paymentsByService.get(service.id) || [],
+      documentsByService.get(service.id) || [],
+      componentsByService.get(service.id) || [],
+    ),
   );
 }
 
