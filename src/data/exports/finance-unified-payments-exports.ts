@@ -7,11 +7,18 @@ import {
   type UnifiedFinancePaymentRow,
   type UnifiedFinancePaymentStoreAllocation,
 } from '../../domain/finance-payments';
+import {
+  financePaymentOccurrenceDifference,
+  financePaymentOccurrences,
+  financePaymentOfficialAmount,
+} from '../../domain/finance-payment-occurrences';
 import type { Store } from '../../domain/types';
 
 const HEADER_FILL = 'FF1F6F5C';
 const HEADER_TEXT = 'FFFFFFFF';
 const MONEY_FORMAT = 'R$ #,##0.00';
+const DIVERGENCE_FILL = 'FFFFE8E6';
+const DIVERGENCE_TEXT = 'FFB42318';
 
 const PAYMENT_LABELS: Record<string, string> = {
   pix: 'PIX',
@@ -119,6 +126,11 @@ function paymentMethodLabel(row: UnifiedFinancePaymentRow): string {
   return PAYMENT_LABELS[row.paymentMethod] || row.paymentMethod;
 }
 
+function paymentMethodValue(value: string | null): string {
+  if (!value) return 'Não informada';
+  return PAYMENT_LABELS[value] || value;
+}
+
 function referenceLabel(row: UnifiedFinancePaymentRow): string {
   return row.referenceCodes.join(' + ') || 'Sem referência';
 }
@@ -131,6 +143,51 @@ function storeLabel(row: UnifiedFinancePaymentRow, storesById: Map<string, Store
   if (labels.length) return labels.join('\n');
   if (row.storeCodes.length) return row.storeCodes.join(', ');
   return 'Sem loja definida';
+}
+
+function paymentOccurrenceDatesLabel(row: UnifiedFinancePaymentRow): string {
+  if (row.status !== 'paid') return formatDate(row.date);
+  const occurrences = financePaymentOccurrences(row);
+  if (!occurrences.length) return formatDate(row.date);
+  return [...new Set(occurrences.map((entry) => entry.date))]
+    .sort()
+    .map((date) => formatDate(date))
+    .join('\n');
+}
+
+function paymentOccurrenceDetailLabel(row: UnifiedFinancePaymentRow): string {
+  if (row.status !== 'paid') return '—';
+  const occurrences = financePaymentOccurrences(row);
+  if (!occurrences.length) return 'Sem detalhamento';
+  return occurrences
+    .map((entry) => {
+      const reference = entry.referenceLabel ? ` · ${entry.referenceLabel}` : '';
+      return `${formatDate(entry.date)} · ${formatCurrency(entry.amountCents)} · ${paymentMethodValue(entry.paymentMethod)}${reference}`;
+    })
+    .join('\n');
+}
+
+function paymentOccurrenceReconciliationLabel(row: UnifiedFinancePaymentRow): string {
+  if (row.status !== 'paid') return '—';
+  const occurrences = financePaymentOccurrences(row);
+  if (!occurrences.length) return 'Sem detalhamento';
+  const official = financePaymentOfficialAmount(row);
+  const detailed = occurrences.reduce((sum, entry) => sum + entry.amountCents, 0n);
+  const difference = financePaymentOccurrenceDifference(row);
+  if (difference === 0n) {
+    return `OK · oficial ${formatCurrency(official)} · detalhado ${formatCurrency(detailed)}`;
+  }
+  const prefix = difference > 0n ? '+' : '';
+  return `DIVERGENTE · oficial ${formatCurrency(official)} · detalhado ${formatCurrency(detailed)} · diferença ${prefix}${formatCurrency(difference)}`;
+}
+
+function markDivergence(row: { getCell: (key: string) => { fill: unknown; font: unknown } }, payment: UnifiedFinancePaymentRow) {
+  if (payment.status !== 'paid' || financePaymentOccurrenceDifference(payment) === 0n) return;
+  ['date', 'paymentDetails', 'reconciliation'].forEach((key) => {
+    const cell = row.getCell(key);
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DIVERGENCE_FILL } };
+    cell.font = { color: { argb: DIVERGENCE_TEXT }, bold: true };
+  });
 }
 
 export async function createFinanceUnifiedPaymentsWorkbook(
@@ -175,7 +232,7 @@ export async function createFinanceUnifiedPaymentsWorkbook(
   });
   sheet.columns = [
     { header: 'Situação', key: 'status', width: 24 },
-    { header: 'Data / vencimento', key: 'date', width: 17 },
+    { header: 'Data / vencimento', key: 'date', width: 20 },
     { header: 'Origem', key: 'origin', width: 22 },
     { header: 'Referência', key: 'reference', width: 22 },
     { header: 'Fornecedor / prestador', key: 'supplier', width: 28 },
@@ -185,26 +242,33 @@ export async function createFinanceUnifiedPaymentsWorkbook(
     { header: 'Forma', key: 'method', width: 21 },
     { header: 'Identificação / parcela', key: 'installment', width: 28 },
     { header: 'Valor', key: 'amount', width: 17, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Datas dos pagamentos', key: 'paymentDates', width: 24 },
+    { header: 'Detalhamento · data · valor · forma', key: 'paymentDetails', width: 58 },
+    { header: 'Conciliação do detalhamento', key: 'reconciliation', width: 58 },
   ];
   styleHeader(sheet.getRow(1));
 
-  input.rows.forEach((row) => {
-    sheet.addRow({
-      status: VIEW_LABELS[row.status],
-      date: formatDate(row.date),
-      origin: originLabel(row),
-      reference: referenceLabel(row),
-      supplier: row.supplierName,
-      description: row.description,
-      stores: storeLabel(row, storesById),
-      states: row.states.join(', ') || '—',
-      method: paymentMethodLabel(row),
-      installment: row.sourceLabel || row.installmentLabel,
-      amount: centsToNumber(row.amountCents),
+  input.rows.forEach((payment) => {
+    const excelRow = sheet.addRow({
+      status: VIEW_LABELS[payment.status],
+      date: paymentOccurrenceDatesLabel(payment),
+      origin: originLabel(payment),
+      reference: referenceLabel(payment),
+      supplier: payment.supplierName,
+      description: payment.description,
+      stores: storeLabel(payment, storesById),
+      states: payment.states.join(', ') || '—',
+      method: paymentMethodLabel(payment),
+      installment: payment.sourceLabel || payment.installmentLabel,
+      amount: centsToNumber(payment.amountCents),
+      paymentDates: payment.status === 'paid' ? paymentOccurrenceDatesLabel(payment) : '—',
+      paymentDetails: paymentOccurrenceDetailLabel(payment),
+      reconciliation: paymentOccurrenceReconciliationLabel(payment),
     });
+    markDivergence(excelRow, payment);
   });
 
-  sheet.autoFilter = `A1:K${Math.max(1, sheet.rowCount)}`;
+  sheet.autoFilter = `A1:N${Math.max(1, sheet.rowCount)}`;
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) row.alignment = { vertical: 'top', wrapText: true };
   });
@@ -215,7 +279,7 @@ export async function createFinanceUnifiedPaymentsWorkbook(
   });
   storesSheet.columns = [
     { header: 'Situação', key: 'status', width: 24 },
-    { header: 'Data / vencimento', key: 'date', width: 17 },
+    { header: 'Data / vencimento', key: 'date', width: 20 },
     { header: 'Loja', key: 'store', width: 32 },
     { header: 'Cidade', key: 'city', width: 22 },
     { header: 'UF', key: 'state', width: 9 },
@@ -226,46 +290,57 @@ export async function createFinanceUnifiedPaymentsWorkbook(
     { header: 'Identificação / parcela', key: 'installment', width: 28 },
     { header: 'Valor da loja', key: 'amount', width: 18, style: { numFmt: MONEY_FORMAT } },
     { header: 'Observação', key: 'note', width: 34 },
+    { header: 'Datas dos pagamentos', key: 'paymentDates', width: 24 },
+    { header: 'Detalhamento · data · valor · forma', key: 'paymentDetails', width: 58 },
+    { header: 'Conciliação do detalhamento', key: 'reconciliation', width: 58 },
   ];
   styleHeader(storesSheet.getRow(1));
 
-  input.rows.forEach((row) => {
-    row.storeAllocations.forEach((allocation) => {
+  input.rows.forEach((payment) => {
+    payment.storeAllocations.forEach((allocation) => {
       const store = storesById.get(allocation.storeId);
-      storesSheet.addRow({
-        status: VIEW_LABELS[row.status],
-        date: formatDate(row.date),
+      const excelRow = storesSheet.addRow({
+        status: VIEW_LABELS[payment.status],
+        date: paymentOccurrenceDatesLabel(payment),
         store: store ? `${store.code} · ${store.name}` : allocation.storeCode,
         city: store?.city || '—',
         state: store?.state || allocation.state || '—',
         origin: allocationOriginLabel(allocation),
-        reference: referenceLabel(row),
-        supplier: row.supplierName,
-        method: paymentMethodLabel(row),
-        installment: row.sourceLabel || row.installmentLabel,
+        reference: referenceLabel(payment),
+        supplier: payment.supplierName,
+        method: paymentMethodLabel(payment),
+        installment: payment.sourceLabel || payment.installmentLabel,
         amount: centsToNumber(allocation.amountCents),
         note: 'Valor atribuído pelo custo real da loja na compra/serviço.',
+        paymentDates: payment.status === 'paid' ? paymentOccurrenceDatesLabel(payment) : '—',
+        paymentDetails: paymentOccurrenceDetailLabel(payment),
+        reconciliation: paymentOccurrenceReconciliationLabel(payment),
       });
+      markDivergence(excelRow, payment);
     });
-    if (row.unallocatedCents > 0n) {
-      storesSheet.addRow({
-        status: VIEW_LABELS[row.status],
-        date: formatDate(row.date),
+    if (payment.unallocatedCents > 0n) {
+      const excelRow = storesSheet.addRow({
+        status: VIEW_LABELS[payment.status],
+        date: paymentOccurrenceDatesLabel(payment),
         store: 'Não distribuído',
         city: '—',
         state: '—',
-        origin: originLabel(row),
-        reference: referenceLabel(row),
-        supplier: row.supplierName,
-        method: paymentMethodLabel(row),
-        installment: row.sourceLabel || row.installmentLabel,
-        amount: centsToNumber(row.unallocatedCents),
+        origin: originLabel(payment),
+        reference: referenceLabel(payment),
+        supplier: payment.supplierName,
+        method: paymentMethodLabel(payment),
+        installment: payment.sourceLabel || payment.installmentLabel,
+        amount: centsToNumber(payment.unallocatedCents),
         note: 'Parcela sem distribuição de loja confirmada; não atribuída artificialmente.',
+        paymentDates: payment.status === 'paid' ? paymentOccurrenceDatesLabel(payment) : '—',
+        paymentDetails: paymentOccurrenceDetailLabel(payment),
+        reconciliation: paymentOccurrenceReconciliationLabel(payment),
       });
+      markDivergence(excelRow, payment);
     }
   });
 
-  storesSheet.autoFilter = `A1:L${Math.max(1, storesSheet.rowCount)}`;
+  storesSheet.autoFilter = `A1:O${Math.max(1, storesSheet.rowCount)}`;
   storesSheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) row.alignment = { vertical: 'top', wrapText: true };
   });
@@ -315,7 +390,7 @@ export async function createFinanceUnifiedPaymentsPdf(
       'Valor',
     ]],
     body: input.rows.map((row) => [
-      formatDate(row.date),
+      paymentOccurrenceDatesLabel(row),
       originLabel(row),
       referenceLabel(row),
       row.supplierName,
@@ -327,13 +402,13 @@ export async function createFinanceUnifiedPaymentsPdf(
     headStyles: { fillColor: [31, 111, 92], fontSize: 6.1 },
     styles: { fontSize: 5.6, cellPadding: 1.35, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 20 },
-      1: { cellWidth: 26 },
-      2: { cellWidth: 30 },
+      0: { cellWidth: 24 },
+      1: { cellWidth: 25 },
+      2: { cellWidth: 29 },
       3: { cellWidth: 34 },
-      4: { cellWidth: 52 },
-      5: { cellWidth: 50 },
-      6: { cellWidth: 40 },
+      4: { cellWidth: 50 },
+      5: { cellWidth: 48 },
+      6: { cellWidth: 39 },
       7: { cellWidth: 24, halign: 'right' },
     },
     margin: { left: 7, right: 7, bottom: 10 },

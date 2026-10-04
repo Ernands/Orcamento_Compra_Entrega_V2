@@ -14,22 +14,35 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import {
+  FinancePaymentDatesAction,
+  FinancePaymentDatesCell,
+  FinancePaymentOccurrencesModal,
+} from '../components/finance-payment-occurrences';
 import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
+import { listSupplyPurchasePaymentOccurrencesV2 } from '../data/purchases/payment-occurrences-repository';
 import { createPurchaseAttachmentSignedUrlV2, listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
 import { createWorkDocumentSignedUrl, listWorkServices } from '../data/works/works-repository';
+import {
+  decorateFinancePaymentsWithOccurrences,
+  financePaymentLatestDate,
+  financePaymentMatchesDateRange,
+  scopeFinancePaymentsWithOccurrencesByStores,
+  type UnifiedFinancePaymentRowWithOccurrences,
+} from '../domain/finance-payment-occurrences';
 import {
   buildUnifiedFinancePayments,
   financePaymentOriginSummary,
   financePaymentPrimaryOrigin,
   financePaymentTotals,
   FINANCE_PAYMENT_ORIGIN_LABELS,
-  scopeFinancePaymentsByStores,
   type FinancePaymentOrigin,
   type FinancePaymentsView,
   type UnifiedFinancePaymentRow,
 } from '../domain/finance-payments';
+import type { PurchasePaymentOccurrenceV2 } from '../domain/payment-occurrences';
 import { formatBRL } from '../domain/supply-calculations';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
@@ -92,9 +105,16 @@ function referenceLabel(row: UnifiedFinancePaymentRow): string {
   return row.referenceCodes.join(' + ') || 'Sem referência';
 }
 
-function dateSort(a: UnifiedFinancePaymentRow, b: UnifiedFinancePaymentRow, view: FinancePaymentsView) {
+function dateSort(
+  a: UnifiedFinancePaymentRowWithOccurrences,
+  b: UnifiedFinancePaymentRowWithOccurrences,
+  view: FinancePaymentsView,
+) {
   if (view === 'paid') {
-    return (b.date || '').localeCompare(a.date || '') || referenceLabel(a).localeCompare(referenceLabel(b));
+    return (
+      (financePaymentLatestDate(b) || '').localeCompare(financePaymentLatestDate(a) || '') ||
+      referenceLabel(a).localeCompare(referenceLabel(b))
+    );
   }
   if (view === 'planned') {
     return (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31') ||
@@ -111,6 +131,7 @@ export function FinancePaymentsPage() {
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [occurrences, setOccurrences] = useState<PurchasePaymentOccurrenceV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [originOpen, setOriginOpen] = useState(true);
@@ -125,7 +146,8 @@ export function FinancePaymentsPage() {
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [focusItemId, setFocusItemId] = useState(searchParams.get('item') || '');
   const [focusServiceId, setFocusServiceId] = useState(searchParams.get('service') || '');
-  const [documentsRow, setDocumentsRow] = useState<UnifiedFinancePaymentRow | null>(null);
+  const [documentsRow, setDocumentsRow] = useState<UnifiedFinancePaymentRowWithOccurrences | null>(null);
+  const [datesRow, setDatesRow] = useState<UnifiedFinancePaymentRowWithOccurrences | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
 
@@ -133,14 +155,16 @@ export function FinancePaymentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextPurchases, nextWorks, nextStores] = await Promise.all([
+      const [nextPurchases, nextWorks, nextStores, nextOccurrences] = await Promise.all([
         listSupplyPurchasesV2(),
         listWorkServices(),
         listStores(),
+        listSupplyPurchasePaymentOccurrencesV2(),
       ]);
       setPurchases(nextPurchases);
       setWorks(nextWorks);
       setStores(nextStores);
+      setOccurrences(nextOccurrences);
     } catch (loadError) {
       setError(
         loadError instanceof Error && loadError.message
@@ -156,14 +180,20 @@ export function FinancePaymentsPage() {
     void load();
   }, [load]);
 
-  const rows = useMemo(() => buildUnifiedFinancePayments(purchases, works), [purchases, works]);
+  const rows = useMemo(
+    () => decorateFinancePaymentsWithOccurrences(buildUnifiedFinancePayments(purchases, works), occurrences),
+    [occurrences, purchases, works],
+  );
   const states = useMemo(() => [...new Set(stores.map((store) => store.state))].sort(), [stores]);
   const suppliers = useMemo(
     () => [...new Set(rows.map((row) => row.supplierName).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [rows],
   );
   const methods = useMemo(
-    () => [...new Set(rows.map((row) => row.paymentMethod).filter((value): value is string => Boolean(value)))].sort(),
+    () => [...new Set(rows.flatMap((row) => [
+      row.paymentMethod,
+      ...row.paymentOccurrences.map((occurrence) => occurrence.paymentMethod),
+    ]).filter((value): value is string => Boolean(value)))].sort(),
     [rows],
   );
   const locationStoreIds = useMemo(() => {
@@ -182,7 +212,7 @@ export function FinancePaymentsPage() {
     const search = normalized(query);
     const locationRows = locationStoreIds === null
       ? rows
-      : scopeFinancePaymentsByStores(rows, locationStoreIds);
+      : scopeFinancePaymentsWithOccurrencesByStores(rows, locationStoreIds);
     return locationRows
       .filter(
         (row) =>
@@ -190,11 +220,15 @@ export function FinancePaymentsPage() {
           row.originAllocations[originFilter as FinancePaymentOrigin] > 0n,
       )
       .filter((row) => !supplierFilter || row.supplierName === supplierFilter)
-      .filter((row) => !methodFilter || row.paymentMethod === methodFilter)
+      .filter(
+        (row) =>
+          !methodFilter ||
+          row.paymentMethod === methodFilter ||
+          row.paymentOccurrences.some((occurrence) => occurrence.paymentMethod === methodFilter),
+      )
       .filter((row) => !focusItemId || row.supplyItemIds.includes(focusItemId))
       .filter((row) => !focusServiceId || row.workServiceId === focusServiceId)
-      .filter((row) => !dateFrom || (row.date !== null && row.date >= dateFrom))
-      .filter((row) => !dateTo || (row.date !== null && row.date <= dateTo))
+      .filter((row) => financePaymentMatchesDateRange(row, dateFrom, dateTo))
       .filter(
         (row) =>
           !search ||
@@ -207,6 +241,11 @@ export function FinancePaymentsPage() {
               row.installmentLabel,
               ...row.storeCodes,
               ...row.states,
+              ...row.paymentOccurrences.flatMap((occurrence) => [
+                occurrence.date,
+                occurrence.referenceLabel || '',
+                occurrence.paymentMethod || '',
+              ]),
             ].join(' '),
           ).includes(search),
       );
@@ -561,7 +600,7 @@ export function FinancePaymentsPage() {
                 <h3>{VIEW_LABELS[view]}</h3>
                 <p>
                   {view === 'paid'
-                    ? 'Pagamentos já efetivados.'
+                    ? 'Pagamentos já efetivados. A coluna de data considera todas as ocorrências financeiras registradas.'
                     : view === 'planned'
                       ? 'Pagamentos com vencimento e forma já definidos.'
                       : 'Saldos existentes que ainda precisam de programação financeira.'}
@@ -604,7 +643,11 @@ export function FinancePaymentsPage() {
                             </>
                           ) : (
                             <>
-                              <td><strong>{formatDate(row.date)}</strong></td>
+                              <td>
+                                {view === 'paid'
+                                  ? <FinancePaymentDatesCell row={row} />
+                                  : <strong>{formatDate(row.date)}</strong>}
+                              </td>
                               <td><strong>{origin}</strong></td>
                               <td>
                                 <strong>{referenceLabel(row)}</strong>
@@ -628,6 +671,9 @@ export function FinancePaymentsPage() {
                           <td className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
                           <td>
                             <div className="finance-payment-actions">
+                              {view === 'paid' && (
+                                <FinancePaymentDatesAction onClick={() => setDatesRow(row)} />
+                              )}
                               {(row.workServiceId ? canWorks : canPurchases) ? (
                                 <Link className="finance-payment-origin-link" to={originHref(row)}>
                                   Ver origem
@@ -661,6 +707,8 @@ export function FinancePaymentsPage() {
           </section>
         </>
       )}
+
+      <FinancePaymentOccurrencesModal row={datesRow} onClose={() => setDatesRow(null)} />
 
       {documentsRow && (
         <Modal
