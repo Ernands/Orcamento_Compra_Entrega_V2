@@ -11,10 +11,10 @@ describe('purchase payment occurrences migrations', () => {
     expect(migration).toContain('enable row level security');
     expect(migration).toContain('app.can_read_supply_purchase(payment.purchase_id)');
     expect(migration).toContain('app.can_edit_supply_purchase(v_purchase_id)');
-    expect(migration).toContain('grant select on public.supply_purchase_payment_occurrences to authenticated');
-    expect(migration).not.toContain('grant insert on public.supply_purchase_payment_occurrences to authenticated');
-    expect(migration).not.toContain('grant update on public.supply_purchase_payment_occurrences to authenticated');
-    expect(migration).not.toContain('grant delete on public.supply_purchase_payment_occurrences to authenticated');
+    expect(migration).toContain('grant select on table public.supply_purchase_payment_occurrences to authenticated');
+    expect(migration).not.toContain('grant insert on table public.supply_purchase_payment_occurrences to authenticated');
+    expect(migration).not.toContain('grant update on table public.supply_purchase_payment_occurrences to authenticated');
+    expect(migration).not.toContain('grant delete on table public.supply_purchase_payment_occurrences to authenticated');
   });
 
   it('cria ocorrência automática sem substituir detalhamento manual ou de comprovante', () => {
