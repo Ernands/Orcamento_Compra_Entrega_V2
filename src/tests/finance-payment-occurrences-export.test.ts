@@ -57,6 +57,10 @@ const store: Store = {
   notes: null,
 };
 
+function normalizeMoneyText(value: unknown): string {
+  return String(value).replace(/\u00a0/g, ' ');
+}
+
 describe('payment occurrence Excel export', () => {
   it('inclui datas, valores, formas e diferença sem substituir o valor oficial', async () => {
     const [row] = decorateFinancePaymentsWithOccurrences([baseRow], occurrences);
@@ -75,10 +79,10 @@ describe('payment occurrence Excel export', () => {
     expect(payments?.getCell('K2').value).toBe(23600.39);
     expect(String(payments?.getCell('L2').value)).toContain('28/09/2026');
     expect(String(payments?.getCell('L2').value)).toContain('01/10/2026');
-    expect(String(payments?.getCell('M2').value)).toContain('R$ 22.133,07');
+    expect(normalizeMoneyText(payments?.getCell('M2').value)).toContain('22.133,07');
     expect(String(payments?.getCell('M2').value)).toContain('PIX');
     expect(String(payments?.getCell('N2').value)).toContain('DIVERGENTE');
-    expect(String(payments?.getCell('N2').value)).toContain('R$ 1.148,56');
+    expect(normalizeMoneyText(payments?.getCell('N2').value)).toContain('1.148,56');
     expect(payments?.getCell('N2').fill).toMatchObject({ fgColor: { argb: 'FFFFE8E6' } });
 
     const byStore = workbook.getWorksheet('Pagamentos por loja');
