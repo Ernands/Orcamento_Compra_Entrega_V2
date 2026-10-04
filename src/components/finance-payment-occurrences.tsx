@@ -65,7 +65,7 @@ function draftsFromOccurrences(
 }
 
 function displayFromDrafts(drafts: OccurrenceDraft[]): FinancePaymentOccurrenceDisplay[] {
-  return drafts.flatMap((draft, index) => {
+  return drafts.flatMap((draft) => {
     try {
       if (!draft.occurredOn || !draft.amount.trim()) return [];
       return [{
@@ -78,8 +78,7 @@ function displayFromDrafts(drafts: OccurrenceDraft[]): FinancePaymentOccurrenceD
         referenceLabel: draft.referenceLabel || null,
         source: 'manual' as const,
         notes: 'Detalhamento informado manualmente no Financeiro.',
-        position: index,
-      } as FinancePaymentOccurrenceDisplay & { position: number }];
+      }];
     } catch {
       return [];
     }
