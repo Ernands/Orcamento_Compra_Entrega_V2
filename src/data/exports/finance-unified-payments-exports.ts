@@ -5,6 +5,7 @@ import {
   type FinancePaymentOrigin,
   type FinancePaymentsView,
   type UnifiedFinancePaymentRow,
+  type UnifiedFinancePaymentStoreAllocation,
 } from '../../domain/finance-payments';
 import type { Store } from '../../domain/types';
 
@@ -105,6 +106,14 @@ function originLabel(row: UnifiedFinancePaymentRow): string {
   return FINANCE_PAYMENT_ORIGIN_LABELS[financePaymentPrimaryOrigin(row)];
 }
 
+function allocationOriginLabel(allocation: UnifiedFinancePaymentStoreAllocation): string {
+  const origins = (Object.keys(allocation.originAllocations) as FinancePaymentOrigin[]).filter(
+    (origin) => allocation.originAllocations[origin] > 0n,
+  );
+  if (!origins.length) return 'Não atribuída';
+  return origins.map((origin) => FINANCE_PAYMENT_ORIGIN_LABELS[origin]).join(' + ');
+}
+
 function paymentMethodLabel(row: UnifiedFinancePaymentRow): string {
   if (!row.paymentMethod) return 'Não informada';
   return PAYMENT_LABELS[row.paymentMethod] || row.paymentMethod;
@@ -197,6 +206,67 @@ export async function createFinanceUnifiedPaymentsWorkbook(
 
   sheet.autoFilter = `A1:K${Math.max(1, sheet.rowCount)}`;
   sheet.eachRow((row, rowNumber) => {
+    if (rowNumber > 1) row.alignment = { vertical: 'top', wrapText: true };
+  });
+
+  const storesSheet = workbook.addWorksheet('Pagamentos por loja', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  storesSheet.columns = [
+    { header: 'Situação', key: 'status', width: 24 },
+    { header: 'Data / vencimento', key: 'date', width: 17 },
+    { header: 'Loja', key: 'store', width: 32 },
+    { header: 'Cidade', key: 'city', width: 22 },
+    { header: 'UF', key: 'state', width: 9 },
+    { header: 'Origem', key: 'origin', width: 24 },
+    { header: 'Referência', key: 'reference', width: 22 },
+    { header: 'Fornecedor / prestador', key: 'supplier', width: 28 },
+    { header: 'Forma', key: 'method', width: 21 },
+    { header: 'Identificação / parcela', key: 'installment', width: 28 },
+    { header: 'Valor da loja', key: 'amount', width: 18, style: { numFmt: MONEY_FORMAT } },
+    { header: 'Observação', key: 'note', width: 34 },
+  ];
+  styleHeader(storesSheet.getRow(1));
+
+  input.rows.forEach((row) => {
+    row.storeAllocations.forEach((allocation) => {
+      const store = storesById.get(allocation.storeId);
+      storesSheet.addRow({
+        status: VIEW_LABELS[row.status],
+        date: formatDate(row.date),
+        store: store ? `${store.code} · ${store.name}` : allocation.storeCode,
+        city: store?.city || '—',
+        state: store?.state || allocation.state || '—',
+        origin: allocationOriginLabel(allocation),
+        reference: referenceLabel(row),
+        supplier: row.supplierName,
+        method: paymentMethodLabel(row),
+        installment: row.sourceLabel || row.installmentLabel,
+        amount: centsToNumber(allocation.amountCents),
+        note: 'Valor atribuído pelo custo real da loja na compra/serviço.',
+      });
+    });
+    if (row.unallocatedCents > 0n) {
+      storesSheet.addRow({
+        status: VIEW_LABELS[row.status],
+        date: formatDate(row.date),
+        store: 'Não distribuído',
+        city: '—',
+        state: '—',
+        origin: originLabel(row),
+        reference: referenceLabel(row),
+        supplier: row.supplierName,
+        method: paymentMethodLabel(row),
+        installment: row.sourceLabel || row.installmentLabel,
+        amount: centsToNumber(row.unallocatedCents),
+        note: 'Parcela sem distribuição de loja confirmada; não atribuída artificialmente.',
+      });
+    }
+  });
+
+  storesSheet.autoFilter = `A1:L${Math.max(1, storesSheet.rowCount)}`;
+  storesSheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) row.alignment = { vertical: 'top', wrapText: true };
   });
 
