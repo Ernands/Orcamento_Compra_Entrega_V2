@@ -10,7 +10,7 @@ export interface FinancePaymentOccurrenceDisplay {
   amountCents: bigint;
   paymentMethod: string | null;
   referenceLabel: string | null;
-  source: 'manual' | 'proof_backfill' | 'fallback';
+  source: 'manual' | 'proof_backfill' | 'payment_record' | 'fallback';
   notes: string | null;
 }
 
