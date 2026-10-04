@@ -26,7 +26,10 @@ export function buildOccurrencePayload(occurrences: PurchasePaymentOccurrenceInp
   }));
 }
 
-function paymentPayload(values: RegisterPurchaseOperationWithOccurrencesInputV2['payments'][number]) {
+export function buildPaymentWithOccurrencePayload(
+  values: RegisterPurchaseOperationWithOccurrencesInputV2['payments'][number],
+) {
+  const occurrencePayload = buildOccurrencePayload(values.occurrences || []);
   return {
     payment_method: values.paymentMethod,
     source_label: values.sourceLabel.trim() || null,
@@ -37,7 +40,7 @@ function paymentPayload(values: RegisterPurchaseOperationWithOccurrencesInputV2[
     status: values.status,
     paid_at: values.paidAt ? new Date(values.paidAt).toISOString() : null,
     notes: values.notes.trim() || null,
-    occurrences: buildOccurrencePayload(values.occurrences || []),
+    ...(occurrencePayload.length ? { occurrences: occurrencePayload } : {}),
   };
 }
 
@@ -89,7 +92,7 @@ function operationPayload(values: RegisterPurchaseOperationWithOccurrencesInputV
   const order = buildPurchaseOrderRpcPayloadV2(values);
   return {
     ...order,
-    p_payments: values.payments.map(paymentPayload),
+    p_payments: values.payments.map(buildPaymentWithOccurrencePayload),
   };
 }
 
