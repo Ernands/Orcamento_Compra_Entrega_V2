@@ -85,9 +85,13 @@ function purchase(distributionStatus: 'confirmed' | 'pending' = 'confirmed'): Pu
   } as unknown as PurchaseV2;
 }
 
+function paidRows(purchaseValue: PurchaseV2) {
+  return buildUnifiedFinancePayments([purchaseValue], []).filter((row) => row.status === 'paid');
+}
+
 describe('finance payments store allocation', () => {
   it('uses the real store cost when filtering a payment', () => {
-    const rows = buildUnifiedFinancePayments([purchase()], []);
+    const rows = paidRows(purchase());
     expect(rows).toHaveLength(1);
     expect(rows[0].amountCents).toBe(15000n);
     expect(rows[0].unallocatedCents).toBe(0n);
@@ -109,7 +113,7 @@ describe('finance payments store allocation', () => {
   });
 
   it('does not invent a store value while distribution is pending', () => {
-    const rows = buildUnifiedFinancePayments([purchase('pending')], []);
+    const rows = paidRows(purchase('pending'));
     expect(rows).toHaveLength(1);
     expect(rows[0].amountCents).toBe(15000n);
     expect(rows[0].storeAllocations).toHaveLength(0);
