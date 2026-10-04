@@ -111,12 +111,24 @@
   font-size: 0.78rem;
 }
 
-.finance-payment-occurrence-fallback {
+.finance-payment-occurrence-fallback,
+.finance-payment-occurrence-saved {
   margin-bottom: 12px;
   padding: 8px 10px;
   border-radius: 8px;
+  font-size: 0.78rem;
+}
+
+.finance-payment-occurrence-fallback {
   background: #f3f5f4;
   color: #66736d;
+}
+
+.finance-payment-occurrence-saved {
+  border: 1px solid #b8d9cb;
+  background: #f0f9f5;
+  color: #275c49;
+  font-weight: 700;
 }
 
 .finance-payment-occurrence-table-wrap {
