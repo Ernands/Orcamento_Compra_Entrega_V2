@@ -58,7 +58,7 @@ type Numeric = number | string;
 
 type PagedResult<T> = {
   data: T[] | null;
-  error: unknown;
+  error: Error | null;
 };
 
 async function fetchPagedResult<T>(
@@ -67,7 +67,10 @@ async function fetchPagedResult<T>(
   try {
     return { data: await fetchAllPages(fetchPage), error: null };
   } catch (error) {
-    return { data: null, error };
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error('Falha ao carregar pagina de dados do Supabase.'),
+    };
   }
 }
 
