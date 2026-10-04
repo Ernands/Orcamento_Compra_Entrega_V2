@@ -25,6 +25,7 @@ import {
   financePaymentPrimaryOrigin,
   financePaymentTotals,
   FINANCE_PAYMENT_ORIGIN_LABELS,
+  scopeFinancePaymentsByStores,
   type FinancePaymentOrigin,
   type FinancePaymentsView,
   type UnifiedFinancePaymentRow,
@@ -165,17 +166,29 @@ export function FinancePaymentsPage() {
     () => [...new Set(rows.map((row) => row.paymentMethod).filter((value): value is string => Boolean(value)))].sort(),
     [rows],
   );
+  const locationStoreIds = useMemo(() => {
+    if (storeFilter) {
+      const selectedStore = stores.find((store) => store.id === storeFilter);
+      if (!selectedStore || (stateFilter && selectedStore.state !== stateFilter)) return [];
+      return [selectedStore.id];
+    }
+    if (stateFilter) {
+      return stores.filter((store) => store.state === stateFilter).map((store) => store.id);
+    }
+    return null;
+  }, [stateFilter, storeFilter, stores]);
 
   const summaryRows = useMemo(() => {
     const search = normalized(query);
-    return rows
+    const locationRows = locationStoreIds === null
+      ? rows
+      : scopeFinancePaymentsByStores(rows, locationStoreIds);
+    return locationRows
       .filter(
         (row) =>
           !originFilter ||
           row.originAllocations[originFilter as FinancePaymentOrigin] > 0n,
       )
-      .filter((row) => !storeFilter || row.storeIds.includes(storeFilter))
-      .filter((row) => !stateFilter || row.states.includes(stateFilter))
       .filter((row) => !supplierFilter || row.supplierName === supplierFilter)
       .filter((row) => !methodFilter || row.paymentMethod === methodFilter)
       .filter((row) => !focusItemId || row.supplyItemIds.includes(focusItemId))
@@ -202,12 +215,11 @@ export function FinancePaymentsPage() {
     dateTo,
     focusItemId,
     focusServiceId,
+    locationStoreIds,
     methodFilter,
     originFilter,
     query,
     rows,
-    stateFilter,
-    storeFilter,
     supplierFilter,
   ]);
 
