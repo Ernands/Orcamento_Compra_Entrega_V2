@@ -1,9 +1,7 @@
 import { supabase } from '../supabase/client';
 import { buildPurchaseOrderRpcPayloadV2 } from './purchases-v2-repository';
-import type {
-  PurchaseBatchOperationResultV2,
-  RegisterPurchaseOperationResultV2,
-} from './purchases-v2-repository';
+import type { PurchaseBatchOperationResultV2 } from './purchases-v2-repository';
+import type { RegisterPurchaseOperationResultV2 } from '../../domain/purchase-v2-types';
 import type {
   PurchasePaymentOccurrenceInputV2,
   PurchasePaymentOccurrenceV2,
