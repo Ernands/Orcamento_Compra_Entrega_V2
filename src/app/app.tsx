@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AccessPage } from '../pages/access-page';
 import { ChangePasswordPage } from '../pages/change-password-page';
@@ -31,6 +32,38 @@ import {
   RequireSession,
 } from './guards';
 import { SessionProvider } from './session-provider';
+
+function SupplyPurchasesRoute() {
+  useEffect(() => {
+    const selectEligibleBulkLines = () => {
+      document
+        .querySelectorAll<HTMLFormElement>(
+          'details.purchase-v2-new-operation--bulk[open] form.purchase-v2-bulk-purchase',
+        )
+        .forEach((form) => {
+          if (form.dataset.bulkDefaultsApplied === 'true') return;
+          const selectAllButton = Array.from(form.querySelectorAll<HTMLButtonElement>('button')).find(
+            (button) => button.textContent?.includes('Selecionar todos disponiveis'),
+          );
+          if (!selectAllButton || selectAllButton.disabled) return;
+          form.dataset.bulkDefaultsApplied = 'true';
+          selectAllButton.click();
+        });
+    };
+
+    selectEligibleBulkLines();
+    const observer = new MutationObserver(selectEligibleBulkLines);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open'],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return <SupplyPurchasesPage />;
+}
 
 export function App() {
   return (
@@ -198,7 +231,7 @@ export function App() {
               path="suprimentos/compras"
               element={
                 <RequireCapability capability="purchases.view">
-                  <SupplyPurchasesPage />
+                  <SupplyPurchasesRoute />
                 </RequireCapability>
               }
             />
