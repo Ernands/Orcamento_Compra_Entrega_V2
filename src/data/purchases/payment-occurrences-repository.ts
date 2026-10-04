@@ -14,8 +14,8 @@ function stringValue(value: number | string): string {
   return String(value);
 }
 
-function occurrencePayload(occurrence: PurchasePaymentOccurrenceInputV2) {
-  return {
+export function buildOccurrencePayload(occurrences: PurchasePaymentOccurrenceInputV2[]) {
+  return occurrences.map((occurrence) => ({
     occurred_on: occurrence.occurredOn,
     amount: occurrence.amount,
     payment_method: occurrence.paymentMethod,
@@ -23,7 +23,7 @@ function occurrencePayload(occurrence: PurchasePaymentOccurrenceInputV2) {
     attachment_id: occurrence.attachmentId || null,
     source: occurrence.source || 'manual',
     notes: occurrence.notes?.trim() || null,
-  };
+  }));
 }
 
 function paymentPayload(values: RegisterPurchaseOperationWithOccurrencesInputV2['payments'][number]) {
@@ -37,7 +37,7 @@ function paymentPayload(values: RegisterPurchaseOperationWithOccurrencesInputV2[
     status: values.status,
     paid_at: values.paidAt ? new Date(values.paidAt).toISOString() : null,
     notes: values.notes.trim() || null,
-    occurrences: (values.occurrences || []).map(occurrencePayload),
+    occurrences: buildOccurrencePayload(values.occurrences || []),
   };
 }
 
@@ -80,7 +80,7 @@ export async function replaceSupplyPurchasePaymentOccurrencesV2(
 ): Promise<void> {
   const { error } = await supabase.rpc('replace_supply_purchase_payment_occurrences' as never, {
     p_payment_id: paymentId,
-    p_occurrences: occurrences.map(occurrencePayload),
+    p_occurrences: buildOccurrencePayload(occurrences),
   } as never);
   if (error) throw new Error(error.message);
 }
