@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { fetchAllPages } from '../supabase/pagination';
 import type {
   AllocationSource,
   DistributionStatus,
@@ -54,6 +55,24 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 type Numeric = number | string;
+
+type PagedResult<T> = {
+  data: T[] | null;
+  error: Error | null;
+};
+
+async function fetchPagedResult<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<PagedResult<T>>,
+): Promise<PagedResult<T>> {
+  try {
+    return { data: await fetchAllPages(fetchPage), error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error('Falha ao carregar pagina de dados do Supabase.'),
+    };
+  }
+}
 
 function stringValue(value: Numeric | null): string {
   return value === null ? '0' : String(value);
@@ -198,11 +217,29 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult] = await Promise.all([
     supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
-    supabase.from('supply_purchase_stores' as never).select('*').order('store_code_snapshot'),
+    fetchPagedResult<PurchaseStoreRow>((from, to) => (
+      supabase.from('supply_purchase_stores' as never)
+        .select('*')
+        .order('store_code_snapshot')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<PagedResult<PurchaseStoreRow>>
+    )),
     supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
     supabase.from('supply_items' as never).select('id, subcategory, group_name, financial_group'),
-    supabase.from('supply_purchase_destinations' as never).select('*').order('position'),
-    supabase.from('supply_purchase_destination_stores' as never).select('*').order('store_code_snapshot'),
+    fetchPagedResult<DestinationRow>((from, to) => (
+      supabase.from('supply_purchase_destinations' as never)
+        .select('*')
+        .order('position')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<PagedResult<DestinationRow>>
+    )),
+    fetchPagedResult<DestinationStoreRow>((from, to) => (
+      supabase.from('supply_purchase_destination_stores' as never)
+        .select('*')
+        .order('store_code_snapshot')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<PagedResult<DestinationStoreRow>>
+    )),
     supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
     supabase.from('supply_purchase_order_items' as never).select('*').order('created_at'),
     supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot'),
