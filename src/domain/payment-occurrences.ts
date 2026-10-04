@@ -4,7 +4,7 @@ import type {
   RegisterPurchasePaymentInputV2,
 } from './purchase-v2-types';
 
-export type PaymentOccurrenceSource = 'manual' | 'proof_backfill';
+export type PaymentOccurrenceSource = 'manual' | 'proof_backfill' | 'payment_record';
 
 export interface PurchasePaymentOccurrenceV2 {
   id: string;
