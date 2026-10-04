@@ -35,28 +35,55 @@ import { SessionProvider } from './session-provider';
 
 function SupplyPurchasesRoute() {
   useEffect(() => {
+    const prepareBulkForm = (form: HTMLFormElement) => {
+      if (form.dataset.bulkDefaultsWatcher !== 'true') {
+        form.dataset.bulkDefaultsWatcher = 'true';
+        form.addEventListener('change', (event) => {
+          const target = event.target;
+          if (
+            event.isTrusted
+            && target instanceof HTMLInputElement
+            && target.type === 'checkbox'
+            && target.closest('.purchase-v2-bulk-purchase-line')
+          ) {
+            form.dataset.bulkDefaultsManual = 'true';
+          }
+        });
+      }
+
+      if (form.dataset.bulkDefaultsManual === 'true') return;
+
+      const selectAllButton = Array.from(form.querySelectorAll<HTMLButtonElement>('button')).find(
+        (button) => button.textContent?.includes('Selecionar todos disponiveis'),
+      );
+      if (!selectAllButton || selectAllButton.disabled) return;
+
+      const summary = Array.from(form.querySelectorAll<HTMLSpanElement>('span')).find((span) =>
+        /\d+\s+selecionados de\s+\d+\s+disponiveis/i.test(span.textContent || ''),
+      );
+      const match = summary?.textContent?.match(/(\d+)\s+selecionados de\s+(\d+)\s+disponiveis/i);
+      if (!match) return;
+
+      const selectedCount = Number(match[1]);
+      const eligibleCount = Number(match[2]);
+      if (eligibleCount > 0 && selectedCount < eligibleCount) selectAllButton.click();
+    };
+
     const selectEligibleBulkLines = () => {
       document
         .querySelectorAll<HTMLFormElement>(
           'details.purchase-v2-new-operation--bulk[open] form.purchase-v2-bulk-purchase',
         )
-        .forEach((form) => {
-          if (form.dataset.bulkDefaultsApplied === 'true') return;
-          const selectAllButton = Array.from(form.querySelectorAll<HTMLButtonElement>('button')).find(
-            (button) => button.textContent?.includes('Selecionar todos disponiveis'),
-          );
-          if (!selectAllButton || selectAllButton.disabled) return;
-          form.dataset.bulkDefaultsApplied = 'true';
-          selectAllButton.click();
-        });
+        .forEach(prepareBulkForm);
     };
 
     selectEligibleBulkLines();
-    const observer = new MutationObserver(selectEligibleBulkLines);
+    const observer = new MutationObserver(() => queueMicrotask(selectEligibleBulkLines));
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
+      characterData: true,
       attributeFilter: ['open'],
     });
     return () => observer.disconnect();
