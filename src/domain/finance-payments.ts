@@ -159,7 +159,6 @@ interface PurchasePaymentContext {
 }
 
 function lineOrigin(
-  purchase: PurchaseV2,
   itemById: Map<string, PurchaseV2['items'][number]>,
   line: PurchaseOrderV2['lines'][number],
 ): FinancePaymentOrigin {
@@ -187,7 +186,7 @@ function buildOrderCostContext(
   order.lines.forEach((line) => {
     const total = orderLineTotalCents(line);
     totalCents += total;
-    const origin = lineOrigin(purchase, itemById, line);
+    const origin = lineOrigin(itemById, line);
     originWeights.set(origin, (originWeights.get(origin) || 0n) + total);
 
     const item = line.purchaseItemId ? itemById.get(line.purchaseItemId) || null : null;
