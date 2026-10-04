@@ -44,7 +44,7 @@
 }
 
 .finance-payment-occurrences-modal {
-  max-width: 760px;
+  max-width: 920px;
 }
 
 .finance-payment-occurrence-summary {
@@ -159,8 +159,163 @@
   white-space: nowrap;
 }
 
+.finance-payment-occurrence-edit-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e9e6;
+}
+
+.finance-payment-occurrence-edit-action small {
+  max-width: 520px;
+  color: #6c7872;
+  line-height: 1.4;
+}
+
+.finance-payment-occurrence-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.finance-payment-occurrence-editor__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid #dbe5e0;
+  border-radius: 10px;
+  background: #f8faf9;
+}
+
+.finance-payment-occurrence-editor__intro > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.finance-payment-occurrence-editor__intro span {
+  color: #66736d;
+  font-size: 0.78rem;
+}
+
+.finance-payment-occurrence-editor__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.finance-payment-occurrence-editor__row {
+  display: grid;
+  grid-template-columns: 26px minmax(128px, 0.8fr) minmax(120px, 0.7fr) minmax(155px, 0.9fr) minmax(190px, 1.3fr) 34px;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #dde6e2;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.finance-payment-occurrence-editor__row > strong {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #edf5f1;
+  color: #27624f;
+  font-size: 0.75rem;
+}
+
+.finance-payment-occurrence-editor__row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.finance-payment-occurrence-editor__row label > span {
+  color: #66736d;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.finance-payment-occurrence-editor__row input,
+.finance-payment-occurrence-editor__row select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #ccd9d3;
+  border-radius: 8px;
+  background: #fff;
+  padding: 7px 9px;
+}
+
+.finance-payment-occurrence-editor__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ead1cd;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #a0473d;
+  cursor: pointer;
+}
+
+.finance-payment-occurrence-editor__balance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 10px 12px;
+  border: 1px solid #cfe0d8;
+  border-radius: 9px;
+  background: #f5faf7;
+  color: #33584a;
+  font-size: 0.8rem;
+}
+
+.finance-payment-occurrence-editor__balance.is-divergent {
+  border-color: #e7b0a9;
+  background: #fff5f3;
+  color: #943f35;
+}
+
+.finance-payment-occurrence-editor__balance strong {
+  margin-left: 4px;
+}
+
+@media (max-width: 900px) {
+  .finance-payment-occurrence-editor__row {
+    grid-template-columns: 24px 1fr 1fr;
+  }
+
+  .finance-payment-occurrence-editor__reference {
+    grid-column: 2 / -1;
+  }
+}
+
 @media (max-width: 760px) {
   .finance-payment-occurrence-summary {
     grid-template-columns: 1fr;
+  }
+
+  .finance-payment-occurrence-edit-action,
+  .finance-payment-occurrence-editor__intro {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .finance-payment-occurrence-editor__row {
+    grid-template-columns: 24px 1fr;
+  }
+
+  .finance-payment-occurrence-editor__reference {
+    grid-column: auto;
   }
 }
