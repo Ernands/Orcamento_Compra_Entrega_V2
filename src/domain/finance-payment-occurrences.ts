@@ -21,6 +21,7 @@ export interface UnifiedFinancePaymentRowWithOccurrences extends UnifiedFinanceP
   occurrenceSumCents: bigint;
   occurrenceDifferenceCents: bigint;
   occurrenceDetailsSource: 'structured' | 'fallback' | 'none';
+  occurrenceDateScoped: boolean;
 }
 
 function uniqueDates(values: string[]): string[] {
@@ -125,6 +126,7 @@ export function decorateFinancePaymentsWithOccurrences(
       occurrenceSumCents,
       occurrenceDifferenceCents,
       occurrenceDetailsSource: structured.length ? 'structured' : fallback.length ? 'fallback' : 'none',
+      occurrenceDateScoped: false,
     };
   });
 }
@@ -206,6 +208,7 @@ export function scopeFinancePaymentToOccurrenceDateRange(
     paymentOccurrences: matchingOccurrences,
     paymentDates: uniqueDates(matchingOccurrences.map((occurrence) => occurrence.date)),
     occurrenceSumCents: scopedAmountCents,
+    occurrenceDateScoped: true,
   };
 }
 
@@ -216,6 +219,7 @@ export function financePaymentLatestDate(row: UnifiedFinancePaymentRowWithOccurr
 
 export function financePaymentHasOccurrenceDivergence(row: UnifiedFinancePaymentRow): boolean {
   const enriched = row as Partial<UnifiedFinancePaymentRowWithOccurrences>;
+  if (enriched.occurrenceDateScoped) return false;
   return typeof enriched.occurrenceDifferenceCents === 'bigint' && enriched.occurrenceDifferenceCents !== 0n;
 }
 
@@ -240,11 +244,13 @@ export function financePaymentOccurrences(row: UnifiedFinancePaymentRow): Financ
 
 export function financePaymentOfficialAmount(row: UnifiedFinancePaymentRow): bigint {
   const enriched = row as Partial<UnifiedFinancePaymentRowWithOccurrences>;
+  if (enriched.occurrenceDateScoped) return row.amountCents;
   return typeof enriched.officialAmountCents === 'bigint' ? enriched.officialAmountCents : row.amountCents;
 }
 
 export function financePaymentOccurrenceDifference(row: UnifiedFinancePaymentRow): bigint {
   const enriched = row as Partial<UnifiedFinancePaymentRowWithOccurrences>;
+  if (enriched.occurrenceDateScoped) return 0n;
   if (typeof enriched.occurrenceDifferenceCents === 'bigint') return enriched.occurrenceDifferenceCents;
   return 0n;
 }
