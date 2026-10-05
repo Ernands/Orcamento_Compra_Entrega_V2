@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   decorateFinancePaymentsWithOccurrences,
+  financePaymentHasOccurrenceDivergence,
   financePaymentMatchesDateRange,
   financePaymentOccurrenceDifference,
   financePaymentOccurrences,
+  financePaymentOfficialAmount,
   scopeFinancePaymentToOccurrenceDateRange,
 } from '../domain/finance-payment-occurrences';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
@@ -105,11 +107,15 @@ describe('finance payment occurrences', () => {
 
     expect(scoped.amountCents).toBe(64_290n);
     expect(scoped.officialAmountCents).toBe(2_360_039n);
+    expect(scoped.occurrenceDateScoped).toBe(true);
     expect(scoped.paymentDates).toEqual(['2026-09-30']);
     expect(scoped.paymentOccurrences).toHaveLength(1);
     expect(scoped.paymentOccurrences[0].referenceLabel).toBe('Extintor');
     expect(scoped.originAllocations.equipment).toBe(64_290n);
     expect(scoped.storeAllocations[0].amountCents).toBe(64_290n);
+    expect(financePaymentOfficialAmount(scoped)).toBe(64_290n);
+    expect(financePaymentOccurrenceDifference(scoped)).toBe(0n);
+    expect(financePaymentHasOccurrenceDivergence(scoped)).toBe(false);
   });
 
   it('usa o pagamento cadastrado como fallback quando não há detalhamento estruturado', () => {
