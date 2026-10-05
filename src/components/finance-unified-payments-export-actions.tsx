@@ -1,9 +1,11 @@
 import { FileSpreadsheet, FileText } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
-  downloadFinanceUnifiedPaymentsExcel,
   downloadFinanceUnifiedPaymentsPdf,
 } from '../data/exports/finance-unified-payments-exports';
+import {
+  downloadFinanceUnifiedPaymentsExcelWithStoreSummary,
+} from '../data/exports/finance-unified-payments-store-summary-export';
 import {
   FINANCE_PAYMENT_ORIGIN_LABELS,
   type FinancePaymentOrigin,
@@ -117,7 +119,7 @@ export function FinanceUnifiedPaymentsExportActions({
         filtersText,
       };
       if (format === 'pdf') await downloadFinanceUnifiedPaymentsPdf(input);
-      else await downloadFinanceUnifiedPaymentsExcel(input);
+      else await downloadFinanceUnifiedPaymentsExcelWithStoreSummary(input);
     } catch (error) {
       onError(
         error instanceof Error && error.message
