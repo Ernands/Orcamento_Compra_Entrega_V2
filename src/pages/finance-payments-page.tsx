@@ -29,6 +29,7 @@ import {
   decorateFinancePaymentsWithOccurrences,
   financePaymentLatestDate,
   financePaymentMatchesDateRange,
+  scopeFinancePaymentToOccurrenceDateRange,
   scopeFinancePaymentsWithOccurrencesByStores,
   type UnifiedFinancePaymentRowWithOccurrences,
 } from '../domain/finance-payment-occurrences';
@@ -143,6 +144,7 @@ export function FinancePaymentsPage() {
   const [methodFilter, setMethodFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [occurrenceValuesOnly, setOccurrenceValuesOnly] = useState(false);
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [focusItemId, setFocusItemId] = useState(searchParams.get('item') || '');
   const [focusServiceId, setFocusServiceId] = useState(searchParams.get('service') || '');
@@ -207,13 +209,14 @@ export function FinancePaymentsPage() {
     }
     return null;
   }, [stateFilter, storeFilter, stores]);
+  const occurrenceValueScopeActive = occurrenceValuesOnly && Boolean(dateFrom || dateTo);
 
   const summaryRows = useMemo(() => {
     const search = normalized(query);
     const locationRows = locationStoreIds === null
       ? rows
       : scopeFinancePaymentsWithOccurrencesByStores(rows, locationStoreIds);
-    return locationRows
+    const filtered = locationRows
       .filter(
         (row) =>
           !originFilter ||
@@ -249,6 +252,9 @@ export function FinancePaymentsPage() {
             ].join(' '),
           ).includes(search),
       );
+
+    if (!occurrenceValueScopeActive) return filtered;
+    return filtered.map((row) => scopeFinancePaymentToOccurrenceDateRange(row, dateFrom, dateTo));
   }, [
     dateFrom,
     dateTo,
@@ -256,6 +262,7 @@ export function FinancePaymentsPage() {
     focusServiceId,
     locationStoreIds,
     methodFilter,
+    occurrenceValueScopeActive,
     originFilter,
     query,
     rows,
@@ -279,6 +286,7 @@ export function FinancePaymentsPage() {
     methodFilter,
     dateFrom,
     dateTo,
+    occurrenceValueScopeActive ? 'occurrence-values' : '',
     query.trim(),
     focusItemId,
     focusServiceId,
@@ -434,7 +442,7 @@ export function FinancePaymentsPage() {
               <CheckCircle2 size={22} />
               <span>Pago</span>
               <strong>{formatBRL(totals.paidCents)}</strong>
-              <small>Pagamentos realizados</small>
+              <small>{occurrenceValueScopeActive ? 'Ocorrências realizadas no período' : 'Pagamentos realizados'}</small>
             </article>
             <article className="finance-payments-kpi finance-payments-kpi--planned">
               <CalendarDays size={22} />
@@ -466,9 +474,11 @@ export function FinancePaymentsPage() {
               <div>
                 <strong>Origem dos valores</strong>
                 <span>
-                  {activeFilterCount > 0
-                    ? 'Valores considerando os filtros ativos.'
-                    : 'Equipamentos, mobiliário, itens gerais e obras e serviços.'}
+                  {occurrenceValueScopeActive
+                    ? 'Pago considera somente os valores das ocorrências dentro do período filtrado.'
+                    : activeFilterCount > 0
+                      ? 'Valores considerando os filtros ativos.'
+                      : 'Equipamentos, mobiliário, itens gerais e obras e serviços.'}
                 </span>
               </div>
               <span className="finance-payment-origins__action">
@@ -562,6 +572,27 @@ export function FinancePaymentsPage() {
               Até
               <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
             </label>
+            <label
+              style={{
+                gridColumn: '1 / -1',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                padding: '2px 4px',
+                textTransform: 'none',
+                fontSize: '0.72rem',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={occurrenceValuesOnly}
+                disabled={!dateFrom && !dateTo}
+                onChange={(event) => setOccurrenceValuesOnly(event.target.checked)}
+                style={{ width: 16, minWidth: 16, minHeight: 16, height: 16, padding: 0, margin: 0 }}
+              />
+              Considerar somente os valores das ocorrências dentro do período filtrado
+            </label>
             <label className="finance-payments-search">
               <Search size={17} />
               <input
@@ -600,7 +631,9 @@ export function FinancePaymentsPage() {
                 <h3>{VIEW_LABELS[view]}</h3>
                 <p>
                   {view === 'paid'
-                    ? 'Pagamentos já efetivados. A coluna de data considera todas as ocorrências financeiras registradas.'
+                    ? occurrenceValueScopeActive
+                      ? 'Pagamentos já efetivados. Valores e datas consideram somente as ocorrências dentro do período filtrado.'
+                      : 'Pagamentos já efetivados. A coluna de data considera todas as ocorrências financeiras registradas.'
                     : view === 'planned'
                       ? 'Pagamentos com vencimento e forma já definidos.'
                       : 'Saldos existentes que ainda precisam de programação financeira.'}
@@ -672,7 +705,9 @@ export function FinancePaymentsPage() {
                           <td>
                             <div className="finance-payment-actions">
                               {view === 'paid' && (
-                                <FinancePaymentDatesAction onClick={() => setDatesRow(row)} />
+                                <FinancePaymentDatesAction
+                                  onClick={() => setDatesRow(rows.find((candidate) => candidate.id === row.id) || row)}
+                                />
                               )}
                               {(row.workServiceId ? canWorks : canPurchases) ? (
                                 <Link className="finance-payment-origin-link" to={originHref(row)}>
