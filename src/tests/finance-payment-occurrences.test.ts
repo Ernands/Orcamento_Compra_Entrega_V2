@@ -4,6 +4,7 @@ import {
   financePaymentMatchesDateRange,
   financePaymentOccurrenceDifference,
   financePaymentOccurrences,
+  scopeFinancePaymentToOccurrenceDateRange,
 } from '../domain/finance-payment-occurrences';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { PurchasePaymentOccurrenceV2 } from '../domain/payment-occurrences';
@@ -96,6 +97,19 @@ describe('finance payment occurrences', () => {
     expect(financePaymentMatchesDateRange(row, '2026-09-30', '2026-09-30')).toBe(true);
     expect(financePaymentMatchesDateRange(row, '2026-10-01', '2026-10-01')).toBe(true);
     expect(financePaymentMatchesDateRange(row, '2026-10-02', '2026-10-02')).toBe(false);
+  });
+
+  it('quando solicitado, usa somente o valor das ocorrências dentro do período', () => {
+    const [row] = decorateFinancePaymentsWithOccurrences([baseRow], cmp43Occurrences);
+    const scoped = scopeFinancePaymentToOccurrenceDateRange(row, '2026-09-30', '2026-09-30');
+
+    expect(scoped.amountCents).toBe(64_290n);
+    expect(scoped.officialAmountCents).toBe(2_360_039n);
+    expect(scoped.paymentDates).toEqual(['2026-09-30']);
+    expect(scoped.paymentOccurrences).toHaveLength(1);
+    expect(scoped.paymentOccurrences[0].referenceLabel).toBe('Extintor');
+    expect(scoped.originAllocations.equipment).toBe(64_290n);
+    expect(scoped.storeAllocations[0].amountCents).toBe(64_290n);
   });
 
   it('usa o pagamento cadastrado como fallback quando não há detalhamento estruturado', () => {
