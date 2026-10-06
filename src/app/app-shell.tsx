@@ -185,6 +185,8 @@ export function AppShell() {
   });
 
   const handleSignOut = async () => {
+    if (!window.confirm('Deseja realmente sair do sistema?')) return;
+
     setSigningOut(true);
     try {
       await signOut();
