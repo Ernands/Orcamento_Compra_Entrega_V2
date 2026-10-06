@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { loadViewer, loginWithCpf, logout } from '../data/auth/auth-repository';
@@ -30,20 +31,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  const viewerRef = useRef<Viewer | null>(null);
 
   const hydrate = useCallback(async (nextSession: Session | null) => {
+    sessionRef.current = nextSession;
     setSession(nextSession);
     setError(null);
 
     if (!nextSession) {
+      viewerRef.current = null;
       setViewer(null);
       setLoading(false);
       return;
     }
 
     try {
-      setViewer(await loadViewer());
+      const nextViewer = await loadViewer();
+      viewerRef.current = nextViewer;
+      setViewer(nextViewer);
     } catch {
+      viewerRef.current = null;
       setViewer(null);
       setError('Nao foi possivel carregar suas permissoes. Entre novamente.');
     } finally {
@@ -58,9 +66,39 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (active) void hydrate(data.session);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       window.setTimeout(() => {
-        if (active) void hydrate(nextSession);
+        if (!active) return;
+
+        // getSession() acima ja hidrata o estado inicial. Ignorar INITIAL_SESSION
+        // evita uma segunda carga simultanea de usuario/permissoes.
+        if (event === 'INITIAL_SESSION') return;
+
+        // Renovacao de token nao altera perfil/permissoes. Manter o ultimo viewer
+        // valido evita transformar falhas transitorias de rede/RLS em falso logout.
+        if (event === 'TOKEN_REFRESHED' && nextSession && viewerRef.current) {
+          sessionRef.current = nextSession;
+          setSession(nextSession);
+          setError(null);
+          return;
+        }
+
+        // SIGNED_IN pode ser emitido novamente quando a mesma sessao e restaurada
+        // ou a aba volta ao foco. Nao recarregar permissoes se o usuario e o mesmo.
+        if (
+          event === 'SIGNED_IN' &&
+          nextSession &&
+          viewerRef.current &&
+          sessionRef.current?.user?.id === nextSession.user?.id
+        ) {
+          sessionRef.current = nextSession;
+          setSession(nextSession);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+
+        void hydrate(nextSession);
       }, 0);
     });
 
@@ -92,7 +130,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const refreshViewer = useCallback(async () => {
     if (!session) return;
-    setViewer(await loadViewer());
+    const nextViewer = await loadViewer();
+    viewerRef.current = nextViewer;
+    setViewer(nextViewer);
   }, [session]);
 
   const value = useMemo<SessionContextValue>(
