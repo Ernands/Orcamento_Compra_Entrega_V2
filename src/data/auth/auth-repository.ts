@@ -22,7 +22,7 @@ export async function loginWithCpf(cpf: string, password: string): Promise<Sessi
 }
 
 export async function logout(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
 
   if (error) {
     throw error;
