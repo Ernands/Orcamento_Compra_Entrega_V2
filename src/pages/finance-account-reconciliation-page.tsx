@@ -443,42 +443,42 @@ export function FinanceAccountReconciliationPage() {
       ) : (
         <>
           <section className="finance-account-kpis" aria-label="Consolidado da conta">
-            <article className="finance-account-kpi finance-account-kpi--positive">
+            <article className="finance-account-kpi finance-account-kpi--investment">
               <span>Investimento acumulado</span>
               <strong>{formatBRL(consolidated.investmentCents)}</strong>
               <small>Valores colocados na Conta BB para o projeto.</small>
             </article>
-            <article className="finance-account-kpi">
+            <article className="finance-account-kpi finance-account-kpi--payments">
               <span>Pagamentos realizados</span>
               <strong>{formatBRL(consolidated.systemPaymentsCents)}</strong>
               <small>Ocorrências pagas registradas no sistema.</small>
             </article>
-            <article className="finance-account-kpi">
+            <article className="finance-account-kpi finance-account-kpi--adjustments">
               <span>Acertos líquidos</span>
               <strong>{formatBRL(consolidated.adjustmentCreditCents - consolidated.adjustmentDebitCents)}</strong>
               <small>Positivos {formatBRL(consolidated.adjustmentCreditCents)} · negativos {formatBRL(consolidated.adjustmentDebitCents)}</small>
             </article>
-            <article className="finance-account-kpi finance-account-kpi--positive">
+            <article className="finance-account-kpi finance-account-kpi--expected">
               <span>Saldo esperado</span>
               <strong>{formatBRL(consolidated.expectedBalanceCents)}</strong>
               <small>Investimentos − pagamentos + acertos positivos − negativos.</small>
             </article>
-            <article className="finance-account-kpi">
+            <article className="finance-account-kpi finance-account-kpi--bank">
               <span>Saldo informado BB</span>
               <strong>{consolidated.actualBalanceCents === null ? 'Não informado' : formatBRL(consolidated.actualBalanceCents)}</strong>
               <small>{consolidated.actualBalanceDate ? `Última posição em ${dateLabel(consolidated.actualBalanceDate)}` : 'Sem posição bancária registrada.'}</small>
             </article>
-            <article className={`finance-account-kpi ${consolidated.balanceDifferenceCents === 0n ? 'finance-account-kpi--positive' : consolidated.balanceDifferenceCents === null ? 'finance-account-kpi--warning' : 'finance-account-kpi--danger'}`}>
+            <article className={`finance-account-kpi finance-account-kpi--difference ${consolidated.balanceDifferenceCents === 0n ? 'finance-account-kpi--positive' : consolidated.balanceDifferenceCents === null ? 'finance-account-kpi--warning' : 'finance-account-kpi--danger'}`}>
               <span>Diferença da conta</span>
               <strong>{consolidated.balanceDifferenceCents === null ? 'Não calculada' : formatBRL(consolidated.balanceDifferenceCents)}</strong>
               <small>Saldo BB − saldo esperado pelo sistema.</small>
             </article>
-            <article className="finance-account-kpi">
+            <article className="finance-account-kpi finance-account-kpi--conference">
               <span>Conferência diária</span>
               <strong>{consolidated.reconciledDays} conciliado(s)</strong>
               <small>{consolidated.divergentDays} divergente(s) · {consolidated.pendingDays} pendente(s)</small>
             </article>
-            <article className={`finance-account-kpi ${overallStatus === 'reconciled' ? 'finance-account-kpi--positive' : overallStatus === 'divergent' ? 'finance-account-kpi--danger' : 'finance-account-kpi--warning'}`}>
+            <article className={`finance-account-kpi finance-account-kpi--status ${overallStatus === 'reconciled' ? 'finance-account-kpi--positive' : overallStatus === 'divergent' ? 'finance-account-kpi--danger' : 'finance-account-kpi--warning'}`}>
               <span>Situação da conta</span>
               <strong>{overallStatus === 'reconciled' ? 'Conciliada' : overallStatus === 'divergent' ? 'Divergente' : 'Pendente'}</strong>
               <small>{overallStatus === 'reconciled' ? 'Saldo real e saldo esperado estão iguais.' : overallStatus === 'divergent' ? 'Existe diferença entre a conta e o sistema.' : 'Informe o saldo atual da Conta BB.'}</small>
@@ -601,7 +601,7 @@ export function FinanceAccountReconciliationPage() {
                   </thead>
                   <tbody>
                     {filteredDays.map((day) => (
-                      <tr key={day.date}>
+                      <tr key={day.date} className={`finance-account-table-row finance-account-table-row--${day.status}`}>
                         <td><strong>{dateLabel(day.date)}</strong></td>
                         <td className="finance-account-money">{formatBRL(day.investmentCents)}</td>
                         <td className="finance-account-money">{formatBRL(day.systemPaymentsCents)}</td>
@@ -674,15 +674,15 @@ export function FinanceAccountReconciliationPage() {
         >
           <div className="finance-account-detail">
             <div className="finance-account-detail__summary">
-              <article><span>Sistema</span><strong>{formatBRL(detailDay.systemPaymentsCents)}</strong></article>
-              <article><span>Conta BB</span><strong>{detailDay.bankPaymentsCents === null ? 'Não informado' : formatBRL(detailDay.bankPaymentsCents)}</strong></article>
-              <article><span>Acertos líquidos</span><strong>{formatBRL(detailDay.adjustmentCreditCents - detailDay.adjustmentDebitCents)}</strong></article>
-              <article><span>Diferença</span><strong>{detailDay.differenceCents === null ? '—' : formatBRL(detailDay.differenceCents)}</strong></article>
+              <article className="finance-account-detail__summary--system"><span>Sistema</span><strong>{formatBRL(detailDay.systemPaymentsCents)}</strong></article>
+              <article className="finance-account-detail__summary--bank"><span>Conta BB</span><strong>{detailDay.bankPaymentsCents === null ? 'Não informado' : formatBRL(detailDay.bankPaymentsCents)}</strong></article>
+              <article className="finance-account-detail__summary--adjustments"><span>Acertos líquidos</span><strong>{formatBRL(detailDay.adjustmentCreditCents - detailDay.adjustmentDebitCents)}</strong></article>
+              <article className={`finance-account-detail__summary--${detailDay.status}`}><span>Diferença</span><strong>{detailDay.differenceCents === null ? '—' : formatBRL(detailDay.differenceCents)}</strong></article>
             </div>
 
             <div className="finance-account-detail-list">
               {!detailAdjustmentsOnly && detailDay.payments.map((payment) => (
-                <article key={payment.id}>
+                <article key={payment.id} className="finance-account-detail-list__payment">
                   <div>
                     <strong>Pagamento do sistema</strong>
                     <small>{payment.paymentMethod ? PAYMENT_LABELS[payment.paymentMethod] || payment.paymentMethod : 'Forma não informada'}</small>
@@ -704,7 +704,7 @@ export function FinanceAccountReconciliationPage() {
                 .map((entry) => (
                   <article
                     key={entry.id}
-                    className={entry.type === 'investment' ? 'finance-account-detail-list__investment' : 'finance-account-detail-list__adjustment'}
+                    className={entry.type === 'investment' ? 'finance-account-detail-list__investment' : entry.type === 'adjustment_credit' ? 'finance-account-detail-list__adjustment finance-account-detail-list__adjustment--credit' : 'finance-account-detail-list__adjustment finance-account-detail-list__adjustment--debit'}
                   >
                     <div>
                       <strong>{entryLabel(entry)}</strong>
