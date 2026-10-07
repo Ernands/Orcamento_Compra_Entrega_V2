@@ -320,7 +320,7 @@ export function FinanceAccountReconciliationPage() {
       setModalError('Informe a data e o valor.');
       return;
     }
-    let parsedAmount = 0n;
+    let parsedAmount: bigint;
     try {
       parsedAmount = moneyToCents(amount);
     } catch {
