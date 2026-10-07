@@ -240,11 +240,11 @@ export function FinanceAccountReconciliationPage() {
   }, [dateFrom, dateTo, days, query, stateFilter, statusFilter, storeFilter]);
 
   const overallStatus =
-    consolidated.actualBalanceCents === null
+    consolidated.actualBalanceCents === null || consolidated.pendingDays > 0
       ? 'pending'
-      : consolidated.balanceDifferenceCents === 0n
-        ? 'reconciled'
-        : 'divergent';
+      : consolidated.balanceDifferenceCents !== 0n || consolidated.divergentDays > 0
+        ? 'divergent'
+        : 'reconciled';
 
   const resetForm = () => {
     setFormMode(null);
@@ -320,7 +320,14 @@ export function FinanceAccountReconciliationPage() {
       setModalError('Informe a data e o valor.');
       return;
     }
-    if (moneyToCents(amount) <= 0n) {
+    let parsedAmount = 0n;
+    try {
+      parsedAmount = moneyToCents(amount);
+    } catch {
+      setModalError('Informe um valor válido.');
+      return;
+    }
+    if (parsedAmount <= 0n) {
       setModalError('O valor deve ser maior que zero.');
       return;
     }
@@ -764,8 +771,8 @@ export function FinanceAccountReconciliationPage() {
               {formMode === 'bank' ? (
                 <>
                   <label>
-                    Pagamentos realizados pela Conta BB
-                    <input inputMode="decimal" value={bankPayments} onChange={(event) => setBankPayments(event.target.value)} placeholder="0,00" />
+                    Movimento/Pagamentos da Conta BB
+                    <input inputMode="decimal" value={bankPayments} onChange={(event) => setBankPayments(event.target.value)} placeholder="Use negativo quando o movimento líquido do dia for crédito" />
                   </label>
                   <label>
                     Saldo da Conta BB
