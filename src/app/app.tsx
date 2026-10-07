@@ -7,6 +7,7 @@ import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
 import { FinancePage } from '../pages/finance-page';
 import { FinancePaymentsPage } from '../pages/finance-payments-page';
+import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
 import { FinanceStoreDetailPage } from '../pages/finance-store-detail-page';
 import { WorksPage } from '../pages/works-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
@@ -257,6 +258,18 @@ export function App() {
                 <RequireCapability capability="finance.view">
                   <RequireCapability capability="finance.payments_view">
                     <FinancePaymentsPage />
+                  </RequireCapability>
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="financeiro/conciliacao-conta"
+              element={
+                <RequireCapability capability="finance.view">
+                  <RequireCapability capability="finance.payments_view">
+                    <RequireCapability capability="finance.account_reconciliation_view">
+                      <FinanceAccountReconciliationPage />
+                    </RequireCapability>
                   </RequireCapability>
                 </RequireCapability>
               }

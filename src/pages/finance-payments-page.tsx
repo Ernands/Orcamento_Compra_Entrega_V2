@@ -9,6 +9,7 @@ import {
   Paperclip,
   RefreshCcw,
   Search,
+  Scale,
   WalletCards,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -128,6 +129,7 @@ export function FinancePaymentsPage() {
   const { can } = useSession();
   const canPurchases = can('purchases.view');
   const canWorks = can('works.view');
+  const canReconciliation = can('finance.account_reconciliation_view');
   const [searchParams] = useSearchParams();
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
@@ -708,6 +710,18 @@ export function FinancePaymentsPage() {
                                 <FinancePaymentDatesAction
                                   onClick={() => setDatesRow(rows.find((candidate) => candidate.id === row.id) || row)}
                                 />
+                              )}
+                              {view === 'paid' && canReconciliation && (
+                                <Link
+                                  className="finance-payment-origin-link"
+                                  to={financePaymentLatestDate(row)
+                                    ? `/financeiro/conciliacao-conta?date=${financePaymentLatestDate(row)}`
+                                    : '/financeiro/conciliacao-conta'}
+                                  title="Abrir esta data na Conciliação Conta"
+                                >
+                                  <Scale size={13} />
+                                  Conciliação
+                                </Link>
                               )}
                               {(row.workServiceId ? canWorks : canPurchases) ? (
                                 <Link className="finance-payment-origin-link" to={originHref(row)}>

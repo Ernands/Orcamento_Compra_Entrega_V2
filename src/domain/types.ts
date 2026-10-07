@@ -59,6 +59,8 @@ export type Capability =
   | 'finance.store_detail_view'
   | 'finance.store_detail_documents_view'
   | 'finance.payments_view'
+  | 'finance.account_reconciliation_view'
+  | 'finance.account_reconciliation_manage'
   | 'finance.stores_ufs_view'
   | 'finance.reimbursements_view'
   | 'finance.budget_edit'
