@@ -596,7 +596,7 @@ export function FinanceAccountReconciliationPage() {
                       <th>Saldo esperado</th>
                       <th>Saldo BB</th>
                       <th>Situação</th>
-                      <th>Ações</th>
+                      <th scope="col" className="finance-account-actions-column">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -617,40 +617,45 @@ export function FinanceAccountReconciliationPage() {
                             {statusLabel(day.status)}
                           </span>
                         </td>
-                        <td>
+                        <td className="finance-account-actions-cell">
                           <div className="finance-account-row-actions">
                             <button
                               type="button"
-                              className="button button--secondary button--small"
+                              className="button button--secondary button--small finance-account-row-actions__primary"
+                              aria-label={`Ver todos os lançamentos de ${dateLabel(day.date)}`}
                               onClick={() => {
                                 setDetailDay(day);
                                 setDetailAdjustmentsOnly(false);
                               }}
                             >
-                              <Eye size={14} />
-                              Todos os lançamentos
+                              <Eye size={15} aria-hidden="true" />
+                              Lançamentos
                             </button>
-                            <button
-                              type="button"
-                              className="button button--secondary button--small"
-                              onClick={() => {
-                                setDetailDay(day);
-                                setDetailAdjustmentsOnly(true);
-                              }}
-                            >
-                              <Scale size={14} />
-                              Só acertos
-                            </button>
-                            {canManage && (
+                            <div className="finance-account-row-actions__secondary">
                               <button
                                 type="button"
                                 className="button button--secondary button--small"
-                                onClick={() => openBankForm(day)}
+                                aria-label={`Ver somente os acertos de ${dateLabel(day.date)}`}
+                                onClick={() => {
+                                  setDetailDay(day);
+                                  setDetailAdjustmentsOnly(true);
+                                }}
                               >
-                                <Landmark size={14} />
-                                Conta BB
+                                <Scale size={14} aria-hidden="true" />
+                                Só acertos
                               </button>
-                            )}
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  className="button button--secondary button--small finance-account-row-actions__bank"
+                                  title="Registrar ou editar Conta BB"
+                                  aria-label={`Registrar ou editar Conta BB de ${dateLabel(day.date)}`}
+                                  onClick={() => openBankForm(day)}
+                                >
+                                  <Landmark size={15} aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>

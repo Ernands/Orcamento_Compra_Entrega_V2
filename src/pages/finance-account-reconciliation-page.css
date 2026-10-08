@@ -615,6 +615,85 @@
   background: #fff;
 }
 
+/* Compact actions that remain visible when the financial grid scrolls horizontally. */
+.finance-account-table .finance-account-actions-column,
+.finance-account-table .finance-account-actions-cell {
+  position: sticky;
+  right: 0;
+  box-sizing: border-box;
+  width: 184px;
+  min-width: 184px;
+  max-width: 184px;
+  border-left: 2px solid #cbd4d0;
+  box-shadow: -4px 0 8px -8px rgba(26, 56, 42, .35);
+}
+
+.finance-account-table .finance-account-actions-column {
+  z-index: 2;
+  background: #f1f3f2;
+}
+
+.finance-account-table .finance-account-actions-cell {
+  z-index: 1;
+  padding: 8px 10px;
+  background: #fbfcfb;
+}
+
+.finance-account-row-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+
+.finance-account-row-actions__secondary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 6px;
+}
+
+.finance-account-row-actions__secondary > .button:only-child {
+  grid-column: 1 / -1;
+}
+
+.finance-account-row-actions .button {
+  min-width: 0;
+  min-height: 32px;
+  gap: 6px;
+  padding: 5px 7px;
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+.finance-account-row-actions .finance-account-row-actions__primary {
+  color: #2947ba;
+  background: #eef3ff;
+  border-color: #c5d2f7;
+}
+
+.finance-account-row-actions .finance-account-row-actions__primary:hover:not(:disabled) {
+  background: #e2eaff;
+}
+
+.finance-account-row-actions .finance-account-row-actions__bank {
+  width: 32px;
+  padding: 0;
+}
+
+.finance-account-row-actions .button:focus-visible {
+  outline: 2px solid #2947ba;
+  outline-offset: 2px;
+}
+
+@media (max-width: 680px) {
+  .finance-account-table .finance-account-actions-column,
+  .finance-account-table .finance-account-actions-cell {
+    position: static;
+    box-shadow: none;
+  }
+}
+
 .finance-account-detail__summary article {
   position: relative;
   overflow: hidden;
