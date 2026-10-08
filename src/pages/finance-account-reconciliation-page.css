@@ -176,7 +176,7 @@
 
 .finance-account-table {
   width: 100%;
-  min-width: 1400px;
+  min-width: 1720px;
   border-collapse: collapse;
 }
 
@@ -615,7 +615,28 @@
   background: #fff;
 }
 
-/* Compact actions that remain visible when the financial grid scrolls horizontally. */
+/* Keep the final two columns together instead of letting Actions cover Situação. */
+.finance-account-table th:nth-child(10),
+.finance-account-table td:nth-child(10) {
+  position: sticky;
+  right: 184px;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 196px;
+  min-width: 196px;
+  max-width: 196px;
+  border-left: 2px solid #cbd4d0;
+}
+
+.finance-account-table th:nth-child(10) {
+  z-index: 4;
+  background: #f1f3f2;
+}
+
+.finance-account-table td:nth-child(10) {
+  background: #fbfcfb;
+}
+
 .finance-account-table .finance-account-actions-column,
 .finance-account-table .finance-account-actions-cell {
   position: sticky;
@@ -624,17 +645,17 @@
   width: 184px;
   min-width: 184px;
   max-width: 184px;
-  border-left: 2px solid #cbd4d0;
+  border-left: 1px solid #cbd4d0;
   box-shadow: -4px 0 8px -8px rgba(26, 56, 42, .35);
 }
 
 .finance-account-table .finance-account-actions-column {
-  z-index: 2;
+  z-index: 5;
   background: #f1f3f2;
 }
 
 .finance-account-table .finance-account-actions-cell {
-  z-index: 1;
+  z-index: 3;
   padding: 8px 10px;
   background: #fbfcfb;
 }
@@ -686,10 +707,13 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 900px) {
+  .finance-account-table th:nth-child(10),
+  .finance-account-table td:nth-child(10),
   .finance-account-table .finance-account-actions-column,
   .finance-account-table .finance-account-actions-cell {
     position: static;
+    right: auto;
     box-shadow: none;
   }
 }
