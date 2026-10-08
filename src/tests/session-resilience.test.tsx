@@ -91,7 +91,7 @@ describe('estabilidade da sessao e permissoes', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     sendAuthEvent = null;
-    mocks.onAuthStateChange.mockImplementation((callback) => {
+    mocks.onAuthStateChange.mockImplementation((callback: (event: AuthChangeEvent, session: Session | null) => void) => {
       sendAuthEvent = callback;
       return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
     });
@@ -176,7 +176,7 @@ describe('estabilidade da sessao e permissoes', () => {
     await event('SIGNED_OUT', null);
     expect(await screen.findByText('Tela de login')).toBeInTheDocument();
 
-    await act(async () => { finishViewer(activeViewer); });
+    await act(async () => { finishViewer(activeViewer); await Promise.resolve(); });
     expect(screen.getByText('Tela de login')).toBeInTheDocument();
     expect(screen.queryByText('Area protegida: Operadora')).toBeNull();
   });
@@ -192,6 +192,7 @@ describe('estabilidade da sessao e permissoes', () => {
 
     await act(async () => {
       finishSession({ data: { session: initialSession }, error: null });
+      await Promise.resolve();
     });
     expect(screen.getByText('Tela de login')).toBeInTheDocument();
     expect(mocks.loadViewer).not.toHaveBeenCalled();
