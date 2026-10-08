@@ -33,6 +33,7 @@ import { SessionProvider, useSession } from '../app/session-provider';
 const session = {
   access_token: 'access-token',
   refresh_token: 'refresh-token',
+  user: { id: 'auth-user-1' },
 } as Session;
 
 const viewer: Viewer = {
@@ -117,7 +118,7 @@ describe('SessionProvider', () => {
     renderProvider();
 
     expect(
-      await screen.findByText('Nao foi possivel carregar suas permissoes. Entre novamente.'),
+      await screen.findByText('Nao foi possivel validar suas permissoes. Tente novamente.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Anonimo')).toBeInTheDocument();
   });
