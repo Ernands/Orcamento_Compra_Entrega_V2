@@ -25,7 +25,10 @@ const ACCEPTED_MIME_TYPES = new Set([
 
 type WorkServiceRow = Database['public']['Tables']['works_services']['Row'];
 type WorkComponentRow = Database['public']['Tables']['works_service_components']['Row'];
-type WorkPaymentRow = Database['public']['Tables']['works_service_payments']['Row'];
+type WorkPaymentRow = Database['public']['Tables']['works_service_payments']['Row'] & {
+  forwarded_to_finance_at: string | null;
+  forwarded_to_finance_by: string | null;
+};
 type WorkDocumentRow = Database['public']['Tables']['works_service_documents']['Row'];
 type WorkDocumentUpdate = Database['public']['Tables']['works_service_documents']['Update'];
 type BudgetRow = Database['public']['Tables']['finance_store_budgets']['Row'];
@@ -65,6 +68,8 @@ function mapPayment(row: WorkPaymentRow): WorkServicePayment {
     amount: stringValue(row.amount),
     status: row.status as WorkServicePayment['status'],
     paidAt: row.paid_at,
+    forwardedToFinanceAt: row.forwarded_to_finance_at,
+    forwardedToFinanceBy: row.forwarded_to_finance_by,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -160,7 +165,8 @@ export async function listWorkServices(): Promise<WorkService[]> {
     servicesResult.error || paymentsResult.error || documentsResult.error || componentsResult.error;
   if (error) throw error;
 
-  const paymentsByService = groupRowsBy(paymentsResult.data || [], (payment) => payment.service_id);
+  const paymentRows = (paymentsResult.data || []) as unknown as WorkPaymentRow[];
+  const paymentsByService = groupRowsBy(paymentRows, (payment) => payment.service_id);
   const documentsByService = groupRowsBy(documentsResult.data || [], (document) => document.service_id);
   const componentsByService = groupRowsBy(componentsResult.data || [], (component) => component.service_id);
 

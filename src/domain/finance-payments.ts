@@ -37,6 +37,7 @@ export interface UnifiedFinancePaymentRow {
   paymentMethod: string | null;
   sourceLabel: string | null;
   installmentLabel: string;
+  forwardedToFinance: boolean | null;
   amountCents: bigint;
   storeIds: string[];
   storeCodes: string[];
@@ -314,6 +315,10 @@ function paymentNotes(purchase: PurchaseV2, paymentId: string): string | null {
   return purchase.payments.find((payment) => payment.id === paymentId)?.notes || null;
 }
 
+function paymentForwardedToFinance(purchase: PurchaseV2, paymentId: string): boolean {
+  return Boolean(purchase.payments.find((payment) => payment.id === paymentId)?.forwardedToFinanceAt);
+}
+
 function purchasePaymentRow(
   purchase: PurchaseV2,
   event: ReturnType<typeof buildFinancePaymentEvents>[number],
@@ -351,6 +356,7 @@ function purchasePaymentRow(
     paymentMethod: event.paymentMethod,
     sourceLabel: event.sourceLabel,
     installmentLabel: sourceInstallment,
+    forwardedToFinance: paymentForwardedToFinance(purchase, event.paymentId),
     amountCents: event.amountCents,
     storeIds: unique(storeIds),
     storeCodes,
@@ -402,6 +408,11 @@ function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
     purchaseOrderIds: unique(rows.flatMap((row) => row.purchaseOrderIds)),
     paymentIds: unique(rows.flatMap((row) => row.paymentIds)),
     supplyItemIds: unique(rows.flatMap((row) => row.supplyItemIds)),
+    forwardedToFinance: rows.every((row) => row.forwardedToFinance === true)
+      ? true
+      : rows.every((row) => row.forwardedToFinance === false)
+        ? false
+        : null,
     description: unique(rows.map((row) => row.description)).join(' + '),
     amountCents: rows.reduce((sum, row) => sum + row.amountCents, 0n),
     storeIds: unique(rows.flatMap((row) => row.storeIds)),
@@ -501,6 +512,7 @@ function purchaseUnscheduledRows(
         paymentMethod: null,
         sourceLabel: null,
         installmentLabel: 'Saldo sem programação',
+        forwardedToFinance: null,
         amountCents: residual,
         storeIds: storeIds.length ? storeIds : fallbackStores.map((store) => store.storeId),
         storeCodes: storeCodes.length ? storeCodes : fallbackStores.map((store) => store.code),
@@ -539,6 +551,7 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
         paymentMethod: payment.paymentMethod,
         sourceLabel: payment.sourceLabel || payment.label,
         installmentLabel: payment.label || (paid ? 'Pagamento realizado' : 'Pagamento previsto'),
+        forwardedToFinance: paid ? null : Boolean(payment.forwardedToFinanceAt),
         amountCents,
         storeIds: [work.storeId],
         storeCodes: [work.storeCode],
@@ -582,6 +595,7 @@ function workPaymentRows(work: WorkService): UnifiedFinancePaymentRow[] {
       paymentMethod: null,
       sourceLabel: null,
       installmentLabel: 'Saldo sem programação',
+      forwardedToFinance: null,
       amountCents: residual,
       storeIds: [work.storeId],
       storeCodes: [work.storeCode],

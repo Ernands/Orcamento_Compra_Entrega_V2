@@ -130,3 +130,33 @@ export async function saveFinanceReimbursement(
   if (error) throw new Error(error.message);
   return data;
 }
+
+
+export type PlannedFinancePaymentSource = 'purchase' | 'work';
+
+export function buildPlannedFinancePaymentUpdatePayload(values: {
+  source: PlannedFinancePaymentSource;
+  paymentIds: string[];
+  dueDate: string;
+  forwardedToFinance: boolean | null;
+}) {
+  return {
+    p_source: values.source,
+    p_payment_ids: values.paymentIds,
+    p_due_date: values.dueDate,
+    p_forwarded_to_finance: values.forwardedToFinance,
+  };
+}
+
+export async function updatePlannedFinancePayment(values: {
+  source: PlannedFinancePaymentSource;
+  paymentIds: string[];
+  dueDate: string;
+  forwardedToFinance: boolean | null;
+}): Promise<void> {
+  const { error } = await supabase.rpc(
+    'update_planned_finance_payment_v1' as never,
+    buildPlannedFinancePaymentUpdatePayload(values) as never,
+  );
+  if (error) throw new Error(error.message);
+}

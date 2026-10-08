@@ -189,6 +189,8 @@ export interface PurchasePaymentV2 {
   firstDueDate: string | null;
   status: PurchasePaymentStatus;
   paidAt: string | null;
+  forwardedToFinanceAt: string | null;
+  forwardedToFinanceBy: string | null;
   notes: string | null;
   createdAt: string;
   cancelledBy?: string | null;
