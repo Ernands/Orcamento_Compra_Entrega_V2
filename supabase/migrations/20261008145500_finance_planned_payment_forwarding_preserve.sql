@@ -79,5 +79,5 @@ begin
 end;
 $$;
 
-revoke all on function public.update_planned_finance_payment_v1(text, uuid[], date, boolean) from public;
+revoke all on function public.update_planned_finance_payment_v1(text, uuid[], date, boolean) from public, anon;
 grant execute on function public.update_planned_finance_payment_v1(text, uuid[], date, boolean) to authenticated;
