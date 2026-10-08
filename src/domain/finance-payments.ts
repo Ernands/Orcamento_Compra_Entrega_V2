@@ -37,7 +37,7 @@ export interface UnifiedFinancePaymentRow {
   paymentMethod: string | null;
   sourceLabel: string | null;
   installmentLabel: string;
-  forwardedToFinance: boolean | null;
+  forwardedToFinance?: boolean | null;
   amountCents: bigint;
   storeIds: string[];
   storeCodes: string[];

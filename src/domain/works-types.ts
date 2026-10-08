@@ -25,8 +25,8 @@ export interface WorkServicePayment {
   amount: string;
   status: WorkPaymentStatus;
   paidAt: string | null;
-  forwardedToFinanceAt: string | null;
-  forwardedToFinanceBy: string | null;
+  forwardedToFinanceAt?: string | null;
+  forwardedToFinanceBy?: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
