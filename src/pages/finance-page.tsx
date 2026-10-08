@@ -65,17 +65,6 @@ import './finance-page.css';
 
 type FinanceTab = 'overview' | 'stores' | 'reimbursements';
 
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: 'PIX',
-  boleto: 'Boleto',
-  bank_transfer: 'Transferencia bancaria',
-  credit_card: 'Cartao de credito',
-  debit_card: 'Cartao de debito',
-  cash: 'Dinheiro',
-  invoiced: 'Faturado',
-  other: 'Outro',
-};
-
 const REIMBURSEMENT_LABELS: Record<FinanceReimbursementStatus, string> = {
   draft: 'Rascunho',
   requested: 'Solicitado',
@@ -545,7 +534,7 @@ export function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<FinanceTab>(firstAllowedTab);
-  const [month, setMonth] = useState(currentMonth);
+  const [month] = useState(currentMonth);
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
   const [query, setQuery] = useState('');
