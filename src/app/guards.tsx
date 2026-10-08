@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import type { Capability } from '../domain/types';
-import { LoadingScreen } from '../components/ui';
+import { ErrorState, LoadingScreen } from '../components/ui';
 import { useSession } from './session-provider';
 
 export function authorizedHomePath(capabilities: Capability[]): string {
@@ -27,13 +27,18 @@ export function AuthorizedHomeRedirect() {
 }
 
 export function RequireSession({ children }: { children: ReactNode }) {
-  const { session, loading, error } = useSession();
+  const { session, viewer, loading, error, refreshViewer } = useSession();
   const location = useLocation();
 
   if (loading) return <LoadingScreen label="Validando acesso" />;
-  if (!session || error) {
+  if (error && !viewer) {
+    return <ErrorState message={error} onRetry={() => void refreshViewer()} />;
+  }
+  if (!session) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
+  // A real user session is not sufficient to access pages until permissions are verified.
+  if (!viewer) return <LoadingScreen label="Validando permissoes" />;
   return children;
 }
 
