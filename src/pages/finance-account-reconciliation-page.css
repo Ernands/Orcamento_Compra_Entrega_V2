@@ -172,11 +172,34 @@
 
 .finance-account-table-scroll {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.finance-account-top-scroll {
+  height: 17px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid #d9dfdc;
+  background: #f6f8f7;
+  scrollbar-color: #aab8b0 #edf1ee;
+}
+
+.finance-account-top-scroll__spacer {
+  height: 1px;
+}
+
+.finance-account-top-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.finance-account-top-scroll::-webkit-scrollbar-thumb {
+  background: #aab8b0;
+  border-radius: 6px;
 }
 
 .finance-account-table {
-  width: 100%;
-  min-width: 1720px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
 }
 
@@ -461,7 +484,7 @@
   border-bottom-color: #c9d3ce;
 }
 
-.finance-account-panel > header > span {
+.finance-account-panel__count {
   padding: 5px 9px;
   color: #285c4c;
   background: #e8f3ef;
@@ -615,49 +638,44 @@
   background: #fff;
 }
 
-/* Keep the final two columns together instead of letting Actions cover Situação. */
+/* Numeric columns keep their own space; scrolling never covers financial values. */
+.finance-account-table th:nth-child(1),
+.finance-account-table td:nth-child(1) { min-width: 115px; }
+.finance-account-table th:nth-child(2),
+.finance-account-table td:nth-child(2) { min-width: 135px; }
+.finance-account-table th:nth-child(3),
+.finance-account-table td:nth-child(3) { min-width: 145px; }
+.finance-account-table th:nth-child(4),
+.finance-account-table td:nth-child(4) { min-width: 170px; }
+.finance-account-table th:nth-child(5),
+.finance-account-table td:nth-child(5),
+.finance-account-table th:nth-child(6),
+.finance-account-table td:nth-child(6) { min-width: 100px; }
+.finance-account-table th:nth-child(7),
+.finance-account-table td:nth-child(7) { min-width: 120px; }
+.finance-account-table th:nth-child(8),
+.finance-account-table td:nth-child(8) { min-width: 170px; }
+.finance-account-table th:nth-child(9),
+.finance-account-table td:nth-child(9) { min-width: 155px; }
 .finance-account-table th:nth-child(10),
-.finance-account-table td:nth-child(10) {
-  position: sticky;
-  right: 184px;
-  z-index: 2;
-  box-sizing: border-box;
-  width: 196px;
-  min-width: 196px;
-  max-width: 196px;
-  border-left: 2px solid #cbd4d0;
-}
-
-.finance-account-table th:nth-child(10) {
-  z-index: 4;
-  background: #f1f3f2;
-}
-
-.finance-account-table td:nth-child(10) {
-  background: #fbfcfb;
-}
+.finance-account-table td:nth-child(10) { min-width: 115px; }
 
 .finance-account-table .finance-account-actions-column,
 .finance-account-table .finance-account-actions-cell {
-  position: sticky;
-  right: 0;
-  box-sizing: border-box;
-  width: 184px;
   min-width: 184px;
-  max-width: 184px;
-  border-left: 1px solid #cbd4d0;
-  box-shadow: -4px 0 8px -8px rgba(26, 56, 42, .35);
-}
-
-.finance-account-table .finance-account-actions-column {
-  z-index: 5;
-  background: #f1f3f2;
-}
-
-.finance-account-table .finance-account-actions-cell {
-  z-index: 3;
-  padding: 8px 10px;
+  width: 184px;
   background: #fbfcfb;
+}
+
+.finance-account-table .finance-account-actions-column { background: #f1f3f2; }
+.finance-account-table .finance-account-actions-cell { padding: 8px 10px; }
+
+/* Preserve the original column order so semantic color rules remain correct. */
+.finance-account-table--hide-investment th:nth-child(2),
+.finance-account-table--hide-investment td:nth-child(2),
+.finance-account-table--hide-actions th:nth-child(11),
+.finance-account-table--hide-actions td:nth-child(11) {
+  display: none;
 }
 
 .finance-account-row-actions {
@@ -707,14 +725,40 @@
   outline-offset: 2px;
 }
 
+/* Controls stay accessible without truncating the table header. */
+.finance-account-panel__tools,
+.finance-account-column-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.finance-account-panel__tools {
+  justify-content: flex-end;
+}
+
+.finance-account-column-controls .button {
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+.finance-account-column-controls .button[aria-pressed="true"] {
+  color: #2947ba;
+  background: #eef3ff;
+  border-color: #c5d2f7;
+}
+
 @media (max-width: 900px) {
-  .finance-account-table th:nth-child(10),
-  .finance-account-table td:nth-child(10),
-  .finance-account-table .finance-account-actions-column,
-  .finance-account-table .finance-account-actions-cell {
-    position: static;
-    right: auto;
-    box-shadow: none;
+  .finance-account-panel > header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .finance-account-panel__tools {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

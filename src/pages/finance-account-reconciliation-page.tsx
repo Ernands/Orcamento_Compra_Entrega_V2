@@ -2,6 +2,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Eye,
+  EyeOff,
   FileDown,
   FileSpreadsheet,
   Landmark,
@@ -12,7 +13,7 @@ import {
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
@@ -82,7 +83,7 @@ function statusLabel(status: FinanceAccountDaySummary['status']): string {
     ? 'Conciliado'
     : status === 'divergent'
       ? 'Divergente'
-      : 'Pendente de conferência';
+      : 'Pendente';
 }
 
 function entryLabel(entry: FinanceAccountManualEntry): string {
@@ -122,6 +123,14 @@ export function FinanceAccountReconciliationPage() {
   const [storeFilter, setStoreFilter] = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [query, setQuery] = useState('');
+
+  // The financial columns stay in the table; these controls affect visibility only.
+  const [showInvestmentColumn, setShowInvestmentColumn] = useState(false);
+  const [showActionsColumn, setShowActionsColumn] = useState(false);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
 
   const [detailDay, setDetailDay] = useState<FinanceAccountDaySummary | null>(null);
   const [detailAdjustmentsOnly, setDetailAdjustmentsOnly] = useState(false);
@@ -238,6 +247,30 @@ export function FinanceAccountReconciliationPage() {
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [dateFrom, dateTo, days, query, stateFilter, statusFilter, storeFilter]);
+
+  useEffect(() => {
+    const table = tableRef.current;
+    const tableScroll = tableScrollRef.current;
+    if (!table || !tableScroll) return;
+
+    const updateWidth = () => {
+      setTableWidth(table.scrollWidth);
+      if (topScrollRef.current) {
+        topScrollRef.current.scrollLeft = tableScroll.scrollLeft;
+      }
+    };
+
+    updateWidth();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(table);
+    observer.observe(tableScroll);
+    return () => observer.disconnect();
+  }, [filteredDays.length, loading, showInvestmentColumn, showActionsColumn]);
 
   const overallStatus =
     consolidated.actualBalanceCents === null || consolidated.pendingDays > 0
@@ -523,7 +556,7 @@ export function FinanceAccountReconciliationPage() {
                 <option value="">Todas</option>
                 <option value="reconciled">Conciliado</option>
                 <option value="divergent">Divergente</option>
-                <option value="pending">Pendente de conferência</option>
+                <option value="pending">Pendente</option>
               </select>
             </label>
             <label>
@@ -578,12 +611,60 @@ export function FinanceAccountReconciliationPage() {
                 <h3>Conciliação por data</h3>
                 <p>Cada data pode ser aberta para ver todos os lançamentos ou somente os acertos.</p>
               </div>
-              <span>{filteredDays.length} data(s)</span>
+              <div className="finance-account-panel__tools">
+                <div className="finance-account-column-controls" role="group" aria-label="Colunas da conciliação">
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    aria-pressed={showInvestmentColumn}
+                    onClick={() => setShowInvestmentColumn((visible) => !visible)}
+                  >
+                    {showInvestmentColumn ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                    {showInvestmentColumn ? 'Ocultar investimento' : 'Mostrar investimento'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    aria-pressed={showActionsColumn}
+                    onClick={() => setShowActionsColumn((visible) => !visible)}
+                  >
+                    {showActionsColumn ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                    {showActionsColumn ? 'Ocultar ações' : 'Mostrar ações'}
+                  </button>
+                </div>
+                <span className="finance-account-panel__count">{filteredDays.length} data(s)</span>
+              </div>
             </header>
 
             {filteredDays.length ? (
-              <div className="finance-account-table-scroll">
-                <table className="finance-account-table">
+              <>
+                <div
+                  className="finance-account-top-scroll"
+                  ref={topScrollRef}
+                  role="region"
+                  tabIndex={0}
+                  aria-label="Rolagem horizontal superior da conciliação"
+                  onScroll={(event) => {
+                    if (tableScrollRef.current) {
+                      tableScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                    }
+                  }}
+                >
+                  <div className="finance-account-top-scroll__spacer" style={{ width: tableWidth }} />
+                </div>
+                <div
+                  className="finance-account-table-scroll"
+                  ref={tableScrollRef}
+                  onScroll={(event) => {
+                    if (topScrollRef.current) {
+                      topScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                    }
+                  }}
+                >
+                <table
+                  ref={tableRef}
+                  className={`finance-account-table${showInvestmentColumn ? '' : ' finance-account-table--hide-investment'}${showActionsColumn ? '' : ' finance-account-table--hide-actions'}`}
+                >
                   <thead>
                     <tr>
                       <th>Data</th>
@@ -662,7 +743,8 @@ export function FinanceAccountReconciliationPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             ) : (
               <EmptyState title="Nenhuma data encontrada" detail="Ajuste os filtros ou registre um movimento da Conta BB." />
             )}
