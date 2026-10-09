@@ -26,6 +26,7 @@ import {
   downloadFinanceOverviewExcel,
   downloadFinanceOverviewPdf,
 } from '../data/exports/finance-exports';
+import { exportErrorMessage } from '../data/exports/export-errors';
 import {
   listFinanceReimbursements,
   saveFinanceReimbursement,
@@ -801,7 +802,7 @@ export function FinancePage() {
       if (format === 'pdf') await downloadFinanceOverviewPdf(input);
       else await downloadFinanceOverviewExcel(input);
     } catch (exportError) {
-      setError(errorMessage(exportError, 'Não foi possível gerar a exportação da Visão Geral.'));
+      setError(exportErrorMessage(exportError, 'Não foi possível gerar a exportação da Visão Geral.'));
     } finally {
       setOverviewExporting(null);
     }
