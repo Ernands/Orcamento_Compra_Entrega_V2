@@ -1,5 +1,6 @@
 import { supabase } from '../supabase/client';
 import { fetchAllPages } from '../supabase/pagination';
+import { moneyToCents } from '../../domain/supply-calculations';
 import type {
   AllocationSource,
   DistributionStatus,
@@ -470,6 +471,32 @@ export function paidAtFromDateV2(date: string): string {
   return timestamp.toISOString();
 }
 
+/**
+ * Normalize a purchase payment entered as BRL to a decimal accepted by PostgreSQL.
+ * Accepts 5.684,00, 5684,00, 5684.00 and integer values without floating point.
+ * A dot followed by exactly three digits is treated as a grouping separator.
+ */
+export function purchasePaymentDecimalV2(input: string): string {
+  const raw = input.replace(/R\$/gi, '').replace(/\s/g, '');
+  if (!raw) throw new Error('Informe o valor do pagamento.');
+
+  let decimal: string;
+  if (/^-?\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(raw)) {
+    decimal = raw.replace(/\./g, '').replace(',', '.');
+  } else if (/^-?\d{1,3}(?:,\d{3})+\.\d{1,2}$/.test(raw)) {
+    decimal = raw.replace(/,/g, '');
+  } else if (/^-?\d+(?:[.,]\d{1,2})?$/.test(raw)) {
+    decimal = raw.replace(',', '.');
+  } else {
+    throw new Error('Valor monetario invalido. Use, por exemplo, 5.684,00.');
+  }
+
+  const cents = moneyToCents(decimal);
+  const negative = cents < 0n;
+  const positive = negative ? -cents : cents;
+  return `${negative ? '-' : ''}${positive / 100n}.${String(positive % 100n).padStart(2, '0')}`;
+}
+
 export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInputV2) {
   return {
     p_payment_id: values.id,
@@ -477,8 +504,8 @@ export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInpu
     p_purchase_order_id: values.purchaseOrderId,
     p_payment_method: values.paymentMethod,
     p_source_label: values.sourceLabel.trim() || null,
-    p_amount: values.amount,
-    p_entry_amount: values.entryAmount || null,
+    p_amount: purchasePaymentDecimalV2(values.amount),
+    p_entry_amount: values.entryAmount.trim() ? purchasePaymentDecimalV2(values.entryAmount) : null,
     p_installment_count: values.installmentCount ? Number(values.installmentCount) : null,
     p_first_due_date: values.firstDueDate || null,
     p_status: values.status,
