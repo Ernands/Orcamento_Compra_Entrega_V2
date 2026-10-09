@@ -181,7 +181,7 @@ type PaymentRow = {
   cancelled_by: string | null; cancelled_at: string | null; cancellation_reason: string | null;
 };
 type AttachmentRow = {
-  id: string; purchase_id: string; purchase_order_id: string | null; original_name: string; storage_path: string;
+  id: string; purchase_id: string; purchase_order_id: string | null; payment_id: string | null; original_name: string; storage_path: string;
   mime_type: string; size_bytes: number; description: string | null; document_type: PurchaseDocumentType;
   document_number: string | null; document_date: string | null; document_amount: Numeric | null; created_at: string; deleted_at: string | null;
 };
@@ -346,7 +346,7 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
     })),
     attachments: (attachmentsByPurchase.get(purchase.id) || []).map((attachment): PurchaseAttachmentV2 => ({
       id: attachment.id, purchaseId: attachment.purchase_id, purchaseOrderId: attachment.purchase_order_id,
-      originalName: attachment.original_name, storagePath: attachment.storage_path, mimeType: attachment.mime_type,
+      paymentId: attachment.payment_id, originalName: attachment.original_name, storagePath: attachment.storage_path, mimeType: attachment.mime_type,
       sizeBytes: attachment.size_bytes, description: attachment.description, documentType: attachment.document_type,
       documentNumber: attachment.document_number, documentDate: attachment.document_date,
       documentAmount: nullableStringValue(attachment.document_amount), createdAt: attachment.created_at,
@@ -461,6 +461,15 @@ export async function createSupplyPurchaseBatchOperationV2(
   }));
 }
 
+export function paidAtFromDateV2(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Informe a data real do pagamento.');
+  const timestamp = new Date(`${date}T12:00:00.000Z`);
+  if (Number.isNaN(timestamp.getTime()) || timestamp.toISOString().slice(0, 10) !== date) {
+    throw new Error('Informe uma data valida para o pagamento.');
+  }
+  return timestamp.toISOString();
+}
+
 export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInputV2) {
   return {
     p_payment_id: values.id,
@@ -530,6 +539,7 @@ export async function savePurchaseOrderLineDistributionV2(
 export async function uploadPurchaseAttachmentV3(values: {
   purchaseId: string;
   purchaseOrderId: string | null;
+  paymentId?: string | null;
   file: File;
   description: string;
   documentType: PurchaseDocumentType;
@@ -548,7 +558,7 @@ export async function uploadPurchaseAttachmentV3(values: {
     contentType: mimeType, upsert: false,
   });
   if (uploadError) throw uploadError;
-  const { error } = await supabase.rpc('register_supply_purchase_attachment_v3' as never, {
+  const { data: registered, error } = await supabase.rpc('register_supply_purchase_attachment_v3' as never, {
     p_purchase_id: values.purchaseId,
     p_purchase_order_id: values.purchaseOrderId,
     p_original_name: values.file.name,
@@ -565,6 +575,17 @@ export async function uploadPurchaseAttachmentV3(values: {
   if (error) {
     await supabase.storage.from(PURCHASE_BUCKET).remove([path]);
     throw new Error(error.message);
+  }
+  if (values.paymentId) {
+    const attachmentId = (registered as unknown as { id?: string } | null)?.id;
+    if (!attachmentId) throw new Error('Comprovante enviado, mas o registro do arquivo nao foi retornado.');
+    const { error: linkError } = await supabase.rpc('link_supply_purchase_payment_proof_v1' as never, {
+      p_attachment_id: attachmentId,
+      p_payment_id: values.paymentId,
+    } as never);
+    if (linkError) {
+      throw new Error('O comprovante foi enviado para a compra, mas o vinculo com a parcela falhou: ' + linkError.message);
+    }
   }
 }
 
