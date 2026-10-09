@@ -1940,7 +1940,11 @@ function PortfolioBulkRegisterPurchaseModal({
         <button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button>
         <button className="button button--primary" disabled={saving || !selectedLines.length}>{saving ? 'Salvando lote...' : `Salvar compra em lote · ${selectedCmpCount} CMPs`}</button>
       </div>
-    </ffunction PaymentModal({
+    </form>
+  </Modal>;
+}
+
+function PaymentModal({
   purchase,
   initialPurchaseOrderId,
   lockedPurchaseOrderId,
@@ -2387,9 +2391,6 @@ function DocumentsModal({
   if (embedded) return content;
   return <Modal open={Boolean(purchase)} title={purchase ? `Documentos · ${purchase.code}` : 'Documentos'} description="Documentos da cotacao sao exibidos apenas para consulta; arquivos nao sao duplicados." onClose={onClose}>
     {content}
-  </Modal>;
-}
-tent}
   </Modal>;
 }
 
