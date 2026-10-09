@@ -1992,7 +1992,7 @@ function PaymentModal({
     setSource(activePayment?.sourceLabel || '');
     setAmount(activePayment?.amount || suggestedPaymentAmount(purchase, initialOrderId));
     setEntry(activePayment?.entryAmount || purchase.entryAmountSnapshot || '');
-    setInstallments(activePayment?.installmentCount ? String(editingPayment.installmentCount) : purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '');
+    setInstallments(activePayment?.installmentCount ? String(activePayment.installmentCount) : purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '');
     setFirstDueDate(activePayment?.firstDueDate || '');
     setStatus(markPaidPaymentId === activePayment?.id || activePayment?.status === 'paid' ? 'paid' : 'planned');
     setPaidDate(activePayment?.paidAt?.slice(0, 10) || todayInput());
