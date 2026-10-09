@@ -177,6 +177,7 @@ type PaymentRow = {
   id: string; purchase_id: string; purchase_order_id: string | null; payment_method: PaymentMethod; source_label: string | null; amount: Numeric;
   entry_amount: Numeric | null; installment_count: number | null; first_due_date: string | null;
   status: PurchasePaymentStatus; paid_at: string | null; notes: string | null; created_at: string;
+  forwarded_to_finance_at: string | null; forwarded_to_finance_by: string | null;
   cancelled_by: string | null; cancelled_at: string | null; cancellation_reason: string | null;
 };
 type AttachmentRow = {
@@ -339,7 +340,8 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
       paymentMethod: payment.payment_method,
       sourceLabel: payment.source_label, amount: stringValue(payment.amount), entryAmount: nullableStringValue(payment.entry_amount),
       installmentCount: payment.installment_count, firstDueDate: payment.first_due_date, status: payment.status,
-      paidAt: payment.paid_at, notes: payment.notes, createdAt: payment.created_at,
+      paidAt: payment.paid_at, forwardedToFinanceAt: payment.forwarded_to_finance_at,
+      forwardedToFinanceBy: payment.forwarded_to_finance_by, notes: payment.notes, createdAt: payment.created_at,
       cancelledBy: payment.cancelled_by, cancelledAt: payment.cancelled_at, cancellationReason: payment.cancellation_reason,
     })),
     attachments: (attachmentsByPurchase.get(purchase.id) || []).map((attachment): PurchaseAttachmentV2 => ({

@@ -7,8 +7,10 @@ import {
   ExternalLink,
   FileText,
   Paperclip,
+  Pencil,
   RefreshCcw,
   Search,
+  Scale,
   WalletCards,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,6 +24,7 @@ import {
 import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listSupplyPurchasePaymentOccurrencesV2 } from '../data/purchases/payment-occurrences-repository';
+import { updatePlannedFinancePayment } from '../data/finance/finance-repository';
 import { createPurchaseAttachmentSignedUrlV2, listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
 import { createWorkDocumentSignedUrl, listWorkServices } from '../data/works/works-repository';
@@ -128,6 +131,8 @@ export function FinancePaymentsPage() {
   const { can } = useSession();
   const canPurchases = can('purchases.view');
   const canWorks = can('works.view');
+  const canReconciliation = can('finance.account_reconciliation_view');
+  const canManageFinance = can('finance.manage');
   const [searchParams] = useSearchParams();
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
@@ -152,6 +157,11 @@ export function FinancePaymentsPage() {
   const [datesRow, setDatesRow] = useState<UnifiedFinancePaymentRowWithOccurrences | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [plannedEditRow, setPlannedEditRow] = useState<UnifiedFinancePaymentRowWithOccurrences | null>(null);
+  const [plannedDueDate, setPlannedDueDate] = useState('');
+  const [plannedForwarding, setPlannedForwarding] = useState<'yes' | 'no' | 'keep'>('no');
+  const [plannedSaving, setPlannedSaving] = useState(false);
+  const [plannedEditError, setPlannedEditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -374,6 +384,47 @@ export function FinancePaymentsPage() {
         value === 'payment_proof' ? 0 : value === 'invoice' ? 1 : value === 'receipt' ? 2 : value === 'boleto' ? 3 : 4;
       return priority(a.type) - priority(b.type) || a.name.localeCompare(b.name, 'pt-BR');
     });
+  };
+
+  const openPlannedEdit = (row: UnifiedFinancePaymentRowWithOccurrences) => {
+    setPlannedEditRow(row);
+    setPlannedDueDate(row.date || '');
+    setPlannedForwarding(
+      row.forwardedToFinance === true ? 'yes' : row.forwardedToFinance === false ? 'no' : 'keep',
+    );
+    setPlannedEditError(null);
+  };
+
+  const savePlannedEdit = async () => {
+    if (!plannedEditRow) return;
+    if (!plannedDueDate) {
+      setPlannedEditError('Informe a data de vencimento.');
+      return;
+    }
+    if (!plannedEditRow.paymentIds.length) {
+      setPlannedEditError('Pagamento sem identificação para edição.');
+      return;
+    }
+    setPlannedSaving(true);
+    setPlannedEditError(null);
+    try {
+      await updatePlannedFinancePayment({
+        source: plannedEditRow.workServiceId ? 'work' : 'purchase',
+        paymentIds: plannedEditRow.paymentIds,
+        dueDate: plannedDueDate,
+        forwardedToFinance: plannedForwarding === 'keep' ? null : plannedForwarding === 'yes',
+      });
+      setPlannedEditRow(null);
+      await load();
+    } catch (saveError) {
+      setPlannedEditError(
+        saveError instanceof Error && saveError.message
+          ? saveError.message
+          : 'Não foi possível atualizar a programação.',
+      );
+    } finally {
+      setPlannedSaving(false);
+    }
   };
 
   const openDocument = async (
@@ -698,16 +749,43 @@ export function FinancePaymentsPage() {
                                 {row.sourceLabel && row.installmentLabel !== row.sourceLabel && (
                                   <small>{row.installmentLabel}</small>
                                 )}
+                                {view === 'planned' && (
+                                  <span className={`finance-payment-forwarded finance-payment-forwarded--${row.forwardedToFinance === true ? 'yes' : row.forwardedToFinance === false ? 'no' : 'partial'}`}>
+                                    Financeiro: {row.forwardedToFinance === true ? 'Sim' : row.forwardedToFinance === false ? 'Não' : 'Parcial'}
+                                  </span>
+                                )}
                               </td>
                             </>
                           )}
                           <td className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
                           <td>
                             <div className="finance-payment-actions">
+                              {view === 'planned' && canManageFinance && (
+                                <button
+                                  type="button"
+                                  className="finance-payment-document-link finance-payment-edit-programming"
+                                  onClick={() => openPlannedEdit(row)}
+                                >
+                                  <Pencil size={13} />
+                                  Editar programação
+                                </button>
+                              )}
                               {view === 'paid' && (
                                 <FinancePaymentDatesAction
                                   onClick={() => setDatesRow(rows.find((candidate) => candidate.id === row.id) || row)}
                                 />
+                              )}
+                              {view === 'paid' && canReconciliation && (
+                                <Link
+                                  className="finance-payment-origin-link"
+                                  to={financePaymentLatestDate(row)
+                                    ? `/financeiro/conciliacao-conta?date=${financePaymentLatestDate(row)}`
+                                    : '/financeiro/conciliacao-conta'}
+                                  title="Abrir esta data na Conciliação Conta"
+                                >
+                                  <Scale size={13} />
+                                  Conciliação
+                                </Link>
                               )}
                               {(row.workServiceId ? canWorks : canPurchases) ? (
                                 <Link className="finance-payment-origin-link" to={originHref(row)}>
@@ -744,6 +822,61 @@ export function FinancePaymentsPage() {
       )}
 
       <FinancePaymentOccurrencesModal row={datesRow} onClose={() => setDatesRow(null)} />
+
+      {plannedEditRow && (
+        <Modal
+          open
+          title={`Editar programação · ${referenceLabel(plannedEditRow)}`}
+          description="Altere o vencimento e informe se este pagamento já foi repassado ao Financeiro."
+          onClose={() => {
+            if (!plannedSaving) {
+              setPlannedEditRow(null);
+              setPlannedEditError(null);
+            }
+          }}
+          className="finance-planned-edit-modal"
+        >
+          <div className="finance-planned-edit-form">
+            {plannedEditError && <div className="form-error">{plannedEditError}</div>}
+            <div className="finance-planned-edit-summary">
+              <div><span>Fornecedor / prestador</span><strong>{plannedEditRow.supplierName}</strong></div>
+              <div><span>Valor</span><strong>{formatBRL(plannedEditRow.amountCents)}</strong></div>
+              <div><span>Identificação</span><strong>{plannedEditRow.installmentLabel}</strong></div>
+            </div>
+            <label>
+              Data de vencimento
+              <input type="date" value={plannedDueDate} onChange={(event) => setPlannedDueDate(event.target.value)} />
+            </label>
+            <label>
+              Repassado ao Financeiro
+              <select
+                value={plannedForwarding}
+                onChange={(event) => setPlannedForwarding(event.target.value as 'yes' | 'no' | 'keep')}
+              >
+                {plannedEditRow.forwardedToFinance === null && (
+                  <option value="keep">Manter situação atual (parcial)</option>
+                )}
+                <option value="yes">Sim</option>
+                <option value="no">Não</option>
+              </select>
+            </label>
+            <small className="finance-planned-edit-help">
+              Esta marcação é apenas de controle do repasse. Ela não altera a situação do pagamento para Pago.
+            </small>
+            <div className="finance-planned-edit-actions">
+              <button type="button" className="button button--secondary" disabled={plannedSaving} onClick={() => {
+                setPlannedEditRow(null);
+                setPlannedEditError(null);
+              }}>
+                Cancelar
+              </button>
+              <button type="button" className="button" disabled={plannedSaving} onClick={() => void savePlannedEdit()}>
+                {plannedSaving ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {documentsRow && (
         <Modal

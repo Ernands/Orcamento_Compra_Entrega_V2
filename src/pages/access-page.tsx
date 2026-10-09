@@ -50,12 +50,20 @@ const emptyForm: AccessFormValues = {
 
 const financeOverviewOnlyHiddenKeys = new Set<AccessPermission['key']>([
   'finance.payments_view',
+  'finance.account_reconciliation_view',
+  'finance.account_reconciliation_manage',
   'finance.stores_ufs_view',
   'finance.reimbursements_view',
 ]);
 
 function permissionLabel(permission: AccessPermission): string {
   if (permission.key === 'finance.view') return 'Exibir o menu Financeiro';
+  if (permission.key === 'finance.account_reconciliation_view') {
+    return 'Conciliação Conta — visualizar aba';
+  }
+  if (permission.key === 'finance.account_reconciliation_manage') {
+    return 'Conciliação Conta — cadastrar/editar Conta BB, investimentos e acertos';
+  }
   return permission.description;
 }
 

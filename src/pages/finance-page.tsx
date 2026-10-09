@@ -21,7 +21,6 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
-import { FinancePaymentsExportActions } from '../components/finance-payments-export-actions';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceOverviewExcel,
@@ -64,18 +63,7 @@ import type { Store } from '../domain/types';
 import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
 import './finance-page.css';
 
-type FinanceTab = 'overview' | 'payments' | 'stores' | 'reimbursements';
-
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: 'PIX',
-  boleto: 'Boleto',
-  bank_transfer: 'Transferencia bancaria',
-  credit_card: 'Cartao de credito',
-  debit_card: 'Cartao de debito',
-  cash: 'Dinheiro',
-  invoiced: 'Faturado',
-  other: 'Outro',
-};
+type FinanceTab = 'overview' | 'stores' | 'reimbursements';
 
 const REIMBURSEMENT_LABELS: Record<FinanceReimbursementStatus, string> = {
   draft: 'Rascunho',
@@ -523,7 +511,6 @@ export function FinancePage() {
   const { can } = useSession();
   const canManage = can('finance.manage');
   const canOverview = can('finance.overview_view');
-  const canPayments = can('finance.payments_view');
   const canStoresUfs = can('finance.stores_ufs_view');
   const canReimbursements = can('finance.reimbursements_view');
   const canStoreDetail = can('finance.store_detail_view');
@@ -532,14 +519,12 @@ export function FinancePage() {
   const canPurchases = can('purchases.view');
   const firstAllowedTab: FinanceTab = canOverview
     ? 'overview'
-    : canPayments
-      ? 'payments'
-      : canStoresUfs
-        ? 'stores'
-        : canReimbursements
-          ? 'reimbursements'
-          : 'overview';
-  const hasAnyFinanceView = canOverview || canPayments || canStoresUfs || canReimbursements;
+    : canStoresUfs
+      ? 'stores'
+      : canReimbursements
+        ? 'reimbursements'
+        : 'overview';
+  const hasAnyFinanceView = canOverview || canStoresUfs || canReimbursements;
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [plannedBudgetItems, setPlannedBudgetItems] = useState<PlannedBudgetItem[]>([]);
   const [reimbursements, setReimbursements] = useState<FinanceReimbursement[]>([]);
@@ -549,7 +534,7 @@ export function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<FinanceTab>(firstAllowedTab);
-  const [month, setMonth] = useState(currentMonth);
+  const [month] = useState(currentMonth);
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
   const [query, setQuery] = useState('');
@@ -601,13 +586,11 @@ export function FinancePage() {
   useEffect(() => {
     const allowed =
       (tab === 'overview' && canOverview) ||
-      (tab === 'payments' && canPayments) ||
       (tab === 'stores' && canStoresUfs) ||
       (tab === 'reimbursements' && canReimbursements);
     if (!allowed && hasAnyFinanceView) setTab(firstAllowedTab);
   }, [
     canOverview,
-    canPayments,
     canReimbursements,
     canStoresUfs,
     firstAllowedTab,
@@ -846,9 +829,9 @@ export function FinancePage() {
       <header className="page-heading finance-heading">
         <div>
           <span className="eyebrow">Financeiro</span>
-          <h2>Visão geral, pagamentos, custos e reembolsos</h2>
+          <h2>Visão geral, custos e reembolsos</h2>
           <p>
-            Consolide Equipamentos, Mobiliário e Obras, fluxo de pagamentos e reembolsos por loja.
+            Consolide Equipamentos, Mobiliário e Obras, custos e reembolsos por loja.
           </p>
         </div>
         <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
@@ -963,17 +946,6 @@ export function FinancePage() {
             placeholder="Buscar compra, item, fornecedor, loja ou protocolo"
           />
         </label>
-        {tab === 'payments' && (
-          <label className="finance-filter">
-            Mês
-            <input
-              aria-label="Mes financeiro"
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-            />
-          </label>
-        )}
         <label className="finance-filter">
           UF
           <select
@@ -1019,17 +991,6 @@ export function FinancePage() {
           >
             <Building2 size={18} />
             Visão Geral
-          </button>
-        )}
-        {canPayments && (
-          <button
-            role="tab"
-            aria-selected={tab === 'payments'}
-            className={tab === 'payments' ? 'is-active' : ''}
-            onClick={() => setTab('payments')}
-          >
-            <WalletCards size={18} />
-            Pagamentos
           </button>
         )}
         {canStoresUfs && (
@@ -1230,115 +1191,6 @@ export function FinancePage() {
                 <EmptyState
                   title="Nenhuma loja encontrada"
                   detail="Ajuste os filtros para consultar outra unidade."
-                />
-              )}
-            </section>
-          )}
-
-          {tab === 'payments' && (
-            <section className="finance-panel">
-              <header className="finance-panel__heading">
-                <div>
-                  <h3>Pagamentos de {formatMonth(month)}</h3>
-                  <p>
-                    Realizados pela data efetiva; previstos parcelados a partir do primeiro
-                    vencimento.
-                  </p>
-                </div>
-                <FinancePaymentsExportActions
-                  rows={filteredPayments}
-                  stores={stores}
-                  month={month}
-                  query={query}
-                  stateFilter={stateFilter}
-                  storeFilter={storeFilter}
-                  onError={setError}
-                />
-              </header>
-              {filteredPayments.length ? (
-                <div className="finance-table-scroll">
-                  <table className="finance-table finance-payments-table">
-                    <thead>
-                      <tr>
-                        <th>Data</th>
-                        <th>Situacao</th>
-                        <th>Compra / fornecedor</th>
-                        <th>Itens</th>
-                        <th>Forma</th>
-                        <th>Lojas / UF</th>
-                        <th>Valor</th>
-                        <th>Comprovantes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredPayments.map((payment) => (
-                        <tr key={payment.id}>
-                          <td>
-                            <strong>{formatDate(payment.date)}</strong>
-                            <small>{payment.installmentLabel}</small>
-                          </td>
-                          <td>
-                            <span
-                              className={`finance-payment-state finance-payment-state--${payment.status}`}
-                            >
-                              {payment.status === 'paid' ? 'Realizado' : 'A realizar'}
-                            </span>
-                          </td>
-                          <td>
-                            <strong>{payment.purchaseCode}</strong>
-                            <span>{payment.supplierName}</span>
-                            <small>{payment.quoteCode}</small>
-                          </td>
-                          <td>
-                            <span>{payment.itemSummary}</span>
-                          </td>
-                          <td>
-                            <strong>
-                              {PAYMENT_LABELS[payment.paymentMethod] || payment.paymentMethod}
-                            </strong>
-                            <small>{payment.sourceLabel || 'Origem nao informada'}</small>
-                          </td>
-                          <td>
-                            {payment.allocationStatus === 'assigned' ? (
-                              <>
-                                <strong>{payment.storeIds.length} loja(s)</strong>
-                                <span>{payment.states.join(', ') || '—'}</span>
-                              </>
-                            ) : payment.allocationStatus === 'pending_distribution' ? (
-                              <>
-                                <strong>Distribuicao pendente</strong>
-                                <span>Pedido vinculado; confirme as lojas</span>
-                              </>
-                            ) : (
-                              <>
-                                <strong>Sem vinculo com pedido</strong>
-                                <span>Distribuicao por loja indisponivel</span>
-                              </>
-                            )}
-                          </td>
-                          <td className="finance-money">
-                            <strong>{formatBRL(payment.amountCents)}</strong>
-                          </td>
-                          <td>
-                            {canDetailDocuments ? (
-                              <DocumentLinks
-                                attachments={payment.attachments}
-                                openingId={openingId}
-                                onOpen={openAttachment}
-                              />
-                            ) : (
-                              <span className="finance-muted">Sem acesso aos arquivos</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <EmptyState
-                  title="Nenhum pagamento neste periodo"
-                  detail="Altere o mes ou os filtros para consultar outros lancamentos."
                 />
               )}
             </section>

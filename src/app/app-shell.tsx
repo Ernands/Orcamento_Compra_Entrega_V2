@@ -18,6 +18,7 @@ import {
   ReceiptText,
   ShieldCheck,
   ShoppingCart,
+  Scale,
   Store,
   Truck,
   WalletCards,
@@ -47,6 +48,7 @@ const routeTitles: Record<string, string> = {
   '/obras': 'Obras e Serviços',
   '/financeiro': 'Financeiro',
   '/financeiro/pagamentos': 'Pagamentos',
+  '/financeiro/conciliacao-conta': 'Conciliação Conta',
 };
 
 const SECTION_STORAGE = {
@@ -352,6 +354,16 @@ export function AppShell() {
               >
                 <WalletCards size={18} />
                 Pagamentos
+              </NavLink>
+            )}
+            {can('finance.payments_view') && can('finance.account_reconciliation_view') && (
+              <NavLink
+                className="nav-sub-link"
+                to="/financeiro/conciliacao-conta"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Scale size={18} />
+                Conciliação Conta
               </NavLink>
             )}
           </>

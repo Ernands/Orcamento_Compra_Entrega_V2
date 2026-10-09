@@ -29,6 +29,7 @@ import {
   updateWorkDocument,
 } from '../data/works/works-repository';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
+import { serviceTotals } from '../domain/works-calculations';
 import type { Store } from '../domain/types';
 import type {
   WorkDocumentStatus,
@@ -109,30 +110,6 @@ function normalized(value: string): string {
   return value.trim().toLocaleLowerCase('pt-BR');
 }
 
-function serviceTotals(service: WorkService) {
-  const contractedCents = moneyToCents(service.contractedAmount);
-  const paidCents = service.payments
-    .filter((payment) => payment.status === 'paid')
-    .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
-  const documentedCents = service.documents
-    .filter(
-      (document) => document.documentType !== 'quote' && document.documentType !== 'payment_proof',
-    )
-    .reduce(
-      (sum, document) =>
-        sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
-      0n,
-    );
-  return {
-    budgetCents: moneyToCents(service.budgetAmount),
-    contractedCents,
-    paidCents,
-    payableCents: contractedCents > paidCents ? contractedCents - paidCents : 0n,
-    documentedCents,
-    missingDocumentsCents:
-      contractedCents > documentedCents ? contractedCents - documentedCents : 0n,
-  };
-}
 
 function centsToInput(value: bigint): string {
   return (Number(value) / 100).toFixed(2).replace('.', ',');

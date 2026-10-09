@@ -580,3 +580,61 @@
   color: var(--muted);
   font-size: 0.68rem;
 }
+
+
+.finance-payment-forwarded {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 5px;
+  padding: 3px 7px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 850;
+  line-height: 1;
+}
+.finance-payment-forwarded--yes { color: #177354; background: #edf9f4; border-color: #b9ddcf; }
+.finance-payment-forwarded--no { color: #8a610e; background: #fff8e8; border-color: #ead28a; }
+.finance-payment-forwarded--partial { color: #53615c; background: #f3f5f4; border-color: #d2d8d5; }
+.finance-payment-edit-programming { color: #2947ba; }
+.modal.finance-planned-edit-modal { width: min(94vw, 620px); }
+.finance-planned-edit-form { display: grid; gap: 13px; }
+.finance-planned-edit-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f9f8;
+}
+.finance-planned-edit-summary > div { display: grid; gap: 4px; padding: 10px 12px; border-right: 1px solid var(--line); }
+.finance-planned-edit-summary > div:last-child { border-right: 0; }
+.finance-planned-edit-summary span { color: var(--muted); font-size: 0.62rem; font-weight: 850; text-transform: uppercase; }
+.finance-planned-edit-summary strong { font-size: 0.78rem; }
+.finance-planned-edit-form label { display: grid; gap: 5px; color: var(--muted); font-size: 0.67rem; font-weight: 850; text-transform: uppercase; }
+.finance-planned-edit-form input,
+.finance-planned-edit-form select {
+  min-height: 40px;
+  padding: 8px 9px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #cfd6d1;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  text-transform: none;
+}
+.finance-planned-edit-help {
+  padding: 9px 10px;
+  color: #5b6661;
+  background: #f5f7f6;
+  border-left: 3px solid #2947ba;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.finance-planned-edit-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 620px) {
+  .finance-planned-edit-summary { grid-template-columns: 1fr; }
+  .finance-planned-edit-summary > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .finance-planned-edit-summary > div:last-child { border-bottom: 0; }
+}

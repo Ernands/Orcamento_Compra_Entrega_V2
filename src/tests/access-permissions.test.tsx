@@ -52,6 +52,24 @@ const data = {
       actionName: 'Visualizar pagamentos',
     },
     {
+      id: 'perm-reconciliation-view',
+      key: 'finance.account_reconciliation_view' as const,
+      description: 'Visualizar a Conciliação Conta do Financeiro',
+      moduleKey: 'finance',
+      moduleName: 'Financeiro',
+      actionKey: 'account_reconciliation_view',
+      actionName: 'Visualizar conciliação da conta',
+    },
+    {
+      id: 'perm-reconciliation-manage',
+      key: 'finance.account_reconciliation_manage' as const,
+      description: 'Cadastrar e ajustar dados da Conciliação Conta',
+      moduleKey: 'finance',
+      moduleName: 'Financeiro',
+      actionKey: 'account_reconciliation_manage',
+      actionName: 'Gerenciar conciliação da conta',
+    },
+    {
       id: 'perm-stores',
       key: 'finance.stores_ufs_view' as const,
       description: 'Visualizar a aba Lojas e UFs do Financeiro',
@@ -172,6 +190,14 @@ describe('AccessPage granular permissions', () => {
       screen.getByLabelText('Visualizar a aba Pagamentos do Financeiro para Joana Consulta'),
     ).toHaveValue('deny');
     expect(
+      screen.getByLabelText('Conciliação Conta — visualizar aba para Joana Consulta'),
+    ).toHaveValue('deny');
+    expect(
+      screen.getByLabelText(
+        'Conciliação Conta — cadastrar/editar Conta BB, investimentos e acertos para Joana Consulta',
+      ),
+    ).toHaveValue('deny');
+    expect(
       screen.getByLabelText('Visualizar a aba Lojas e UFs do Financeiro para Joana Consulta'),
     ).toHaveValue('deny');
     expect(
@@ -182,9 +208,29 @@ describe('AccessPage granular permissions', () => {
 
     expect(saveAccessUserPermissions).toHaveBeenCalledWith('user-2', [
       { permissionId: 'perm-payments', effect: 'deny' },
+      { permissionId: 'perm-reconciliation-view', effect: 'deny' },
+      { permissionId: 'perm-reconciliation-manage', effect: 'deny' },
       { permissionId: 'perm-stores', effect: 'deny' },
       { permissionId: 'perm-reimbursements', effect: 'deny' },
     ]);
+  });
+
+  it('exibe controles separados para visualizar e gerenciar a Conciliação Conta', async () => {
+    const user = userEvent.setup();
+    sessionWith(['access.view', 'access.permissions_manage']);
+
+    render(<AccessPage />);
+    await screen.findByText('Joana Consulta');
+    await user.click(screen.getByRole('button', { name: 'Editar permissoes de Joana Consulta' }));
+
+    expect(
+      screen.getByLabelText('Conciliação Conta — visualizar aba para Joana Consulta'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(
+        'Conciliação Conta — cadastrar/editar Conta BB, investimentos e acertos para Joana Consulta',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('nao exibe editor granular sem a permissao administrativa', async () => {
