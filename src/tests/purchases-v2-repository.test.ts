@@ -3,6 +3,7 @@ import {
   buildPurchaseOperationRpcPayloadV2,
   buildPurchaseOrderRpcPayloadV2,
   buildPurchasePaymentRpcPayloadV2,
+  paidAtFromDateV2,
 } from '../data/purchases/purchases-v2-repository';
 
 function values(shippingAmount: string) {
@@ -97,5 +98,39 @@ describe('buildPurchaseOperationRpcPayloadV2', () => {
       status: 'paid',
       notes: 'quitado',
     })]);
+  });
+});
+
+describe('atualizacao de parcela existente', () => {
+  it('preserva o ID original ao marcar como pago com a data real', () => {
+    const date = paidAtFromDateV2('2026-10-09');
+    expect(date).toBe('2026-10-09T12:00:00.000Z');
+    const rpc = buildPurchasePaymentRpcPayloadV2({
+      id: 'parcela-original',
+      purchaseId: 'compra-miranda',
+      purchaseOrderId: 'pedido-original',
+      paymentMethod: 'boleto',
+      sourceLabel: 'Boleto Miranda 1/5',
+      amount: '14652,96',
+      entryAmount: '',
+      installmentCount: '',
+      firstDueDate: '2026-10-13',
+      status: 'paid',
+      paidAt: date,
+      notes: 'Quitado',
+    });
+    expect(rpc).toMatchObject({
+      p_payment_id: 'parcela-original',
+      p_purchase_order_id: 'pedido-original',
+      p_amount: '14652,96',
+      p_status: 'paid',
+      p_first_due_date: '2026-10-13',
+      p_paid_at: '2026-10-09T12:00:00.000Z',
+    });
+  });
+
+  it('rejeita data impossivel ou em branco', () => {
+    expect(() => paidAtFromDateV2('')).toThrow();
+    expect(() => paidAtFromDateV2('2026-02-30')).toThrow();
   });
 });
