@@ -37,6 +37,7 @@ import {
   savePurchaseOrderLineDistributionV2,
   savePurchasePaymentV2,
   paidAtFromDateV2,
+  purchasePaymentDecimalV2,
   uploadPurchaseAttachmentV3,
   validatePurchaseAttachmentV2,
 } from '../data/purchases/purchases-v2-repository';
@@ -2016,8 +2017,10 @@ function PaymentModal({
     if (!purchase) return;
     try {
       if (!purchaseOrderId) throw new Error('Selecione a compra relacionada.');
-      if (moneyToCents(amount) <= 0n) throw new Error('Informe um valor maior que zero.');
-      if (entry && moneyToCents(entry) > moneyToCents(amount)) throw new Error();
+      if (moneyToCents(purchasePaymentDecimalV2(amount)) <= 0n) throw new Error('Informe um valor maior que zero.');
+      if (entry.trim() && moneyToCents(purchasePaymentDecimalV2(entry)) > moneyToCents(purchasePaymentDecimalV2(amount))) {
+        throw new Error('A entrada nao pode superar o valor do pagamento.');
+      }
       if (installments && Number(installments) < 1) throw new Error();
       if (status === 'paid') paidAtFromDateV2(paidDate);
       if (proofFile) {
