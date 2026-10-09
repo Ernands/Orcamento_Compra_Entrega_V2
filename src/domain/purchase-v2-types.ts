@@ -212,7 +212,7 @@ export interface PurchaseAttachmentV2 {
   id: string;
   purchaseId: string;
   purchaseOrderId: string | null;
-  paymentId: string | null;
+  paymentId?: string | null;
   originalName: string;
   storagePath: string;
   mimeType: string;
