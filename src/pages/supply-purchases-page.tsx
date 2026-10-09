@@ -36,6 +36,7 @@ import {
   savePurchaseDestinationDistributionV2,
   savePurchaseOrderLineDistributionV2,
   savePurchasePaymentV2,
+  paidAtFromDateV2,
   uploadPurchaseAttachmentV3,
   validatePurchaseAttachmentV2,
 } from '../data/purchases/purchases-v2-repository';
@@ -1939,11 +1940,7 @@ function PortfolioBulkRegisterPurchaseModal({
         <button type="button" className="button button--secondary" onClick={onClose}>Cancelar</button>
         <button className="button button--primary" disabled={saving || !selectedLines.length}>{saving ? 'Salvando lote...' : `Salvar compra em lote · ${selectedCmpCount} CMPs`}</button>
       </div>
-    </form>
-  </Modal>;
-}
-
-function PaymentModal({
+    </ffunction PaymentModal({
   purchase,
   initialPurchaseOrderId,
   lockedPurchaseOrderId,
@@ -1970,26 +1967,41 @@ function PaymentModal({
   const [installments, setInstallments] = useState('');
   const [firstDueDate, setFirstDueDate] = useState('');
   const [status, setStatus] = useState<'planned' | 'paid'>('planned');
+  const [paidDate, setPaidDate] = useState(todayInput());
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<PurchasePaymentV2 | null>(null);
+  const [markPaidPaymentId, setMarkPaidPaymentId] = useState<string | null>(null);
+  const paymentFormRef = useRef<HTMLFormElement>(null);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const activePayment = selectedPayment || editingPayment || null;
+
   useEffect(() => {
     if (!purchase) return;
-    const requestedOrderId = lockedPurchaseOrderId || editingPayment?.purchaseOrderId || initialPurchaseOrderId || '';
+    const requestedOrderId = lockedPurchaseOrderId || activePayment?.purchaseOrderId || initialPurchaseOrderId || '';
     const initialOrderId = purchase.orders.some((order) => order.id === requestedOrderId) ? requestedOrderId : '';
-    setMethod(editingPayment?.paymentMethod || purchase.paymentMethodSnapshot || 'pix');
+    setMethod(activePayment?.paymentMethod || purchase.paymentMethodSnapshot || 'pix');
     setPurchaseOrderId(initialOrderId);
-    setSource(editingPayment?.sourceLabel || '');
-    setAmount(editingPayment?.amount || suggestedPaymentAmount(purchase, initialOrderId));
-    setEntry(editingPayment?.entryAmount || purchase.entryAmountSnapshot || '');
-    setInstallments(editingPayment?.installmentCount ? String(editingPayment.installmentCount) : purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '');
-    setFirstDueDate(editingPayment?.firstDueDate || '');
-    setStatus(editingPayment?.status === 'paid' ? 'paid' : 'planned');
-    setNotes(editingPayment?.notes || purchase.paymentNotesSnapshot || '');
+    setSource(activePayment?.sourceLabel || '');
+    setAmount(activePayment?.amount || suggestedPaymentAmount(purchase, initialOrderId));
+    setEntry(activePayment?.entryAmount || purchase.entryAmountSnapshot || '');
+    setInstallments(activePayment?.installmentCount ? String(editingPayment.installmentCount) : purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '');
+    setFirstDueDate(activePayment?.firstDueDate || '');
+    setStatus(markPaidPaymentId === activePayment?.id || activePayment?.status === 'paid' ? 'paid' : 'planned');
+    setPaidDate(activePayment?.paidAt?.slice(0, 10) || todayInput());
+    setProofFile(null);
+    setNotes(activePayment?.notes || purchase.paymentNotesSnapshot || '');
     setError(null);
-  }, [editingPayment, initialPurchaseOrderId, lockedPurchaseOrderId, purchase]);
+  }, [activePayment, initialPurchaseOrderId, lockedPurchaseOrderId, markPaidPaymentId, purchase]);
+
+  const editPayment = (payment: PurchasePaymentV2, markPaid: boolean) => {
+    setSelectedPayment(payment);
+    setMarkPaidPaymentId(markPaid ? payment.id : null);
+    requestAnimationFrame(() => paymentFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  };
 
   const visiblePayments = purchase?.payments.filter((payment) => (
     lockedPurchaseOrderId ? payment.purchaseOrderId === lockedPurchaseOrderId : true
@@ -2003,6 +2015,12 @@ function PaymentModal({
       if (moneyToCents(amount) <= 0n) throw new Error('Informe um valor maior que zero.');
       if (entry && moneyToCents(entry) > moneyToCents(amount)) throw new Error();
       if (installments && Number(installments) < 1) throw new Error();
+      if (status === 'paid') paidAtFromDateV2(paidDate);
+      if (proofFile) {
+        if (status !== 'paid') throw new Error('Marque como pago antes de anexar o comprovante.');
+        const validation = validatePurchaseAttachmentV2(proofFile);
+        if (validation) throw new Error(validation);
+      }
     } catch (failure) {
       setError(errorMessage(failure, 'Revise os valores do pagamento.'));
       return;
@@ -2011,8 +2029,8 @@ function PaymentModal({
     setSaving(true);
     setError(null);
     try {
-      await savePurchasePaymentV2({
-        id: editingPayment?.id || null,
+      const savedPaymentId = await savePurchasePaymentV2({
+        id: activePayment?.id || null,
         purchaseId: purchase.id,
         purchaseOrderId,
         paymentMethod: method,
@@ -2022,9 +2040,31 @@ function PaymentModal({
         installmentCount: installments,
         firstDueDate,
         status,
-        paidAt: status === 'paid' ? editingPayment?.paidAt || new Date().toISOString() : '',
+        paidAt: status === 'paid' ? paidAtFromDateV2(paidDate) : '',
         notes,
       });
+      if (proofFile) {
+        try {
+          await uploadPurchaseAttachmentV3({
+            purchaseId: purchase.id,
+            purchaseOrderId,
+            paymentId: savedPaymentId,
+            file: proofFile,
+            description: `Comprovante - ${source || 'pagamento'}`,
+            documentType: 'payment_proof',
+            documentNumber: '',
+            documentDate: paidDate,
+            documentAmount: amount,
+            storeIds: [],
+          });
+        } catch (uploadFailure) {
+          await onSaved();
+          setProofFile(null);
+          setError('Pagamento salvo, mas nao foi possivel concluir o comprovante. Confira os arquivos da compra e tente novamente. ' +
+            errorMessage(uploadFailure, 'Falha no anexo.'));
+          return;
+        }
+      }
       await onSaved();
       onClose();
     } catch (failure) {
@@ -2069,7 +2109,14 @@ function PaymentModal({
                       <td>{payment.installmentCount ? `${payment.installmentCount}x` : 'A vista'}</td>
                       <td><span className={`purchase-v2-pill ${payment.status === 'paid' ? 'is-ok' : payment.status === 'planned' ? 'is-warning' : ''}`}>{payment.status === 'paid' ? 'Pago' : payment.status === 'planned' ? 'Previsto' : 'Cancelado'}</span></td>
                       <td>{payment.status === 'paid' && payment.paidAt ? `Pago em ${formatDate(payment.paidAt)}` : formatDate(payment.firstDueDate)}</td>
-                      <td>{canEdit && payment.status !== 'cancelled' && <div className="row-actions"><button type="button" className="button button--secondary button--small" onClick={() => void cancelPayment(payment)} disabled={cancellingId === payment.id}>{payment.status === 'paid' ? 'Estornar' : 'Cancelar'}</button></div>}</td>
+                      <td>{canEdit && payment.status !== 'cancelled' && <div className="row-actions">
+                        {payment.status === 'planned' && <button type="button" className="button button--primary button--small" onClick={() => editPayment(payment, true)}>Marcar como pago</button>}
+                        <button type="button" className="button button--secondary button--small" onClick={() => editPayment(payment, false)}>Editar</button>
+                        <button type="button" className="button button--secondary button--small" onClick={() => void cancelPayment(payment)} disabled={cancellingId === payment.id}>{payment.status === 'paid' ? 'Estornar' : 'Cancelar'}</button>
+                        {purchase.attachments.filter((attachment) => attachment.paymentId === payment.id && attachment.documentType === 'payment_proof').map((attachment) => (
+                          <button key={attachment.id} type="button" className="button button--secondary button--small" onClick={() => { void createPurchaseAttachmentSignedUrlV2(attachment.storagePath).then((url) => window.open(url, '_blank', 'noopener,noreferrer')).catch(() => setError('Nao foi possivel abrir o comprovante.')); }}>Comprovante</button>
+                        ))}
+                      </div>}</td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -2079,8 +2126,8 @@ function PaymentModal({
 
           {canEdit && purchase.status !== 'returned' && purchase.status !== 'cancelled' && (
             <section className="purchase-v2-payment-section">
-              <h4>{editingPayment ? 'Editar pagamento' : 'Novo pagamento desta compra'}</h4>
-              <form className="stack-form" onSubmit={submit}>
+              <h4>{activePayment ? (markPaidPaymentId === activePayment.id ? 'Marcar pagamento como pago' : 'Editar pagamento') : 'Novo pagamento desta compra'}</h4>
+              <form ref={paymentFormRef} className="stack-form" onSubmit={submit}>
                 <div className="form-grid form-grid--three">
                   {lockedPurchaseOrderId ? <div className="purchase-v2-locked-context"><span>Compra relacionada</span><strong>{purchaseOrderContextLabel(purchase, lockedPurchaseOrderId)}</strong></div> : <label className="field">Registro/pedido relacionado<select value={purchaseOrderId} onChange={(event) => {
                     const nextOrderId = event.target.value;
@@ -2094,10 +2141,12 @@ function PaymentModal({
                   <label className="field">Parcelas<input inputMode="numeric" value={installments} onChange={(event) => setInstallments(event.target.value.replace(/\D/g, ''))} /></label>
                   <label className="field">Primeiro vencimento<input type="date" value={firstDueDate} onChange={(event) => setFirstDueDate(event.target.value)} /></label>
                   <label className="field">Situacao<select value={status} onChange={(event) => setStatus(event.target.value as 'planned' | 'paid')}><option value="planned">Previsto</option><option value="paid">Pago</option></select></label>
+                  {status === 'paid' && <label className="field">Data real do pagamento<input aria-label="Data real do pagamento" type="date" required value={paidDate} onChange={(event) => setPaidDate(event.target.value)} /></label>}
+                  {status === 'paid' && <label className="field">Comprovante da parcela (opcional)<input aria-label="Comprovante da parcela" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => setProofFile(event.target.files?.[0] || null)} /></label>}
                 </div>
                 <label className="field">Observacoes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
                 {error && <div className="form-error">{error}</div>}
-                <div className="modal-actions"><button type="button" className="button button--secondary" onClick={onClose}>Voltar</button><button className="button button--primary" disabled={saving}>{saving ? 'Salvando...' : editingPayment ? 'Salvar pagamento' : 'Registrar pagamento'}</button></div>
+                <div className="modal-actions"><button type="button" className="button button--secondary" onClick={onClose}>Voltar</button><button className="button button--primary" disabled={saving}>{saving ? 'Salvando...' : activePayment ? 'Salvar pagamento' : 'Registrar pagamento'}</button></div>
               </form>
             </section>
           )}
@@ -2338,6 +2387,9 @@ function DocumentsModal({
   if (embedded) return content;
   return <Modal open={Boolean(purchase)} title={purchase ? `Documentos · ${purchase.code}` : 'Documentos'} description="Documentos da cotacao sao exibidos apenas para consulta; arquivos nao sao duplicados." onClose={onClose}>
     {content}
+  </Modal>;
+}
+tent}
   </Modal>;
 }
 
