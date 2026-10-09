@@ -1991,13 +1991,13 @@ function PaymentModal({
     setPurchaseOrderId(initialOrderId);
     setSource(activePayment?.sourceLabel || '');
     setAmount(activePayment?.amount || suggestedPaymentAmount(purchase, initialOrderId));
-    setEntry(activePayment?.entryAmount || purchase.entryAmountSnapshot || '');
-    setInstallments(activePayment?.installmentCount ? String(activePayment.installmentCount) : purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : '');
+    setEntry(activePayment ? activePayment.entryAmount || '' : purchase.entryAmountSnapshot || '');
+    setInstallments(activePayment ? (activePayment.installmentCount ? String(activePayment.installmentCount) : '') : (purchase.installmentCountSnapshot ? String(purchase.installmentCountSnapshot) : ''));
     setFirstDueDate(activePayment?.firstDueDate || '');
     setStatus(markPaidPaymentId === activePayment?.id || activePayment?.status === 'paid' ? 'paid' : 'planned');
     setPaidDate(activePayment?.paidAt?.slice(0, 10) || todayInput());
     setProofFile(null);
-    setNotes(activePayment?.notes || purchase.paymentNotesSnapshot || '');
+    setNotes(activePayment ? activePayment.notes || '' : purchase.paymentNotesSnapshot || '');
     setError(null);
   }, [activePayment, initialPurchaseOrderId, lockedPurchaseOrderId, markPaidPaymentId, purchase]);
 
