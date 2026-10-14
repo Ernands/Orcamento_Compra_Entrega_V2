@@ -869,18 +869,15 @@ export function FinancePage() {
                     availableBbCents < 0n ? 'is-negative' : 'is-positive'
                   }`}
                 >
-                  Disponível BB: {formatBRL(availableBbCents)}
+                  {availableBbCents < 0n
+                    ? `Excedente: ${formatBRL(-availableBbCents)}`
+                    : `Disponível BB: ${formatBRL(availableBbCents)}`}
                 </small>
               </article>
               <article>
                 <ReceiptText size={21} />
                 <span>Orçado total</span>
                 <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
-                {availableBbCents < 0n && (
-                  <small className="finance-budget-alert" role="status">
-                    Atenção: orçamento {formatBRL(-availableBbCents)} acima da Verba BB.
-                  </small>
-                )}
               </article>
             </div>
           </div>

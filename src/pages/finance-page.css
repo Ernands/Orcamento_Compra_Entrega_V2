@@ -121,21 +121,6 @@
   color: #a33a32;
 }
 
-.finance-budget-alert {
-  grid-column: 1 / -1;
-  display: block;
-  margin-top: 2px;
-  padding: 4px 6px;
-  color: #7d241c;
-  background: #fff0d9;
-  border-left: 3px solid #e46b4b;
-  border-radius: 4px;
-  font-size: 0.58rem;
-  font-weight: 850;
-  line-height: 1.25;
-  white-space: normal;
-}
-
 /* Mantém o alerta de estouro dentro da coluna Orçado total. */
 .finance-store-budget-alert {
   display: block;
