@@ -46,6 +46,10 @@ import {
   type FinancePaymentsView,
   type UnifiedFinancePaymentRow,
 } from '../domain/finance-payments';
+import {
+  financePaymentActivityStoreIds,
+  filterInactiveStoresWithoutFinancialValues,
+} from '../domain/finance-store-visibility';
 import type { PurchasePaymentOccurrenceV2 } from '../domain/payment-occurrences';
 import { formatBRL } from '../domain/supply-calculations';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
@@ -196,7 +200,17 @@ export function FinancePaymentsPage() {
     () => decorateFinancePaymentsWithOccurrences(buildUnifiedFinancePayments(purchases, works), occurrences),
     [occurrences, purchases, works],
   );
-  const states = useMemo(() => [...new Set(stores.map((store) => store.state))].sort(), [stores]);
+  const visibleStores = useMemo(
+    () => filterInactiveStoresWithoutFinancialValues(
+      stores,
+      financePaymentActivityStoreIds(rows),
+    ),
+    [rows, stores],
+  );
+  const states = useMemo(
+    () => [...new Set(visibleStores.map((store) => store.state))].sort(),
+    [visibleStores],
+  );
   const suppliers = useMemo(
     () => [...new Set(rows.map((row) => row.supplierName).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [rows],
@@ -210,15 +224,15 @@ export function FinancePaymentsPage() {
   );
   const locationStoreIds = useMemo(() => {
     if (storeFilter) {
-      const selectedStore = stores.find((store) => store.id === storeFilter);
+      const selectedStore = visibleStores.find((store) => store.id === storeFilter);
       if (!selectedStore || (stateFilter && selectedStore.state !== stateFilter)) return [];
       return [selectedStore.id];
     }
     if (stateFilter) {
-      return stores.filter((store) => store.state === stateFilter).map((store) => store.id);
+      return visibleStores.filter((store) => store.state === stateFilter).map((store) => store.id);
     }
     return null;
-  }, [stateFilter, storeFilter, stores]);
+  }, [stateFilter, storeFilter, visibleStores]);
   const occurrenceValueScopeActive = occurrenceValuesOnly && Boolean(dateFrom || dateTo);
 
   const summaryRows = useMemo(() => {
@@ -463,7 +477,7 @@ export function FinancePaymentsPage() {
           <FinanceUnifiedPaymentsExportActions
             rows={filteredRows}
             summaryRows={summaryRows}
-            stores={stores}
+            stores={visibleStores}
             view={view}
             originFilter={originFilter}
             storeFilter={storeFilter}
@@ -577,7 +591,7 @@ export function FinancePaymentsPage() {
               Loja
               <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)}>
                 <option value="">Todas</option>
-                {stores
+                {visibleStores
                   .filter((store) => !stateFilter || store.state === stateFilter)
                   .map((store) => (
                     <option key={store.id} value={store.id}>

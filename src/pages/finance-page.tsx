@@ -50,6 +50,10 @@ import {
   buildFinanceOverviewRows,
   type FinanceOverviewStoreRow,
 } from '../domain/finance-overview';
+import {
+  financeOverviewActivityStoreIds,
+  filterInactiveStoresWithoutFinancialValues,
+} from '../domain/finance-store-visibility';
 import type {
   FinanceReimbursement,
   FinanceReimbursementStatus,
@@ -603,10 +607,6 @@ export function FinancePage() {
     () => buildFinanceStoreRows(purchases, reimbursements),
     [purchases, reimbursements],
   );
-  const states = useMemo(
-    () => [...new Set(stores.map((store) => store.state))].sort(),
-    [stores],
-  );
   const overviewRows = useMemo(
     () =>
       buildFinanceOverviewRows({
@@ -619,16 +619,29 @@ export function FinancePage() {
       }),
     [budgets, plannedBudgetItems, purchases, storeRows, stores, works],
   );
+  // Keep inactive units only when some financial value exists, including a BB budget
+  // or reimbursement; this affects presentation, not the underlying records.
+  const visibleStores = useMemo(
+    () => filterInactiveStoresWithoutFinancialValues(
+      stores,
+      financeOverviewActivityStoreIds(overviewRows, storeRows),
+    ),
+    [overviewRows, storeRows, stores],
+  );
+  const states = useMemo(
+    () => [...new Set(visibleStores.map((store) => store.state))].sort(),
+    [visibleStores],
+  );
   const search = normalized(query);
   const allowedStoreIds = useMemo(
     () =>
       new Set(
-        stores
+        visibleStores
           .filter((store) => !stateFilter || store.state === stateFilter)
           .filter((store) => !storeFilter || store.id === storeFilter)
           .map((store) => store.id),
       ),
-    [stateFilter, storeFilter, stores],
+    [stateFilter, storeFilter, visibleStores],
   );
 
   const filteredOverview = useMemo(
@@ -970,7 +983,7 @@ export function FinancePage() {
             onChange={(event) => setStoreFilter(event.target.value)}
           >
             <option value="">Todas as lojas</option>
-            {stores
+            {visibleStores
               .filter((store) => !stateFilter || store.state === stateFilter)
               .map((store) => (
                 <option key={store.id} value={store.id}>
