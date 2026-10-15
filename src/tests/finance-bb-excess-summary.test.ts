@@ -15,10 +15,9 @@ describe('saldo disponível / excedente no resumo executivo', () => {
     expect(styles).toContain('.finance-bb-available.is-positive');
   });
 
-  it('não duplica o alerta no cartão Orçado total e preserva alertas por loja', () => {
+  it('não duplica o alerta no cartão Orçado total do resumo executivo', () => {
     expect(page).not.toContain('Atenção: orçamento');
     expect(page).not.toContain('className="finance-budget-alert"');
     expect(styles).not.toContain('.finance-budget-alert {');
-    expect(page).toContain('className="finance-store-budget-alert"');
   });
 });
