@@ -33,6 +33,7 @@ import {
 } from '../domain/finance-overview';
 import { formatQuantityV2 } from '../domain/purchase-v2-calculations';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
+import { serviceTotals } from '../domain/works-calculations';
 import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 import type { PurchaseAttachmentV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
@@ -114,30 +115,10 @@ function quantityLabel(value: bigint, unit: string): string {
 }
 
 function workTotals(work: WorkService) {
-  const budgetCents = moneyToCents(work.budgetAmount);
-  const contractedCents = moneyToCents(work.contractedAmount);
-  const paidCents = work.payments
-    .filter((payment) => payment.status === 'paid')
-    .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
-  const documentedCents = work.documents
-    .filter(
-      (document) => document.documentType !== 'quote' && document.documentType !== 'payment_proof',
-    )
-    .reduce(
-      (sum, document) =>
-        sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
-      0n,
-    );
-
+  const totals = serviceTotals(work);
   return {
-    budgetCents,
-    contractedCents,
-    differenceCents: budgetCents - contractedCents,
-    paidCents,
-    payableCents: contractedCents > paidCents ? contractedCents - paidCents : 0n,
-    documentedCents,
-    missingDocumentsCents:
-      contractedCents > documentedCents ? contractedCents - documentedCents : 0n,
+    ...totals,
+    differenceCents: totals.budgetCents - totals.contractedCents,
   };
 }
 

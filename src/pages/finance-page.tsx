@@ -1176,9 +1176,9 @@ export function FinancePage() {
                                   {row.documentationStatus === 'complete'
                                     ? 'Completa'
                                     : row.documentationStatus === 'partial'
-                                      ? 'Parcial'
+                                      ? 'Incompleta'
                                       : row.documentationStatus === 'pending'
-                                        ? 'Pendente'
+                                        ? 'Sem documentação'
                                         : 'Sem obra'}
                                 </span>
                                 {row.worksMissingDocumentsCents > 0n && (

@@ -9,6 +9,7 @@ import type { PurchaseV2 } from './purchase-v2-types';
 import type { Store } from './types';
 import type { FinanceStoreBudget, WorkService } from './works-types';
 import { moneyToCents, quantityToThousandths } from './supply-calculations';
+import { serviceTotals } from './works-calculations';
 
 export interface FinanceStoreItemPurchaseRef {
   purchaseId: string;
@@ -407,42 +408,31 @@ export function buildFinanceStoreCompositionRows(values: {
 }
 
 function worksByStore(works: WorkService[]) {
-  const rows = new Map<
-    string,
-    {
-      budgetCents: bigint;
-      contractedCents: bigint;
-      paidCents: bigint;
-      documentedCents: bigint;
-    }
-  >();
+  const rows = new Map<string, {
+    budgetCents: bigint;
+    contractedCents: bigint;
+    paidCents: bigint;
+    documentedCents: bigint;
+    serviceCount: number;
+    completeCount: number;
+    hasSomeDocumentationCount: number;
+  }>();
 
-  works
-    .filter((work) => work.status !== 'cancelled')
-    .forEach((work) => {
-      const current = rows.get(work.storeId) || {
-        budgetCents: 0n,
-        contractedCents: 0n,
-        paidCents: 0n,
-        documentedCents: 0n,
-      };
-      current.budgetCents += moneyToCents(work.budgetAmount);
-      current.contractedCents += moneyToCents(work.contractedAmount);
-      current.paidCents += work.payments
-        .filter((payment) => payment.status === 'paid')
-        .reduce((sum, payment) => sum + moneyToCents(payment.amount), 0n);
-      current.documentedCents += work.documents
-        .filter(
-          (document) =>
-            document.documentType !== 'quote' && document.documentType !== 'payment_proof',
-        )
-        .reduce(
-          (sum, document) =>
-            sum + (document.documentAmount ? moneyToCents(document.documentAmount) : 0n),
-          0n,
-        );
-      rows.set(work.storeId, current);
-    });
+  works.filter((work) => work.status !== 'cancelled').forEach((work) => {
+    const current = rows.get(work.storeId) || {
+      budgetCents: 0n, contractedCents: 0n, paidCents: 0n, documentedCents: 0n,
+      serviceCount: 0, completeCount: 0, hasSomeDocumentationCount: 0,
+    };
+    const totals = serviceTotals(work);
+    current.budgetCents += totals.budgetCents;
+    current.contractedCents += totals.contractedCents;
+    current.paidCents += totals.paidCents;
+    current.documentedCents += totals.documentedCents;
+    current.serviceCount += 1;
+    if (totals.documentationStatus === 'complete') current.completeCount += 1;
+    if (totals.documentationStatus !== 'none') current.hasSomeDocumentationCount += 1;
+    rows.set(work.storeId, current);
+  });
 
   return rows;
 }
@@ -469,6 +459,9 @@ export function buildFinanceOverviewRows(values: {
         contractedCents: 0n,
         paidCents: 0n,
         documentedCents: 0n,
+        serviceCount: 0,
+        completeCount: 0,
+        hasSomeDocumentationCount: 0,
       };
       const composition = buildFinanceStoreCompositionRows({
         storeId: store.id,
@@ -496,13 +489,13 @@ export function buildFinanceOverviewRows(values: {
           ? work.contractedCents - work.documentedCents
           : 0n;
       const documentationStatus: FinanceOverviewStoreRow['documentationStatus'] =
-        work.contractedCents <= 0n
+        work.serviceCount === 0
           ? 'none'
-          : work.documentedCents <= 0n
-            ? 'pending'
-            : worksMissingDocumentsCents > 0n
-              ? 'partial'
-              : 'complete';
+          : work.completeCount === work.serviceCount
+            ? 'complete'
+            : work.hasSomeDocumentationCount === 0
+              ? 'pending'
+              : 'partial';
 
       return {
         storeId: store.id,
