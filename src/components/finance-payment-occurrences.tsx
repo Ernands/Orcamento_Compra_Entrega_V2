@@ -101,16 +101,23 @@ export function FinancePaymentDatesCell({ row }: { row: UnifiedFinancePaymentRow
   );
 }
 
-export function FinancePaymentDatesAction({ onClick }: { onClick: () => void }) {
+export function FinancePaymentDatesAction({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <button
       type="button"
-      className="finance-payment-dates-action"
+      className={`finance-payment-dates-action${label ? ' finance-payment-dates-action--labeled' : ''}`}
       onClick={onClick}
       title="Ver datas, valores e formas dos pagamentos"
-      aria-label="Ver datas dos pagamentos"
+      aria-label={label || 'Ver datas dos pagamentos'}
     >
-      <CalendarClock size={16} />
+      <CalendarClock size={16} aria-hidden="true" />
+      {label && <span>{label}</span>}
     </button>
   );
 }

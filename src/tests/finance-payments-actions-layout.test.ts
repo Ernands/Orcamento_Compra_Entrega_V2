@@ -1,0 +1,41 @@
+import { describe, expect, it } from 'vitest';
+import page from '../pages/finance-payments-page.tsx?raw';
+import styles from '../pages/finance-payments-page.css?raw';
+import occurrences from '../components/finance-payment-occurrences.tsx?raw';
+
+describe('layout da coluna de ações de Pagamentos', () => {
+  it('define largura estável e texto sem quebra para as ações', () => {
+    expect(page).toContain('className="finance-payments-actions-cell"');
+    expect(page).toContain('className="finance-payments-actions-heading"');
+    expect(styles).toContain('min-width: 164px');
+    expect(styles).toContain('.finance-payment-actions {');
+    expect(styles).toContain('grid-template-columns: minmax(0, 1fr)');
+    expect(styles).toContain('white-space: nowrap');
+    expect(styles).toContain(':focus-visible');
+  });
+
+  it('mantém links, permissões e callbacks existentes', () => {
+    expect(page).toContain('label="Ver ocorrências"');
+    expect(page).toContain('onClick={() => setDatesRow(');
+    expect(page).toContain('to={originHref(row)}');
+    expect(page).toContain('onClick={() => setDocumentsRow(row)}');
+    expect(page).toContain('<span>Ver origem</span>');
+    expect(page).toContain('<span>Ver anexos</span>');
+    expect(page).toContain('<span>Conciliação</span>');
+    expect(page).toContain('<span>Editar programação</span>');
+    expect(page).toContain('className="finance-payment-action-placeholder"');
+  });
+
+  it('acrescenta rótulo ao botão de ocorrências de modo retrocompatível', () => {
+    expect(occurrences).toContain('label?: string');
+    expect(occurrences).toContain("label || 'Ver datas dos pagamentos'");
+    expect(occurrences).toContain('onClick={onClick}');
+    expect(occurrences).toContain('{label && <span>{label}</span>}');
+  });
+
+  it('elimina os estilos de links dispersos da versão anterior', () => {
+    expect(styles).not.toContain('.finance-payment-origin-link {');
+    expect(styles).not.toContain('.finance-payment-document-link {');
+    expect(styles).not.toContain('.finance-payment-actions {\n  display: flex;');
+  });
+});
