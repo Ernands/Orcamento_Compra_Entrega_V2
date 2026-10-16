@@ -49,6 +49,7 @@ const CATEGORIES = [
   'Pedreiro / Alvenaria',
   'Pintura',
   'Piso / Revestimento',
+  'Material para obra',
   'Fachada / Comunicação visual',
   'Vidraçaria',
   'Marcenaria',
@@ -70,6 +71,12 @@ const STATUS_LABELS: Record<WorkServiceStatus, string> = {
   completed: 'Concluído',
   cancelled: 'Cancelado',
 };
+
+const DOCUMENTATION_STATUS_LABELS = {
+  none: 'Sem documentação',
+  incomplete: 'Incompleta',
+  complete: 'Completa',
+} as const;
 
 const PAYMENT_STATUS_LABELS: Record<WorkPaymentStatus, string> = {
   planned: 'A pagar',
@@ -1185,6 +1192,7 @@ export function WorksPage() {
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
+  const [documentationFilter, setDocumentationFilter] = useState('');
   const [serviceModal, setServiceModal] = useState<WorkService | 'new' | null>(null);
   const [paymentEditor, setPaymentEditor] = useState<{
     service: WorkService;
@@ -1227,6 +1235,7 @@ export function WorksPage() {
       .filter((service) => !referenceFilter.length || referenceFilter.includes(service.code))
       .filter((service) => !stateFilter || service.storeState === stateFilter)
       .filter((service) => !storeFilter || service.storeId === storeFilter)
+      .filter((service) => !documentationFilter || serviceTotals(service).documentationStatus === documentationFilter)
       .filter(
         (service) =>
           !search ||
@@ -1243,7 +1252,7 @@ export function WorksPage() {
             ].join(' '),
           ).includes(search),
       );
-  }, [query, referenceFilter, services, stateFilter, storeFilter]);
+  }, [documentationFilter, query, referenceFilter, services, stateFilter, storeFilter]);
 
   const totals = useMemo(
     () =>
@@ -1425,6 +1434,19 @@ export function WorksPage() {
               ))}
           </select>
         </label>
+        <label className="works-filter">
+          Documentação
+          <select
+            aria-label="Status da documentação"
+            value={documentationFilter}
+            onChange={(event) => setDocumentationFilter(event.target.value)}
+          >
+            <option value="">Todas</option>
+            {Object.entries(DOCUMENTATION_STATUS_LABELS).map(([status, label]) => (
+              <option key={status} value={status}>{label}</option>
+            ))}
+          </select>
+        </label>
       </section>
 
       {error && <ErrorState message={error} onRetry={() => void load()} />}
@@ -1491,11 +1513,14 @@ export function WorksPage() {
                   </div>
                   <div>
                     <span>Documentação</span>
-                    <strong>{formatBRL(current.documentedCents)}</strong>
+                    <strong className={`works-documentation-status works-documentation-status--${current.documentationStatus}`}>
+                      {DOCUMENTATION_STATUS_LABELS[current.documentationStatus]}
+                    </strong>
                     <small>
+                      {formatBRL(current.documentedCents)} comprovados
                       {current.missingDocumentsCents > 0n
-                        ? `${formatBRL(current.missingDocumentsCents)} pendente`
-                        : 'Completa'}
+                        ? ` · ${formatBRL(current.missingDocumentsCents)} pendente`
+                        : ''}
                     </small>
                   </div>
                   <div className="works-card__status">

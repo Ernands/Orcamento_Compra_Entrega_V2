@@ -13,6 +13,7 @@ export type WorkPaymentStatus = 'planned' | 'paid' | 'overdue' | 'cancelled';
 export type WorkDocumentType = 'quote' | 'invoice' | 'receipt' | 'rpa' | 'payment_proof' | 'other';
 
 export type WorkDocumentStatus = 'pending' | 'verified';
+export type WorkDocumentationStatus = 'none' | 'incomplete' | 'complete';
 
 export interface WorkServicePayment {
   id: string;
