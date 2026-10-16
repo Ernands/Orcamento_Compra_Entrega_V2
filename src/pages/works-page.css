@@ -156,7 +156,7 @@
 
 .works-controls {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(150px, 0.25fr) minmax(260px, 0.45fr);
+  grid-template-columns: minmax(270px, 1fr) minmax(115px, 0.18fr) minmax(220px, 0.42fr) minmax(165px, 0.3fr);
   align-items: end;
   gap: 10px;
 }
@@ -377,6 +377,14 @@
 .works-card__status {
   justify-items: start;
 }
+
+.works-documentation-status {
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+.works-documentation-status--none { color: #8d3229; }
+.works-documentation-status--incomplete { color: #8a610e; }
+.works-documentation-status--complete { color: #177354; }
 
 .works-status,
 .works-payment {

@@ -29,6 +29,7 @@ function document(
 function service(values: {
   contractedAmount: string;
   documents: WorkServiceDocument[];
+  payments?: WorkService['payments'];
 }): WorkService {
   return {
     id: 'work-1',
@@ -52,60 +53,101 @@ function service(values: {
     notes: null,
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-01T00:00:00Z',
-    payments: [],
+    payments: values.payments || [],
     documents: values.documents,
     components: [],
   };
 }
 
-describe('works documentation coverage', () => {
-  it('considera comprovante parcial quando ainda não há nota ou recibo', () => {
-    const totals = serviceTotals(
-      service({
-        contractedAmount: '23003.00',
-        documents: [
-          document('orcamento', 'quote', null),
-          document('comprovante-entrada', 'payment_proof', '11501.50'),
-        ],
-      }),
-    );
+function payment(id: string, amount: string, status: 'paid' | 'planned' = 'paid'): WorkService['payments'][number] {
+  return {
+    id, serviceId: 'work-1', storeId: 'store-1', label: id,
+    paymentMethod: 'pix', sourceLabel: null, dueDate: null, amount, status,
+    paidAt: status === 'paid' ? '2026-09-11T00:00:00Z' : null, notes: null,
+    createdAt: '2026-09-11T00:00:00Z', updatedAt: '2026-09-11T00:00:00Z',
+  };
+}
 
-    expect(totals.fiscalDocumentedCents).toBe(0n);
-    expect(totals.paymentProofCents).toBe(1150150n);
+describe('documentação de obras: nota e comprovantes para todo o valor pago', () => {
+  it('é sem documentação com zero anexos ou somente orçamento', () => {
+    expect(serviceTotals(service({ contractedAmount: '1000.00', documents: [] })).documentationStatus).toBe('none');
+    expect(serviceTotals(service({
+      contractedAmount: '1000.00', documents: [document('orc', 'quote', '1000.00')],
+    })).documentationStatus).toBe('none');
+  });
+
+  it('é incompleta quando existir somente nota ou somente comprovante', () => {
+    const note = document('nf', 'invoice', null);
+    const proof = document('comprovante', 'payment_proof', '1000.00');
+    const payments = [payment('p1', '1000.00')];
+    expect(serviceTotals(service({ contractedAmount: '1000.00', documents: [note], payments })).documentationStatus).toBe('incomplete');
+    const proofOnly = serviceTotals(service({ contractedAmount: '1000.00', documents: [proof], payments }));
+    expect(proofOnly.documentationStatus).toBe('incomplete');
+    expect(proofOnly.documentedCents).toBe(0n);
+    expect(proofOnly.missingDocumentsCents).toBe(100000n);
+  });
+
+  it('mantém incompleta nota + comprovante de entrada se ainda houver parcela a pagar', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '23003.00',
+      payments: [payment('p1', '11501.50'), payment('p2', '11501.50', 'planned')],
+      documents: [document('nf', 'invoice', null), document('entrada', 'payment_proof', '11501.50')],
+    }));
+    expect(totals.documentationStatus).toBe('incomplete');
+    expect(totals.paidCents).toBe(1150150n);
     expect(totals.documentedCents).toBe(1150150n);
     expect(totals.missingDocumentsCents).toBe(1150150n);
   });
 
-  it('não duplica quando notas e comprovante cobrem o mesmo valor', () => {
-    const totals = serviceTotals(
-      service({
-        contractedAmount: '6650.00',
-        documents: [
-          document('nf-82', 'invoice', '2250.00'),
-          document('nf-83', 'invoice', '4400.00'),
-          document('comprovante', 'payment_proof', '6650.00'),
-        ],
-      }),
-    );
+  it('é incompleta se os comprovantes não cobrirem pagamentos já quitados', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '1000.00',
+      payments: [payment('p1', '600.00'), payment('p2', '400.00')],
+      documents: [document('nf', 'invoice', '1000.00'), document('p1', 'payment_proof', '600.00')],
+    }));
+    expect(totals.documentationStatus).toBe('incomplete');
+    expect(totals.missingDocumentsCents).toBe(40000n);
+  });
 
-    expect(totals.fiscalDocumentedCents).toBe(665000n);
-    expect(totals.paymentProofCents).toBe(665000n);
-    expect(totals.documentedCents).toBe(665000n);
+  it('é completa com NF e comprovantes suficientes e tudo pago', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '1000.00',
+      payments: [payment('p1', '600.00'), payment('p2', '400.00')],
+      documents: [
+        document('nf', 'invoice', null),
+        document('c1', 'payment_proof', '600.00'),
+        document('c2', 'payment_proof', '400.00'),
+      ],
+    }));
+    expect(totals.documentationStatus).toBe('complete');
+    expect(totals.documentedCents).toBe(100000n);
     expect(totals.missingDocumentsCents).toBe(0n);
   });
 
-  it('limita a cobertura documental ao valor contratado', () => {
-    const totals = serviceTotals(
-      service({
-        contractedAmount: '1000.00',
-        documents: [
-          document('nota', 'invoice', '1200.00'),
-          document('comprovante', 'payment_proof', '1500.00'),
-        ],
-      }),
-    );
+  it('ignora notas sem arquivo e limita valores excedentes dos comprovantes', () => {
+    const invalid = { ...document('nf', 'invoice', '1000.00'), storagePath: null };
+    const totals = serviceTotals(service({
+      contractedAmount: '1000.00',
+      payments: [payment('p1', '1000.00')],
+      documents: [invalid, document('c1', 'payment_proof', '1500.00')],
+    }));
+    expect(totals.documentationStatus).toBe('incomplete');
+    expect(totals.documentedCents).toBe(0n);
+    const capped = serviceTotals(service({
+      contractedAmount: '1000.00',
+      payments: [payment('p1', '1000.00')],
+      documents: [document('nf', 'invoice', null), document('c1', 'payment_proof', '1500.00')],
+    }));
+    expect(capped.documentationStatus).toBe('complete');
+    expect(capped.documentedCents).toBe(100000n);
+  });
 
-    expect(totals.documentedCents).toBe(100000n);
-    expect(totals.missingDocumentsCents).toBe(0n);
+  it('não é completa se houver parcela agendada, mesmo com nota e prova', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '1000.00',
+      payments: [payment('p1', '1000.00'), payment('p2', '500.00', 'planned')],
+      documents: [document('nf', 'invoice', null), document('c1', 'payment_proof', '1000.00')],
+    }));
+    expect(totals.documentationStatus).toBe('incomplete');
   });
 });
