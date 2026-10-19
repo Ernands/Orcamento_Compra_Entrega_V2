@@ -718,7 +718,7 @@ export function FinancePaymentsPage() {
                       <th>{view === 'unscheduled' ? 'Vencimento' : 'Forma'}</th>
                       <th>{view === 'unscheduled' ? 'Forma' : 'Identificação / parcela'}</th>
                       <th>Valor</th>
-                      <th>Ação</th>
+                      <th className="finance-payments-actions-heading">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -772,50 +772,51 @@ export function FinancePaymentsPage() {
                             </>
                           )}
                           <td className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
-                          <td>
+                          <td className="finance-payments-actions-cell">
                             <div className="finance-payment-actions">
                               {view === 'planned' && canManageFinance && (
                                 <button
                                   type="button"
-                                  className="finance-payment-document-link finance-payment-edit-programming"
+                                  className="finance-payment-action finance-payment-action--edit"
                                   onClick={() => openPlannedEdit(row)}
                                 >
-                                  <Pencil size={13} />
-                                  Editar programação
+                                  <Pencil size={15} aria-hidden="true" />
+                                  <span>Editar programação</span>
                                 </button>
                               )}
                               {view === 'paid' && (
                                 <FinancePaymentDatesAction
+                                  label="Ver ocorrências"
                                   onClick={() => setDatesRow(rows.find((candidate) => candidate.id === row.id) || row)}
                                 />
                               )}
                               {view === 'paid' && canReconciliation && (
                                 <Link
-                                  className="finance-payment-origin-link"
+                                  className="finance-payment-action"
                                   to={financePaymentLatestDate(row)
                                     ? `/financeiro/conciliacao-conta?date=${financePaymentLatestDate(row)}`
                                     : '/financeiro/conciliacao-conta'}
                                   title="Abrir esta data na Conciliação Conta"
                                 >
-                                  <Scale size={13} />
-                                  Conciliação
+                                  <Scale size={15} aria-hidden="true" />
+                                  <span>Conciliação</span>
                                 </Link>
                               )}
                               {(row.workServiceId ? canWorks : canPurchases) ? (
-                                <Link className="finance-payment-origin-link" to={originHref(row)}>
-                                  Ver origem
-                                  <ExternalLink size={13} />
+                                <Link className="finance-payment-action" to={originHref(row)}>
+                                  <ExternalLink size={15} aria-hidden="true" />
+                                  <span>Ver origem</span>
                                 </Link>
                               ) : (
-                                <span className="finance-payments-muted">Sem acesso</span>
+                                <span className="finance-payment-action-placeholder">Sem acesso à origem</span>
                               )}
                               <button
                                 type="button"
-                                className="finance-payment-document-link"
+                                className="finance-payment-action"
                                 onClick={() => setDocumentsRow(row)}
                               >
-                                <Paperclip size={13} />
-                                Ver anexos
+                                <Paperclip size={15} aria-hidden="true" />
+                                <span>Ver anexos</span>
                               </button>
                             </div>
                           </td>

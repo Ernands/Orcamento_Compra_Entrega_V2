@@ -869,18 +869,15 @@ export function FinancePage() {
                     availableBbCents < 0n ? 'is-negative' : 'is-positive'
                   }`}
                 >
-                  Disponível BB: {formatBRL(availableBbCents)}
+                  {availableBbCents < 0n
+                    ? `Excedente: ${formatBRL(-availableBbCents)}`
+                    : `Disponível BB: ${formatBRL(availableBbCents)}`}
                 </small>
               </article>
               <article>
                 <ReceiptText size={21} />
                 <span>Orçado total</span>
                 <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
-                {availableBbCents < 0n && (
-                  <small className="finance-budget-alert" role="status">
-                    Atenção: orçamento {formatBRL(-availableBbCents)} acima da Verba BB.
-                  </small>
-                )}
               </article>
             </div>
           </div>
@@ -1143,11 +1140,6 @@ export function FinancePage() {
                           </td>
                           <td className="finance-money">
                             <strong>{formatBRL(row.budgetTotalCents)}</strong>
-                            {row.budgetTotalCents > row.budgetBbCents && (
-                              <small className="finance-store-budget-alert" role="status">
-                                Acima da verba em {formatBRL(row.budgetTotalCents - row.budgetBbCents)}
-                              </small>
-                            )}
                           </td>
                           <td>
                             <strong className={row.budgetVarianceToBbCents < 0n ? 'finance-difference--negative' : 'finance-difference--positive'}>
@@ -1184,9 +1176,9 @@ export function FinancePage() {
                                   {row.documentationStatus === 'complete'
                                     ? 'Completa'
                                     : row.documentationStatus === 'partial'
-                                      ? 'Parcial'
+                                      ? 'Incompleta'
                                       : row.documentationStatus === 'pending'
-                                        ? 'Pendente'
+                                        ? 'Sem documentação'
                                         : 'Sem obra'}
                                 </span>
                                 {row.worksMissingDocumentsCents > 0n && (

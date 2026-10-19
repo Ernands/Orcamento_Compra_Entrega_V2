@@ -390,6 +390,23 @@ describe('finance overview', () => {
     expect(rows.reduce((sum, row) => sum + row.payableCents, 0n)).toBe(310000n);
   });
 
+  it('faz a situação financeira refletir nota e comprovantes, não apenas documento fiscal', () => {
+    const stores = [{ id: 'store-1', code: 'L1', name: 'Loja 1', city: 'Natal', state: 'RN' }] as Store[];
+    const original = work();
+    const invoice = { ...original.documents[0], storagePath: 'obras/nf.pdf', documentType: 'invoice' as const };
+    const proof = {
+      ...original.documents[1], storagePath: 'obras/comprovante.pdf',
+      documentType: 'payment_proof' as const, documentAmount: '3100.00',
+    };
+    const row = buildFinanceOverviewRows({
+      stores, purchases: [], plannedBudgetItems: [], purchaseStoreRows: [],
+      works: [{ ...original, documents: [invoice, proof] }], budgets: [],
+    })[0];
+    expect(row.documentationStatus).toBe('partial');
+    expect(row.worksDocumentedCents).toBe(310000n);
+    expect(row.worksMissingDocumentsCents).toBe(310000n);
+  });
+
   it('consolida itens, obra, pagamentos, verba e documentação por loja', () => {
     const stores = [
       {
@@ -455,8 +472,8 @@ describe('finance overview', () => {
     expect(row?.differenceCents).toBe(26001n);
     expect(row?.paidCents).toBe(314000n);
     expect(row?.payableCents).toBe(315000n);
-    expect(row?.worksDocumentedCents).toBe(620000n);
-    expect(row?.worksMissingDocumentsCents).toBe(0n);
-    expect(row?.documentationStatus).toBe('complete');
+    expect(row?.worksDocumentedCents).toBe(0n);
+    expect(row?.worksMissingDocumentsCents).toBe(620000n);
+    expect(row?.documentationStatus).toBe('pending');
   });
 });

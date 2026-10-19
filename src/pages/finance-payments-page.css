@@ -360,7 +360,19 @@
 }
 
 .finance-payments-table {
-  min-width: 1080px;
+  min-width: 1240px;
+}
+
+/* Reserve enough room for actions without wrapping their text. */
+.finance-payments-table .finance-payments-actions-heading,
+.finance-payments-table .finance-payments-actions-cell {
+  width: 164px;
+  min-width: 164px;
+  box-sizing: border-box;
+}
+
+.finance-payments-table .finance-payments-actions-cell {
+  max-width: none;
 }
 
 .finance-payments-table td {
@@ -400,25 +412,6 @@
   font-size: 0.66rem;
   font-weight: 850;
   white-space: nowrap;
-}
-
-.finance-payment-origin-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--brand);
-  font-size: 0.7rem;
-  font-weight: 850;
-  text-decoration: none;
-}
-
-.finance-payment-origin-link:hover {
-  text-decoration: underline;
-}
-
-.finance-payments-muted {
-  color: var(--muted);
-  font-size: 0.7rem;
 }
 
 @media (max-width: 1220px) {
@@ -506,28 +499,74 @@
 }
 
 .finance-payment-actions {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  width: 100%;
 }
 
-.finance-payment-document-link {
+.finance-payment-actions .finance-payment-action,
+.finance-payment-actions .finance-payment-dates-action--labeled {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0;
-  color: #53615c;
-  background: transparent;
-  border: 0;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  height: auto;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid #d7e1dc;
+  border-radius: 7px;
+  background: #fff;
+  color: #314c41;
+  font-family: inherit;
   font-size: 0.7rem;
-  font-weight: 850;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.finance-payment-document-link:hover {
-  color: var(--brand);
-  text-decoration: underline;
+.finance-payment-actions .finance-payment-action svg,
+.finance-payment-actions .finance-payment-dates-action--labeled svg {
+  flex: 0 0 auto;
+}
+
+.finance-payment-actions .finance-payment-action:hover,
+.finance-payment-actions .finance-payment-dates-action--labeled:hover {
+  border-color: #a8c9bb;
+  background: #f0f8f4;
+  color: #176b55;
+  text-decoration: none;
+}
+
+.finance-payment-actions .finance-payment-action:focus-visible,
+.finance-payment-actions .finance-payment-dates-action--labeled:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.finance-payment-actions .finance-payment-dates-action--labeled {
+  border-color: #b9d8ca;
+  background: #edf8f2;
+  color: #176b55;
+}
+
+.finance-payment-actions .finance-payment-action--edit {
+  border-color: #cbd7ef;
+  background: #f3f6ff;
+  color: #2947ba;
+}
+
+.finance-payment-action-placeholder {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 0.68rem;
 }
 
 .modal.finance-payments-documents-modal {
@@ -596,7 +635,6 @@
 .finance-payment-forwarded--yes { color: #177354; background: #edf9f4; border-color: #b9ddcf; }
 .finance-payment-forwarded--no { color: #8a610e; background: #fff8e8; border-color: #ead28a; }
 .finance-payment-forwarded--partial { color: #53615c; background: #f3f5f4; border-color: #d2d8d5; }
-.finance-payment-edit-programming { color: #2947ba; }
 .modal.finance-planned-edit-modal { width: min(94vw, 620px); }
 .finance-planned-edit-form { display: grid; gap: 13px; }
 .finance-planned-edit-summary {
