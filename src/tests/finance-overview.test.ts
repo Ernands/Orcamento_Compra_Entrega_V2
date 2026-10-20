@@ -407,6 +407,37 @@ describe('finance overview', () => {
     expect(row.worksMissingDocumentsCents).toBe(310000n);
   });
 
+  it('considera recibo mais comprovantes como documentação completa na Visão Geral', () => {
+    const original = work();
+    const paidPayments = original.payments.map((row) => ({
+      ...row,
+      status: 'paid' as const,
+      paidAt: '2026-09-30T12:00:00Z',
+    }));
+    const documents = [
+      {
+        ...original.documents[0],
+        documentType: 'receipt' as const,
+        storagePath: 'obras/recibo.pdf',
+        documentAmount: null,
+      },
+      {
+        ...original.documents[1],
+        documentType: 'payment_proof' as const,
+        storagePath: 'obras/comprovante.pdf',
+        documentAmount: '6200.00',
+      },
+    ];
+    const row = buildFinanceOverviewRows({
+      stores: [{ id: 'store-1', code: 'L1', name: 'Loja 1', city: 'Natal', state: 'RN' }] as Store[],
+      purchases: [], plannedBudgetItems: [], purchaseStoreRows: [], budgets: [],
+      works: [{ ...original, payments: paidPayments, documents }],
+    })[0];
+    expect(row.documentationStatus).toBe('complete');
+    expect(row.worksDocumentedCents).toBe(620000n);
+    expect(row.worksMissingDocumentsCents).toBe(0n);
+  });
+
   it('consolida itens, obra, pagamentos, verba e documentação por loja', () => {
     const stores = [
       {
