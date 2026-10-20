@@ -360,7 +360,7 @@
 }
 
 .finance-payments-table {
-  min-width: 1240px;
+  min-width: 1350px;
 }
 
 /* Reserve enough room for actions without wrapping their text. */
@@ -675,4 +675,60 @@
   .finance-planned-edit-summary { grid-template-columns: 1fr; }
   .finance-planned-edit-summary > div { border-right: 0; border-bottom: 1px solid var(--line); }
   .finance-planned-edit-summary > div:last-child { border-bottom: 0; }
+}
+
+/* Fiscal evidence is visible on Pago, Programado and Sem programação. */
+.finance-fiscal-state {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid #b9ddcf;
+  background: #edf9f4;
+  color: #177354;
+  font-size: 0.67rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.finance-fiscal-state--missing {
+  color: #9b342b;
+  background: #fff0ee;
+  border-color: #eac5c0;
+}
+.finance-fiscal-state--review {
+  color: #8a610e;
+  background: #fff8e8;
+  border-color: #ead28a;
+}
+.modal.finance-reimbursement-modal { width: min(95vw, 1050px); }
+.finance-reimbursement-content { display: grid; gap: 15px; }
+.finance-reimbursement-picker { display: grid; gap: 6px; max-width: 440px; font-size: 0.76rem; font-weight: 800; }
+.finance-reimbursement-picker select { min-height: 40px; padding: 7px; border: 1px solid #cad7d0; border-radius: 7px; background: #fff; }
+.finance-reimbursement-explanation, .finance-reimbursement-caveat { margin: 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+.finance-reimbursement-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.finance-reimbursement-summary article { display: grid; gap: 8px; padding: 12px; border: 1px solid #dce7e0; border-radius: 8px; background: #f6faf8; }
+.finance-reimbursement-summary article:first-child { background: #eaf7ef; border-color: #b2dac7; }
+.finance-reimbursement-summary article span { font-size: 0.71rem; color: #53615c; font-weight: 700; }
+.finance-reimbursement-summary article strong { font-size: 1rem; color: #176347; white-space: nowrap; }
+.finance-reimbursement-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.finance-reimbursement-meta span { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; }
+.finance-reimbursement-meta .finance-reimbursement-warning { color: #9b342b; }
+.finance-reimbursement-preview { overflow: auto; max-height: 325px; border: 1px solid var(--line); border-radius: 8px; }
+.finance-reimbursement-preview table { width: 100%; border-collapse: collapse; font-size: 0.73rem; }
+.finance-reimbursement-preview th { position: sticky; top: 0; background: #eaf5ee; text-align: left; padding: 9px; white-space: nowrap; }
+.finance-reimbursement-preview td { padding: 9px; border-top: 1px solid var(--line); vertical-align: top; }
+.finance-reimbursement-preview td strong, .finance-reimbursement-preview td small { display: block; }
+.finance-reimbursement-preview td small { margin-top: 2px; color: var(--muted); }
+.finance-reimbursement-money { white-space: nowrap; font-weight: 750; }
+.finance-reimbursement-buttons { display: flex; justify-content: flex-end; gap: 9px; }
+.finance-reimbursement-error { color: #9b342b; font-size: 0.75rem; }
+.finance-reimbursement-success { color: #177354; font-size: 0.75rem; }
+@media (max-width: 800px) {
+  .finance-reimbursement-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .finance-reimbursement-summary article strong { font-size: 0.88rem; }
+}
+@media (max-width: 550px) {
+  .finance-reimbursement-summary { grid-template-columns: 1fr; }
+  .finance-reimbursement-buttons { flex-direction: column; }
 }

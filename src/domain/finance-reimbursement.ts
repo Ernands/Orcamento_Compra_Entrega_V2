@@ -77,6 +77,12 @@ export function fiscalStateForPayment(
   works: WorkService[],
   storeId?: string,
 ): ReimbursementFiscalState {
+  if (!storeId && row.storeIds.length > 1) {
+    const states = row.storeIds.map((id) => fiscalStateForPayment(row, purchases, works, id));
+    if (states.every((state) => state === 'present')) return 'present';
+    if (states.every((state) => state === 'missing')) return 'missing';
+    return 'review';
+  }
   const docs = fiscalDocumentsForPayment(row, purchases, works, storeId);
   if (!docs.length) return 'missing';
   return docs.some((doc) => !doc.needsStoreReview) ? 'present' : 'review';

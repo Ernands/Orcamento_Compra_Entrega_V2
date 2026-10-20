@@ -6,6 +6,7 @@ import {
   CircleAlert,
   ExternalLink,
   FileText,
+  FileArchive,
   Paperclip,
   Pencil,
   RefreshCcw,
@@ -22,6 +23,8 @@ import {
   FinancePaymentOccurrencesModal,
 } from '../components/finance-payment-occurrences';
 import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
+import { FinanceReimbursementModal } from '../components/finance-reimbursement-modal';
+import { fiscalStateForPayment } from '../domain/finance-reimbursement';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listSupplyPurchasePaymentOccurrencesV2 } from '../data/purchases/payment-occurrences-repository';
 import { updatePlannedFinancePayment } from '../data/finance/finance-repository';
@@ -145,6 +148,7 @@ export function FinancePaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [originOpen, setOriginOpen] = useState(true);
+  const [reimbursementOpen, setReimbursementOpen] = useState(false);
   const [view, setView] = useState<FinancePaymentsView>(() => validView(searchParams.get('view')));
   const [originFilter, setOriginFilter] = useState(searchParams.get('origin') || '');
   const [storeFilter, setStoreFilter] = useState(searchParams.get('store') || '');
@@ -490,6 +494,15 @@ export function FinancePaymentsPage() {
             hasDeepFilter={hasDeepFilter}
             onError={setError}
           />
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => setReimbursementOpen(true)}
+            disabled={loading}
+          >
+            <FileArchive size={17} />
+            Gerar Solicitação de Reembolso
+          </button>
           <button className="button button--secondary" onClick={() => void load()} disabled={loading}>
             <RefreshCcw size={17} className={loading ? 'spin' : undefined} />
             Atualizar
@@ -718,6 +731,7 @@ export function FinancePaymentsPage() {
                       <th>{view === 'unscheduled' ? 'Vencimento' : 'Forma'}</th>
                       <th>{view === 'unscheduled' ? 'Forma' : 'Identificação / parcela'}</th>
                       <th>Valor</th>
+                      <th>Nota/Recibo</th>
                       <th className="finance-payments-actions-heading">Ações</th>
                     </tr>
                   </thead>
@@ -772,6 +786,19 @@ export function FinancePaymentsPage() {
                             </>
                           )}
                           <td className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
+                          <td>
+                            {(() => {
+                              const fiscal = fiscalStateForPayment(
+                                row, purchases, works,
+                                row.storeIds.length === 1 ? row.storeIds[0] : undefined,
+                              );
+                              return (
+                                <span className={`finance-fiscal-state finance-fiscal-state--${fiscal}`}>
+                                  {fiscal === 'missing' ? 'Pendente' : fiscal === 'review' ? 'Conferir vínculo' : 'Anexado'}
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td className="finance-payments-actions-cell">
                             <div className="finance-payment-actions">
                               {view === 'planned' && canManageFinance && (
@@ -836,6 +863,16 @@ export function FinancePaymentsPage() {
         </>
       )}
 
+      {reimbursementOpen && (
+        <FinanceReimbursementModal
+          stores={visibleStores}
+          rows={rows}
+          purchases={purchases}
+          works={works}
+          initialStoreId={storeFilter}
+          onClose={() => setReimbursementOpen(false)}
+        />
+      )}
       <FinancePaymentOccurrencesModal row={datesRow} onClose={() => setDatesRow(null)} />
 
       {plannedEditRow && (

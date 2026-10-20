@@ -65,6 +65,10 @@ describe('solicitação de reembolso por loja', () => {
     expect(report.pendingLines).toHaveLength(1);
     expect(report.documents).toHaveLength(1);
   });
+  it('mostra necessidade de conferência quando o documento só atende uma das lojas', () => {
+    const p = purchase([attachment('r1', 'receipt', [{ storeId: storeA }])]);
+    expect(fiscalStateForPayment(row('p', 'paid', 100n), [p], [])).toBe('review');
+  });
   it('não incorpora documentos de outra ordem da compra', () => {
     const p = purchase([{ ...attachment('other', 'invoice'), purchaseOrderId: 'order-2' }]);
     expect(fiscalStateForPayment(row('p1', 'paid', 100n), [p], [], storeA)).toBe('missing');
