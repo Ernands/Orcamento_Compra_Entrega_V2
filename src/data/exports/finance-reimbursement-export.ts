@@ -17,7 +17,7 @@ const WHITE = 'FFFFFFFF';
 function fileSafe(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/_+/g, '_')
-    .replace(/^[_\.]+|[_\.]+$/g, '').slice(0, 85) || 'Documento';
+    .replace(/^[_.]+|[_.]+$/g, '').slice(0, 85) || 'Documento';
 }
 
 function originLabel(line: ReimbursementLine): string {
@@ -136,7 +136,7 @@ export async function createStoreReimbursementWorkbook(input: {
     row.getCell(4).numFmt = MONEY;
   });
   const bytes = await workbook.xlsx.writeBuffer();
-  return bytes as ArrayBuffer;
+  return bytes;
 }
 
 export async function downloadStoreReimbursementZip(input: {
