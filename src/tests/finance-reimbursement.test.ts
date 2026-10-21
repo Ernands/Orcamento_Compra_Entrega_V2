@@ -142,7 +142,6 @@ describe('solicitação de reembolso por loja', () => {
     expect(sheet?.getCell('H5').value).toEqual({
       text: paths,
       hyperlink: "#'Arquivos do ZIP'!A2",
-      tooltip: 'Clique para abrir a aba Arquivos do ZIP e acessar cada anexo',
     });
     expect(sheet?.getCell('H6').value).toEqual(sheet?.getCell('H5').value);
     expect(sheet?.getCell('F5').value).toBe(1);
@@ -152,7 +151,6 @@ describe('solicitação de reembolso por loja', () => {
     expect(index?.getCell('A2').value).toEqual({
       text: 'Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf',
       hyperlink: 'Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf',
-      tooltip: 'Extrair o ZIP completo antes de abrir',
     });
     expect(index?.views[0]?.showGridLines).toBe(false);
     const { createReimbursementOfflineIndex } =
@@ -183,7 +181,6 @@ describe('solicitação de reembolso por loja', () => {
     const path = available.get('purchase:nf1')!;
     expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('H5').value).toEqual({
       text: path, hyperlink: path,
-      tooltip: 'Extrair o ZIP completo antes de abrir o arquivo',
     });
     expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(2);
     const index = createReimbursementOfflineIndex(report, available);
