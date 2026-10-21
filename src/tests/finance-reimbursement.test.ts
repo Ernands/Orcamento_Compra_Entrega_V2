@@ -96,12 +96,25 @@ describe('solicitação de reembolso por loja', () => {
     await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('Solicitação de Reembolso');
     expect(sheet?.getCell('B1').value).toBe(123.45);
+    expect(Array.from({ length: 10 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
+      'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
+      'Item / serviço', 'Valor', 'Nota/Recibo', 'N° Nota/Recibo',
+      'Arquivo(s) no ZIP', 'Pendência',
+    ]);
+    expect(sheet?.getCell('K4').value).toBeNull();
+    expect(sheet?.getCell('A5').value).toBe('LOJ-001 · Acaraú');
     expect(sheet?.getCell('F5').value).toBe(123.45);
-    expect(sheet?.getCell('L5').value).toEqual(expect.stringContaining('Conferir vínculo'));
-    expect(sheet?.getCell('L5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
+    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('Conferir vínculo'));
+    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
+    expect(sheet?.autoFilter).toEqual({ from: 'A4', to: 'J4' });
     const pending = workbook.getWorksheet('Pendências Documentais');
     expect(pending?.rowCount).toBe(2);
+    expect(pending?.getRow(1).values).toEqual([
+      undefined, 'Loja(s)', 'Referência', 'Pendência', 'Valor',
+    ]);
+    expect(pending?.getCell('A2').value).toBe('LOJ-001 · Acaraú');
     expect(pending?.getCell('C2').value).toEqual(expect.stringContaining('falha ao obter anexo'));
+    expect(pending?.getCell('D2').value).toBe(123.45);
   });
 
 });
