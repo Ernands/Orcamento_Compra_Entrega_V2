@@ -93,6 +93,71 @@ function currentStatus(line: ReimbursementLine, unavailable: Set<string>): strin
   return '';
 }
 
+export interface ReimbursementReferenceGroup {
+  reference: string;
+  lines: ReimbursementLine[];
+  amountCents: bigint;
+  suppliers: string[];
+  descriptions: string[];
+  origins: string[];
+  documents: ReimbursementFiscalDocument[];
+}
+
+/**
+ * Consolidate repeated payment occurrences exclusively for the exported worksheet.
+ * Each report already belongs to one store; no underlying payment or allocation is changed.
+ * Identical combined reference sets group together even if their order differs.
+ * Rows without a reference stay separate to avoid merging unrelated expenses.
+ */
+export function groupReimbursementLinesByReference(lines: ReimbursementLine[]): ReimbursementReferenceGroup[] {
+  const groups = new Map<string, ReimbursementReferenceGroup>();
+
+  lines.forEach((line, index) => {
+    const refs = line.row.referenceCodes.flatMap((code) => code.split(/\s*\+\s*/))
+      .map((code) => code.trim()).filter(Boolean);
+    const normalized = [...new Set(refs.map((code) => code.toLocaleUpperCase('pt-BR')))].sort();
+    const key = normalized.length ? JSON.stringify(normalized) : `sem-referencia:${index}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        reference: refs.join(' + ') || 'Sem referência',
+        lines: [], amountCents: 0n,
+        suppliers: [], descriptions: [], origins: [], documents: [],
+      };
+      groups.set(key, group);
+    }
+    group.lines.push(line);
+    group.amountCents += line.row.amountCents;
+    if (line.row.supplierName && !group.suppliers.includes(line.row.supplierName)) {
+      group.suppliers.push(line.row.supplierName);
+    }
+    if (line.row.description && !group.descriptions.includes(line.row.description)) {
+      group.descriptions.push(line.row.description);
+    }
+    const origin = originLabel(line);
+    if (!group.origins.includes(origin)) group.origins.push(origin);
+    line.documents.forEach((doc) => {
+      if (!group.documents.some((existing) => existing.source === doc.source && existing.id === doc.id)) {
+        group.documents.push(doc);
+      }
+    });
+  });
+
+  return [...groups.values()];
+}
+
+/** Do not suppress documentation failures from any of the underlying payment rows. */
+function groupedDocumentStatus(group: ReimbursementReferenceGroup, unavailable: Set<string>): string {
+  const counts = new Map<string, number>();
+  group.lines.forEach((line) => {
+    const status = currentStatus(line, unavailable);
+    if (status) counts.set(status, (counts.get(status) || 0) + 1);
+  });
+  return [...counts.entries()].map(([status, count]) =>
+    group.lines.length === 1 ? status : `${status} (${count} lançamento${count === 1 ? '' : 's'})`
+  ).join('; ');
+}
+
 /** Offline-only file index: no sessions, signed URLs or external network dependencies. */
 export function createReimbursementOfflineIndex(
   report: ReimbursementReport,
@@ -168,19 +233,26 @@ export async function createStoreReimbursementWorkbook(input: {
     .filter((doc) => input.zipNames.has(`${doc.source}:${doc.id}`));
   const documentIndexRows = new Map(indexedDocuments.map((doc, i) =>
     [`${doc.source}:${doc.id}`, i + 2]));
-  input.report.lines.forEach((line, i) => {
-    const refs = line.row.referenceCodes.join(' + ');
-    const documentKeys = line.documents.map((doc) => `${doc.source}:${doc.id}`);
+  const groups = groupReimbursementLinesByReference(input.report.lines);
+  // The source report still retains every payment occurrence for audit and totals.
+  groups.forEach((group, i) => {
+    const documentKeys = group.documents.map((doc) => `${doc.source}:${doc.id}`);
     const paths = [...new Set(documentKeys
       .map((key) => input.zipNames.get(key))
       .filter((name): name is string => Boolean(name)))];
+    const kinds = [...new Set(group.lines.map((line) => fiscalLabel(line)))];
+    const status = groupedDocumentStatus(group, input.unavailable);
     const row = sheet.addRow([
-      `${input.store.code} · ${input.store.name}`, originLabel(line), refs,
-      line.row.supplierName, line.row.description, Number(line.row.amountCents) / 100,
-      fiscalLabel(line), paths.join('; ') || '—', currentStatus(line, input.unavailable),
+      `${input.store.code} · ${input.store.name}`,
+      group.origins.join(' + '),
+      group.reference,
+      group.suppliers.join(' + '),
+      group.descriptions.join(' | '),
+      Number(group.amountCents) / 100,
+      kinds.join(' + '),
+      paths.join('; ') || '—',
+      status,
     ]);
-    // Excel has only one clickable hyperlink per cell. Link directly for one file,
-    // otherwise link to an index with a separate clickable row for each file.
     if (paths.length) {
       const linkCell = row.getCell(8);
       const firstIndexRow = documentKeys.map((key) => documentIndexRows.get(key))
@@ -196,11 +268,11 @@ export async function createStoreReimbursementWorkbook(input: {
     }
     row.getCell(6).numFmt = MONEY;
     row.alignment = { vertical: 'middle', wrapText: true };
-    row.height = 30;
-    if (i % 2) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F8F6' } }; });
-    if (currentStatus(line, input.unavailable)) {
-      row.getCell(9).font = { bold: true, color: { argb: 'FF9B342B' } };
-    }
+    row.height = Math.min(86, 30 + Math.max(0, group.descriptions.length - 1) * 14);
+    if (i % 2) row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F8F6' } };
+    });
+    if (status) row.getCell(9).font = { bold: true, color: { argb: 'FF9B342B' } };
   });
   const totalLine = sheet.addRow(['TOTAL SOLICITADO', '', '', '', '', Number(input.report.totals.commitmentCents) / 100]);
   totalLine.getCell(6).numFmt = MONEY;
@@ -216,7 +288,8 @@ export async function createStoreReimbursementWorkbook(input: {
   summary.addRow(['Programado', Number(input.report.totals.plannedCents) / 100]);
   summary.addRow(['Sem programação', Number(input.report.totals.unscheduledCents) / 100]);
   summary.addRow(['TOTAL SOLICITADO', Number(input.report.totals.commitmentCents) / 100]);
-  summary.addRow(['Lançamentos', input.report.lines.length]);
+  summary.addRow(['Lançamentos de origem', input.report.lines.length]);
+  summary.addRow(['Referências consolidadas', groups.length]);
   summary.addRow(['Documentos fiscais únicos', input.report.documents.length]);
   summary.addRow(['Lançamentos com pendência/conferência', input.report.lines.filter((line) => currentStatus(line, input.unavailable)).length]);
   for (const index of [4, 5, 6, 7]) summary.getRow(index).getCell(2).numFmt = MONEY;
@@ -226,12 +299,12 @@ export async function createStoreReimbursementWorkbook(input: {
   pending.columns = [{ width: 27 }, { width: 26 }, { width: 45 }, { width: 19 }];
   pending.addRow(['Loja(s)', 'Referência', 'Pendência', 'Valor']);
   pending.getRow(1).font = { bold: true, color: { argb: GREEN } };
-  input.report.lines.forEach((line) => {
-    const status = currentStatus(line, input.unavailable);
+  groups.forEach((group) => {
+    const status = groupedDocumentStatus(group, input.unavailable);
     if (!status) return;
     const row = pending.addRow([
-      `${input.store.code} · ${input.store.name}`, line.row.referenceCodes.join(' + '),
-      status, Number(line.row.amountCents) / 100,
+      `${input.store.code} · ${input.store.name}`, group.reference,
+      status, Number(group.amountCents) / 100,
     ]);
     row.getCell(4).numFmt = MONEY;
   });
