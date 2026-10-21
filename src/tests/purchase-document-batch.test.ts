@@ -21,8 +21,9 @@ describe('anexos multiplos em compra ja cadastrada', () => {
     const files = Array.from({ length: 34 }, (_, i) => `nota-${String(i + 1).padStart(2, '0')}.pdf`);
     const uploaded: string[] = [];
     const progress: string[] = [];
-    const result = await uploadPurchaseDocumentsBatch(files, async (file) => {
+    const result = await uploadPurchaseDocumentsBatch(files, (file) => {
       uploaded.push(file);
+      return Promise.resolve();
     }, (processed, total) => progress.push(`${processed}/${total}`));
     expect(uploaded).toEqual(files);
     expect(result.uploaded).toEqual(files);
@@ -35,11 +36,12 @@ describe('anexos multiplos em compra ja cadastrada', () => {
   it('em falha parcial envia apenas arquivos que falharam, sem repetir os 31 ja cadastrados', async () => {
     const files = Array.from({ length: 34 }, (_, i) => `nota-${i + 1}.pdf`);
     const attempts = new Map<string, number>();
-    const worker = vi.fn(async (file: string) => {
+    const worker = vi.fn((file: string) => {
       attempts.set(file, (attempts.get(file) || 0) + 1);
       if (attempts.get(file) === 1 && ['nota-4.pdf', 'nota-12.pdf', 'nota-30.pdf'].includes(file)) {
-        throw new Error('Erro ao registrar nota');
+        return Promise.reject(new Error('Erro ao registrar nota'));
       }
+      return Promise.resolve();
     });
     const first = await uploadPurchaseDocumentsBatch(files, worker);
     expect(first.uploaded).toHaveLength(31);
@@ -55,11 +57,10 @@ describe('anexos multiplos em compra ja cadastrada', () => {
     expect(attempts.get('nota-4.pdf')).toBe(2);
   });
 
-  it('continua o lote quando o upload rejeita valores nao-Error', async () => {
-    const result = await uploadPurchaseDocumentsBatch(['a.pdf', 'b.pdf'], async (file) => {
-      if (file === 'a.pdf') throw null;
-    });
+  it('registra a mensagem de falha e continua para o proximo arquivo', async () => {
+    const result = await uploadPurchaseDocumentsBatch(['a.pdf', 'b.pdf'], (file) =>
+      file === 'a.pdf' ? Promise.reject(new Error('Storage indisponivel')) : Promise.resolve());
     expect(result.uploaded).toEqual(['b.pdf']);
-    expect(result.failed).toEqual([{ file: 'a.pdf', reason: 'Nao foi possivel enviar o documento.' }]);
+    expect(result.failed).toEqual([{ file: 'a.pdf', reason: 'Storage indisponivel' }]);
   });
 });
