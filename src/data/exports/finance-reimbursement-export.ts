@@ -93,6 +93,36 @@ function currentStatus(line: ReimbursementLine, unavailable: Set<string>): strin
   return '';
 }
 
+/** Offline-only file index: no sessions, signed URLs or external network dependencies. */
+export function createReimbursementOfflineIndex(
+  report: ReimbursementReport,
+  zipNames: Map<string, string>,
+): string {
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const rows = report.documents.flatMap((doc) => {
+    const path = zipNames.get(`${doc.source}:${doc.id}`);
+    if (!path) return [];
+    const lines = report.lines.filter((line) =>
+      line.documents.some((item) => item.source === doc.source && item.id === doc.id));
+    const supplier = [...new Set(lines.map((line) => line.row.supplierName))].join(' + ');
+    const references = [...new Set(lines.flatMap((line) => line.row.referenceCodes))].join(' + ');
+    const href = path.split('/').map(encodeURIComponent).join('/');
+    return [`<tr><td><a href="${escapeHtml(href)}">${escapeHtml(path)}</a></td><td>${doc.type === 'invoice' ? 'Nota' : 'Recibo'}</td><td>${escapeHtml(supplier)}</td><td>${escapeHtml(references)}</td></tr>`];
+  });
+  return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Documentos de reembolso</title>
+<style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:32px auto;padding:0 20px;color:#24332d}h1{color:#1f6f5c}
+table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:12px;border-bottom:1px solid #dce6e1;overflow-wrap:anywhere}
+th{background:#eaf3ee}a{color:#0860b9}</style></head>
+<body><h1>Documentos de reembolso</h1>
+<p>Extraia todo o ZIP antes de abrir esta página. Os links abrem arquivos locais sem login no Implanta 27.</p>
+<table><thead><tr><th>Arquivo</th><th>Tipo</th><th>Fornecedor / prestador</th><th>Referência</th></tr></thead>
+<tbody>${rows.join('\n') || '<tr><td colspan="4">Nenhum arquivo disponível.</td></tr>'}</tbody></table></body></html>`;
+}
+
 /** Build an editable store reimbursement workbook with a store-first detail layout. */
 export async function createStoreReimbursementWorkbook(input: {
   store: Store;
@@ -106,22 +136,25 @@ export async function createStoreReimbursementWorkbook(input: {
   workbook.creator = 'Implanta 27';
   workbook.created = input.generatedAt;
   const sheet = workbook.addWorksheet('Solicitação de Reembolso', {
-    views: [{ state: 'frozen', ySplit: 4 }],
+    views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
     pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
   });
+  // Merge the heading instead of widening the entire store column.
+  sheet.mergeCells('A1:C1');
   sheet.getCell('A1').value = 'Solicitação de Reembolso';
   sheet.getCell('A1').font = { bold: true, size: 16, color: { argb: GREEN } };
-  sheet.getCell('B1').value = Number(input.report.totals.commitmentCents) / 100;
-  sheet.getCell('B1').numFmt = MONEY;
-  sheet.getCell('B1').font = { bold: true, size: 15, color: { argb: GREEN } };
+  sheet.getCell('A1').alignment = { vertical: 'middle' };
+  sheet.getRow(1).height = 30;
+  sheet.getCell('D1').value = Number(input.report.totals.commitmentCents) / 100;
+  sheet.getCell('D1').numFmt = MONEY;
+  sheet.getCell('D1').font = { bold: true, size: 15, color: { argb: GREEN } };
   sheet.getCell('A3').value = 'Detalhamento';
   sheet.getCell('A3').font = { bold: true, size: 12 };
   sheet.getRow(4).values = [
     'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
-    'Item / serviço', 'Valor', 'Nota/Recibo', 'N° Nota/Recibo',
-    'Arquivo(s) no ZIP', 'Pendência',
+    'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP', 'Pendência',
   ];
-  sheet.columns = [27, 19, 26, 31, 50, 17, 18, 20, 45, 45]
+  sheet.columns = [27, 19, 26, 31, 50, 17, 18, 58, 45]
     .map((width) => ({ width }));
   const header = sheet.getRow(4);
   header.height = 34;
@@ -131,30 +164,50 @@ export async function createStoreReimbursementWorkbook(input: {
     cell.alignment = { vertical: 'middle', wrapText: true };
   });
 
+  const indexedDocuments = input.report.documents
+    .filter((doc) => input.zipNames.has(`${doc.source}:${doc.id}`));
+  const documentIndexRows = new Map(indexedDocuments.map((doc, i) =>
+    [`${doc.source}:${doc.id}`, i + 2]));
   input.report.lines.forEach((line, i) => {
     const refs = line.row.referenceCodes.join(' + ');
-    const names = line.documents.map((doc) => input.zipNames.get(`${doc.source}:${doc.id}`))
-      .filter((name): name is string => Boolean(name)).join('; ');
+    const documentKeys = line.documents.map((doc) => `${doc.source}:${doc.id}`);
+    const paths = [...new Set(documentKeys
+      .map((key) => input.zipNames.get(key))
+      .filter((name): name is string => Boolean(name)))];
     const row = sheet.addRow([
       `${input.store.code} · ${input.store.name}`, originLabel(line), refs,
       line.row.supplierName, line.row.description, Number(line.row.amountCents) / 100,
-      fiscalLabel(line), [...new Set(line.documents.map((doc) => doc.number).filter(Boolean))].join(', ') || '—',
-      names || '—', currentStatus(line, input.unavailable),
+      fiscalLabel(line), paths.join('; ') || '—', currentStatus(line, input.unavailable),
     ]);
+    // Excel has only one clickable hyperlink per cell. Link directly for one file,
+    // otherwise link to an index with a separate clickable row for each file.
+    if (paths.length) {
+      const linkCell = row.getCell(8);
+      const firstIndexRow = documentKeys.map((key) => documentIndexRows.get(key))
+        .find((number) => number !== undefined);
+      linkCell.value = {
+        text: paths.join('; '),
+        hyperlink: paths.length === 1 ? paths[0] : `#'Arquivos do ZIP'!A${firstIndexRow}`,
+        tooltip: paths.length === 1
+          ? 'Extrair o ZIP completo antes de abrir o arquivo'
+          : 'Clique para abrir a aba Arquivos do ZIP e acessar cada anexo',
+      };
+      linkCell.font = { color: { argb: 'FF0563C1' }, underline: true };
+    }
     row.getCell(6).numFmt = MONEY;
     row.alignment = { vertical: 'middle', wrapText: true };
     row.height = 30;
     if (i % 2) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F8F6' } }; });
     if (currentStatus(line, input.unavailable)) {
-      row.getCell(10).font = { bold: true, color: { argb: 'FF9B342B' } };
+      row.getCell(9).font = { bold: true, color: { argb: 'FF9B342B' } };
     }
   });
   const totalLine = sheet.addRow(['TOTAL SOLICITADO', '', '', '', '', Number(input.report.totals.commitmentCents) / 100]);
   totalLine.getCell(6).numFmt = MONEY;
   totalLine.font = { bold: true, color: { argb: GREEN } };
-  sheet.autoFilter = { from: 'A4', to: 'J4' };
+  sheet.autoFilter = { from: 'A4', to: 'I4' };
 
-  const summary = workbook.addWorksheet('Resumo');
+  const summary = workbook.addWorksheet('Resumo', { views: [{ showGridLines: false }] });
   summary.columns = [{ width: 37 }, { width: 27 }];
   summary.addRow(['Solicitação de Reembolso', `${input.store.code} · ${input.store.name}`]);
   summary.addRow(['Gerado em', input.generatedAt.toLocaleString('pt-BR')]);
@@ -169,7 +222,7 @@ export async function createStoreReimbursementWorkbook(input: {
   for (const index of [4, 5, 6, 7]) summary.getRow(index).getCell(2).numFmt = MONEY;
   summary.getRow(7).font = { bold: true, color: { argb: GREEN } };
 
-  const pending = workbook.addWorksheet('Pendências Documentais');
+  const pending = workbook.addWorksheet('Pendências Documentais', { views: [{ showGridLines: false }] });
   pending.columns = [{ width: 27 }, { width: 26 }, { width: 45 }, { width: 19 }];
   pending.addRow(['Loja(s)', 'Referência', 'Pendência', 'Valor']);
   pending.getRow(1).font = { bold: true, color: { argb: GREEN } };
@@ -181,6 +234,22 @@ export async function createStoreReimbursementWorkbook(input: {
       status, Number(line.row.amountCents) / 100,
     ]);
     row.getCell(4).numFmt = MONEY;
+  });
+  // Every exported attachment has its own direct, relative hyperlink.
+  const index = workbook.addWorksheet('Arquivos do ZIP', { views: [{ showGridLines: false }] });
+  index.columns = [{ width: 75 }, { width: 18 }, { width: 34 }, { width: 38 }];
+  index.addRow(['Arquivo (clique para abrir)', 'Tipo', 'Fornecedor / prestador', 'Referência']);
+  index.getRow(1).font = { bold: true, color: { argb: GREEN } };
+  indexedDocuments.forEach((doc) => {
+    const path = input.zipNames.get(`${doc.source}:${doc.id}`);
+    if (!path) return;
+    const lines = input.report.lines.filter((line) =>
+      line.documents.some((item) => item.source === doc.source && item.id === doc.id));
+    const supplier = [...new Set(lines.map((line) => line.row.supplierName))].join(' + ');
+    const references = [...new Set(lines.flatMap((line) => line.row.referenceCodes))].join(' + ');
+    const row = index.addRow([path, doc.type === 'invoice' ? 'Nota' : 'Recibo', supplier, references]);
+    row.getCell(1).value = { text: path, hyperlink: path, tooltip: 'Extrair o ZIP completo antes de abrir' };
+    row.getCell(1).font = { color: { argb: 'FF0563C1' }, underline: true };
   });
   const bytes = await workbook.xlsx.writeBuffer();
   return bytes;
@@ -231,7 +300,12 @@ export async function downloadStoreReimbursementZip(input: {
     `Lançamentos com documento a conferir por loja: ${review}`,
     `Anexos indisponíveis no download: ${unavailable.size}`,
     'Consulte a aba Pendências Documentais no Excel; pendências não reduzem o valor solicitado.',
+    'LINKS DE DOCUMENTOS: extraia TODO o ZIP para uma única pasta antes de abrir a planilha.',
+    'Na planilha, clique no arquivo da coluna Arquivo(s) no ZIP; se houver vários, acesse a aba Arquivos do ZIP.',
+    'Para abrir sem Excel ou acesso ao sistema, use Abrir_Arquivos.html no navegador após extrair o ZIP.',
+    'Links relativos não funcionam de forma confiável quando a planilha está aberta dentro do ZIP.',
   ].join('\n'));
+  zip.file('Abrir_Arquivos.html', createReimbursementOfflineIndex(input.report, zipNames));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
