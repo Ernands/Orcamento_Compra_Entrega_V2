@@ -93,7 +93,7 @@ describe('solicitação de reembolso por loja', () => {
       unavailable: new Set(['purchase:shared']),
     });
     const workbook = new Workbook();
-    await workbook.xlsx.load(Buffer.from(bytes));
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('Solicitação de Reembolso');
     expect(sheet?.getCell('B1').value).toBe(123.45);
     expect(sheet?.getCell('F5').value).toBe(123.45);
