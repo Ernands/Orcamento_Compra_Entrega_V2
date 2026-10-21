@@ -139,10 +139,56 @@ describe('solicitação de reembolso por loja', () => {
     await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('Solicitação de Reembolso');
     const paths = [...names.values()].join('; ');
-    expect(sheet?.getCell('I5').value).toBe(paths);
-    expect(sheet?.getCell('I6').value).toBe(paths);
+    expect(sheet?.getCell('H5').value).toEqual({
+      text: paths,
+      hyperlink: "#'Arquivos do ZIP'!A2",
+      tooltip: 'Clique para abrir a aba Arquivos do ZIP e acessar cada anexo',
+    });
+    expect(sheet?.getCell('H6').value).toEqual(sheet?.getCell('H5').value);
     expect(sheet?.getCell('F5').value).toBe(1);
     expect(sheet?.getCell('F6').value).toBe(1);
+    const index = workbook.getWorksheet('Arquivos do ZIP');
+    expect(index?.rowCount).toBe(5);
+    expect(index?.getCell('A2').value).toEqual({
+      text: 'Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf',
+      hyperlink: 'Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf',
+      tooltip: 'Extrair o ZIP completo antes de abrir',
+    });
+    expect(index?.views[0]?.showGridLines).toBe(false);
+    const { createReimbursementOfflineIndex } =
+      await import('../data/exports/finance-reimbursement-export');
+    const offline = createReimbursementOfflineIndex(report, names);
+    expect(offline).toContain('href="Notas_e_Recibos/Nota_Miranda_CMP-00002%20%2B%20CMP-00003.pdf"');
+    expect(offline).toContain('Nota_Miranda_CMP-00002 + CMP-00003_1.pdf');
+    expect(offline).not.toContain('supabase.co');
+  });
+
+  it('faz link direto para um anexo disponível e registra índice offline sem documento ausente', async () => {
+    const { createStoreReimbursementWorkbook, createReimbursementOfflineIndex, planReimbursementZipFileNames } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const p = purchase([attachment('nf1', 'invoice'), attachment('nf2', 'receipt')]);
+    const report = buildStoreReimbursement([row('p1', 'paid', 100n)], [p], [], storeA);
+    const planned = planReimbursementZipFileNames(report);
+    const available = new Map([['purchase:nf1', planned.get('purchase:nf1')!]]);
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report,
+      generatedAt: new Date('2026-10-21T12:00:00Z'),
+      zipNames: available,
+      unavailable: new Set(['purchase:nf2']),
+    });
+    const book = new Workbook();
+    await book.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof book.xlsx.load>[0]);
+    const path = available.get('purchase:nf1')!;
+    expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('H5').value).toEqual({
+      text: path, hyperlink: path,
+      tooltip: 'Extrair o ZIP completo antes de abrir o arquivo',
+    });
+    expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(2);
+    const index = createReimbursementOfflineIndex(report, available);
+    expect(index).toContain('nf1.pdf');
+    expect(index).not.toContain('nf2.pdf');
   });
 
   it('higieniza nomes de fornecedor e preserva extensão quando usa recibo de obra', async () => {
@@ -179,20 +225,26 @@ describe('solicitação de reembolso por loja', () => {
     const workbook = new Workbook();
     await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('Solicitação de Reembolso');
-    expect(sheet?.getCell('B1').value).toBe(123.45);
-    expect(Array.from({ length: 10 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
+    expect(sheet?.getCell('A1').value).toBe('Solicitação de Reembolso');
+    expect(sheet?.getCell('D1').value).toBe(123.45);
+    expect(sheet?.getCell('A1').isMerged).toBe(true);
+    expect(sheet?.getCell('B1').isMerged).toBe(true);
+    expect(sheet?.views[0]?.showGridLines).toBe(false);
+    expect(Array.from({ length: 9 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
       'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
-      'Item / serviço', 'Valor', 'Nota/Recibo', 'N° Nota/Recibo',
-      'Arquivo(s) no ZIP', 'Pendência',
+      'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP', 'Pendência',
     ]);
-    expect(sheet?.getCell('K4').value).toBeNull();
+    expect(sheet?.getCell('J4').value).toBeNull();
     expect(sheet?.getCell('A5').value).toBe('LOJ-001 · Acaraú');
     expect(sheet?.getCell('F5').value).toBe(123.45);
-    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('Conferir vínculo'));
-    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
-    expect(sheet?.autoFilter).toBe('A4:J4');
+    expect(sheet?.getCell('H5').value).toBe('—');
+    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('Conferir vínculo'));
+    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
+    expect(sheet?.autoFilter).toBe('A4:I4');
     const pending = workbook.getWorksheet('Pendências Documentais');
     expect(pending?.rowCount).toBe(2);
+    expect(pending?.views[0]?.showGridLines).toBe(false);
+    expect(workbook.getWorksheet('Resumo')?.views[0]?.showGridLines).toBe(false);
     expect(pending?.getRow(1).values).toEqual([
       undefined, 'Loja(s)', 'Referência', 'Pendência', 'Valor',
     ]);
