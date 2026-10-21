@@ -363,6 +363,9 @@
   width: 100%;
   min-width: 0;
   table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #f0f4f1;
 }
 
 /* Only seven financial columns; supporting controls live below each record. */
@@ -375,16 +378,40 @@
 .finance-payments-table thead th:nth-child(7) { width: 12%; }
 
 .finance-payments-table .finance-payment-info-row > td {
+  background: #fff;
+  border-top: 8px solid #f0f4f1;
   border-bottom: 0;
-  padding: 11px 10px 4px;
+  padding: 11px 11px 7px;
   overflow-wrap: anywhere;
+}
+
+.finance-payments-table .finance-payment-info-row > td:first-child {
+  border-left: 1px solid #dce6df;
+}
+
+.finance-payments-table .finance-payment-info-row > td:last-child {
+  border-right: 1px solid #dce6df;
+}
+
+.finance-payments-table .finance-payment-info-row > td:nth-child(3) > strong,
+.finance-payments-table .finance-payment-info-row > td:nth-child(4) > strong {
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.finance-payments-table .finance-payment-info-row .finance-payments-money > strong {
+  font-size: 0.85rem;
+  font-weight: 900;
 }
 
 .finance-payments-table .finance-payment-meta-row > td {
   max-width: none;
-  padding: 6px 10px 10px;
-  background: #f9fcfa;
-  border-bottom: 1px solid var(--line);
+  padding: 6px 11px 9px;
+  background: #f8faf9;
+  border-left: 1px solid #dce6df;
+  border-right: 1px solid #dce6df;
+  border-bottom: 8px solid #f0f4f1;
+  box-shadow: inset 0 -1px 0 #dce6df;
 }
 
 .finance-payment-meta-bar {
@@ -477,8 +504,13 @@
   .finance-payments-table .finance-payment-info-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 16px;
-    padding: 14px 12px 7px;
+    gap: 10px 16px;
+    margin: 8px 9px 0;
+    padding: 12px 12px 6px;
+    background: #fff;
+    border: 1px solid #dce6df;
+    border-bottom: 0;
+    border-radius: 9px 9px 0 0;
   }
 
   .finance-payments-table .finance-payment-info-row > td {
@@ -486,6 +518,7 @@
     padding: 0;
     min-width: 0;
     max-width: none;
+    border: 0;
   }
 
   .finance-payments-table .finance-payment-info-row > td::before {
@@ -505,7 +538,15 @@
     width: 100%;
   }
 
-  .finance-payments-table .finance-payment-meta-row > td { padding: 6px 12px 12px; }
+  .finance-payments-table .finance-payment-meta-row > td {
+    padding: 8px 12px 10px;
+    margin: 0 9px 8px;
+    background: #f8faf9;
+    border: 1px solid #dce6df;
+    border-top: 0;
+    border-radius: 0 0 9px 9px;
+    box-shadow: none;
+  }
   .finance-payment-meta-bar .finance-payment-actions { justify-content: flex-start; }
 }
 
@@ -602,10 +643,11 @@
 }
 
 .finance-payment-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  width: 100%;
+  width: auto;
 }
 
 .finance-payment-actions .finance-payment-action,
@@ -614,11 +656,12 @@
   align-items: center;
   justify-content: flex-start;
   box-sizing: border-box;
-  width: 100%;
+  width: auto;
+  flex: 0 0 auto;
   min-height: 34px;
   height: auto;
   gap: 7px;
-  padding: 7px 9px;
+  padding: 6px 10px;
   border: 1px solid #d7e1dc;
   border-radius: 7px;
   background: #fff;
@@ -834,4 +877,38 @@
 @media (max-width: 550px) {
   .finance-reimbursement-summary { grid-template-columns: 1fr; }
   .finance-reimbursement-buttons { flex-direction: column; }
+}
+
+/* Final cascade guard: never let action buttons fill the entire record width. */
+.finance-payments-table .finance-payment-meta-bar .finance-payment-actions {
+  display: flex;
+  width: auto;
+  flex: 0 1 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.finance-payments-table .finance-payment-meta-bar .finance-payment-actions > .finance-payment-action,
+.finance-payments-table .finance-payment-meta-bar .finance-payment-actions > .finance-payment-dates-action--labeled {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  min-height: 35px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .finance-payments-table .finance-payment-meta-bar .finance-payment-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .finance-payments-table .finance-payment-meta-bar .finance-payment-actions {
+    width: 100%;
+  }
 }
