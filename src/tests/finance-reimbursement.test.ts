@@ -102,6 +102,68 @@ describe('solicitação de reembolso por loja', () => {
     const workRow = { ...row('w', 'unscheduled', 100n), workServiceId: 'work-1', purchaseIds: [] };
     expect(fiscalStateForPayment(workRow, [], works, storeA)).toBe('present');
   });
+  it('nomeia notas e recibos no ZIP a partir de tipo, fornecedor e referência, sem sobrescrever homônimos', async () => {
+    const { planReimbursementZipFileNames, createStoreReimbursementWorkbook } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const p = purchase([
+      { ...attachment('nf1', 'invoice'), originalName: 'nota original.PDF' },
+      { ...attachment('nf2', 'invoice'), originalName: 'outra nota.pdf' },
+      { ...attachment('nf3', 'invoice'), originalName: 'imagem.png' },
+      { ...attachment('rec1', 'receipt'), originalName: 'recibo.JPG' },
+    ]);
+    const first = {
+      ...row('p1', 'paid', 100n),
+      supplierName: 'Miranda',
+      referenceCodes: ['CMP-00002', 'CMP-00003'],
+    };
+    const second = { ...first, id: 'p2', status: 'planned' as const };
+    const report = buildStoreReimbursement([first, second], [p], [], storeA);
+    const names = planReimbursementZipFileNames(report);
+
+    expect(report.documents).toHaveLength(4);
+    expect(names.size).toBe(4);
+    expect(names.get('purchase:nf1')).toBe('Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf');
+    expect(names.get('purchase:nf2')).toBe('Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003_1.pdf');
+    expect(names.get('purchase:nf3')).toBe('Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.png');
+    expect(names.get('purchase:rec1')).toBe('Notas_e_Recibos/Recibo_Miranda_CMP-00002 + CMP-00003.jpg');
+
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report,
+      generatedAt: new Date('2026-10-21T12:00:00Z'),
+      zipNames: names,
+      unavailable: new Set(),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Solicitação de Reembolso');
+    const paths = [...names.values()].join('; ');
+    expect(sheet?.getCell('I5').value).toBe(paths);
+    expect(sheet?.getCell('I6').value).toBe(paths);
+    expect(sheet?.getCell('F5').value).toBe(1);
+    expect(sheet?.getCell('F6').value).toBe(1);
+  });
+
+  it('higieniza nomes de fornecedor e preserva extensão quando usa recibo de obra', async () => {
+    const { planReimbursementZipFileNames } =
+      await import('../data/exports/finance-reimbursement-export');
+    const works = [{
+      id: 'work-1', storeId: storeA, documents: [{
+        id: 'rec-work', documentType: 'receipt', storagePath: 'obras/arquivo.jpg',
+        originalName: 'recibo-sem-extensao', documentNumber: '123',
+      }],
+    }] as unknown as WorkService[];
+    const workRow = {
+      ...row('w', 'paid', 100n), workServiceId: 'work-1', purchaseIds: [],
+      supplierName: 'Serviços: Silva / Souza',
+      referenceCodes: ['OBR-00019'],
+    };
+    const report = buildStoreReimbursement([workRow], [], works, storeA);
+    const names = planReimbursementZipFileNames(report);
+    expect(names.get('work:rec-work')).toBe('Notas_e_Recibos/Recibo_Servicos Silva Souza_OBR-00019.jpg');
+  });
+
   it('mantém o valor e registra simultaneamente vínculo a conferir e falha de anexo no Excel', async () => {
     const { createStoreReimbursementWorkbook } = await import('../data/exports/finance-reimbursement-export');
     const { Workbook } = await import('exceljs');
