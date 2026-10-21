@@ -18,8 +18,8 @@ describe('integração UI reembolso', () => {
   it('apresenta ações e nota/recibo abaixo dos detalhes sem rolagem horizontal em desktop', () => {
     const section = page.split('<section className="finance-payments-panel">')[1];
     expect(section).toContain('<Fragment key={row.id}>');
-    expect(section).toContain('<tr className="finance-payment-info-row">');
-    expect(section).toContain('<tr className="finance-payment-meta-row">');
+    expect(section).toContain('<tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>');
+    expect(section).toContain('<tr className={`finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>');
     expect(section).toContain('<td colSpan={7}>');
     expect(section).toContain('finance-payment-meta-status');
     expect(section).toContain('finance-payment-actions');
