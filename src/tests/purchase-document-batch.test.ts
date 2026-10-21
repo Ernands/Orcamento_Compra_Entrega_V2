@@ -11,7 +11,7 @@ describe('anexos multiplos em compra ja cadastrada', () => {
     expect(modal).toContain('setFiles(result.failed.map((entry) => entry.file))');
     expect(modal).toContain('Reenviar');
     expect(modal).toContain('setUploadProgress({ processed, total })');
-    expect(modal).toContain('lastDocumentContextRef').toBe(false);
+    expect(modal).not.toContain('lastDocumentContextRef');
     expect(modal).toContain('documentContextRef.current === context');
     expect(modal).toContain('Numero, Data e Valor');
     expect(modal).toContain('purchaseOrderId, file, description, documentType');
