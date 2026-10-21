@@ -10,12 +10,16 @@ describe('integração UI reembolso', () => {
     expect(page).toContain('initialStoreId={storeFilter}');
     expect(page).toContain('<th>Nota/Recibo</th>');
     expect(page).toContain('fiscalStateForPayment(');
-    expect(modal).toContain("['LOJ-001', 'LOJ-006', 'LOJ-025']");
+    expect(modal).toContain('reimbursementEligibleStoreIds(rows)');
+    expect(modal).toContain('eligibleIds.has(store.id)');
+    expect(modal).not.toContain('INITIAL_STORE_CODES');
   });
   it('gera ZIP com documentos disponíveis e registra arquivos ausentes', () => {
     expect(exporter).toContain("await import('jszip')");
     expect(exporter).toContain("compression: 'DEFLATE'");
-    expect(exporter).toContain("workbook.addWorksheet('Pendências Documentais')");
+    expect(exporter).toContain("workbook.addWorksheet('Pendências Documentais',");
+    expect(exporter).toContain("workbook.addWorksheet('Arquivos do ZIP',");
+    expect(exporter).toContain("zip.file('Abrir_Arquivos.html'");
     expect(exporter).toContain("zip.file('LEIA-ME.txt'");
     expect(exporter).toContain("fiscalLabel(line)");
     expect(exporter).toContain("const unavailable = new Set<string>()");

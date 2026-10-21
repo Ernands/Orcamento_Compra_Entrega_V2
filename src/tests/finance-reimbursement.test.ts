@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildStoreReimbursement, fiscalStateForPayment } from '../domain/finance-reimbursement';
+import { buildStoreReimbursement, fiscalStateForPayment, reimbursementEligibleStoreIds } from '../domain/finance-reimbursement';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { WorkService } from '../domain/works-types';
@@ -33,6 +33,28 @@ const attachment = (id: string, type: string, stores: unknown[] = [{ storeId: st
   documentNumber: id, storagePath: 'compras/' + id + '.pdf', stores,
 });
 describe('solicitação de reembolso por loja', () => {
+  it('disponibiliza todas as lojas com valores atribuídos, não apenas as três do piloto', () => {
+    const first = row('p1', 'paid', 10000n);
+    const onlyStoreA = {
+      ...row('p2', 'planned', 20000n),
+      storeAllocations: [first.storeAllocations[0]],
+      unallocatedCents: 20000n,
+    };
+    const storeC = 'store-c';
+    const third = {
+      ...row('p3', 'unscheduled', 30000n),
+      storeIds: [storeC], storeCodes: ['LOJ-027'],
+      storeAllocations: [{
+        storeId: storeC, storeCode: 'LOJ-027', state: 'MG',
+        amountCents: 30000n, originAllocations: orig(30000n),
+      }],
+    };
+    expect([...reimbursementEligibleStoreIds([first, onlyStoreA, third])].sort()).toEqual([
+      storeA, storeB, storeC,
+    ]);
+    expect([...reimbursementEligibleStoreIds([onlyStoreA])]).toEqual([storeA]);
+    expect([...reimbursementEligibleStoreIds([{ ...onlyStoreA, storeAllocations: [] }])]).toEqual([]);
+  });
   it('soma pago, programado e sem programação, limitado ao rateio da loja', () => {
     const p = purchase([attachment('nf1', 'invoice')]);
     const report = buildStoreReimbursement([
@@ -80,6 +102,111 @@ describe('solicitação de reembolso por loja', () => {
     const workRow = { ...row('w', 'unscheduled', 100n), workServiceId: 'work-1', purchaseIds: [] };
     expect(fiscalStateForPayment(workRow, [], works, storeA)).toBe('present');
   });
+  it('nomeia notas e recibos no ZIP a partir de tipo, fornecedor e referência, sem sobrescrever homônimos', async () => {
+    const { planReimbursementZipFileNames, createStoreReimbursementWorkbook } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const p = purchase([
+      { ...attachment('nf1', 'invoice'), originalName: 'nota original.PDF' },
+      { ...attachment('nf2', 'invoice'), originalName: 'outra nota.pdf' },
+      { ...attachment('nf3', 'invoice'), originalName: 'imagem.png' },
+      { ...attachment('rec1', 'receipt'), originalName: 'recibo.JPG' },
+    ]);
+    const first = {
+      ...row('p1', 'paid', 100n),
+      supplierName: 'Miranda',
+      referenceCodes: ['CMP-00002', 'CMP-00003'],
+    };
+    const second = { ...first, id: 'p2', status: 'planned' as const };
+    const report = buildStoreReimbursement([first, second], [p], [], storeA);
+    const names = planReimbursementZipFileNames(report);
+
+    expect(report.documents).toHaveLength(4);
+    expect(names.size).toBe(4);
+    expect(names.get('purchase:nf1')).toBe('Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf');
+    expect(names.get('purchase:nf2')).toBe('Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003_1.pdf');
+    expect(names.get('purchase:nf3')).toBe('Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.png');
+    expect(names.get('purchase:rec1')).toBe('Notas_e_Recibos/Recibo_Miranda_CMP-00002 + CMP-00003.jpg');
+
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report,
+      generatedAt: new Date('2026-10-21T12:00:00Z'),
+      zipNames: names,
+      unavailable: new Set(),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Solicitação de Reembolso');
+    const paths = [...names.values()].join('; ');
+    expect(sheet?.getCell('H5').value).toEqual({
+      text: paths,
+      hyperlink: "#'Arquivos do ZIP'!A2",
+    });
+    expect(sheet?.getCell('H6').value).toEqual(sheet?.getCell('H5').value);
+    expect(sheet?.getCell('F5').value).toBe(1);
+    expect(sheet?.getCell('F6').value).toBe(1);
+    const index = workbook.getWorksheet('Arquivos do ZIP');
+    expect(index?.rowCount).toBe(5);
+    expect(index?.getCell('A2').value).toEqual({
+      text: 'Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf',
+      hyperlink: 'Notas_e_Recibos/Nota_Miranda_CMP-00002 + CMP-00003.pdf',
+    });
+    expect(index?.views[0]?.showGridLines).toBe(false);
+    const { createReimbursementOfflineIndex } =
+      await import('../data/exports/finance-reimbursement-export');
+    const offline = createReimbursementOfflineIndex(report, names);
+    expect(offline).toContain('href="Notas_e_Recibos/Nota_Miranda_CMP-00002%20%2B%20CMP-00003.pdf"');
+    expect(offline).toContain('Nota_Miranda_CMP-00002 + CMP-00003_1.pdf');
+    expect(offline).not.toContain('supabase.co');
+  });
+
+  it('faz link direto para um anexo disponível e registra índice offline sem documento ausente', async () => {
+    const { createStoreReimbursementWorkbook, createReimbursementOfflineIndex, planReimbursementZipFileNames } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const p = purchase([attachment('nf1', 'invoice'), attachment('nf2', 'receipt')]);
+    const report = buildStoreReimbursement([row('p1', 'paid', 100n)], [p], [], storeA);
+    const planned = planReimbursementZipFileNames(report);
+    const available = new Map([['purchase:nf1', planned.get('purchase:nf1')!]]);
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report,
+      generatedAt: new Date('2026-10-21T12:00:00Z'),
+      zipNames: available,
+      unavailable: new Set(['purchase:nf2']),
+    });
+    const book = new Workbook();
+    await book.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof book.xlsx.load>[0]);
+    const path = available.get('purchase:nf1')!;
+    expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('H5').value).toEqual({
+      text: path, hyperlink: path,
+    });
+    expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(2);
+    const index = createReimbursementOfflineIndex(report, available);
+    expect(index).toContain('Nota_Fornecedor_CMP-00002.pdf');
+    expect(index).not.toContain('Recibo_Fornecedor_CMP-00002.pdf');
+  });
+
+  it('higieniza nomes de fornecedor e preserva extensão quando usa recibo de obra', async () => {
+    const { planReimbursementZipFileNames } =
+      await import('../data/exports/finance-reimbursement-export');
+    const works = [{
+      id: 'work-1', storeId: storeA, documents: [{
+        id: 'rec-work', documentType: 'receipt', storagePath: 'obras/arquivo.jpg',
+        originalName: 'recibo-sem-extensao', documentNumber: '123',
+      }],
+    }] as unknown as WorkService[];
+    const workRow = {
+      ...row('w', 'paid', 100n), workServiceId: 'work-1', purchaseIds: [],
+      supplierName: 'Serviços: Silva / Souza',
+      referenceCodes: ['OBR-00019'],
+    };
+    const report = buildStoreReimbursement([workRow], [], works, storeA);
+    const names = planReimbursementZipFileNames(report);
+    expect(names.get('work:rec-work')).toBe('Notas_e_Recibos/Recibo_Servicos Silva Souza_OBR-00019.jpg');
+  });
+
   it('mantém o valor e registra simultaneamente vínculo a conferir e falha de anexo no Excel', async () => {
     const { createStoreReimbursementWorkbook } = await import('../data/exports/finance-reimbursement-export');
     const { Workbook } = await import('exceljs');
@@ -95,20 +222,26 @@ describe('solicitação de reembolso por loja', () => {
     const workbook = new Workbook();
     await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('Solicitação de Reembolso');
-    expect(sheet?.getCell('B1').value).toBe(123.45);
-    expect(Array.from({ length: 10 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
+    expect(sheet?.getCell('A1').value).toBe('Solicitação de Reembolso');
+    expect(sheet?.getCell('D1').value).toBe(123.45);
+    expect(sheet?.getCell('A1').isMerged).toBe(true);
+    expect(sheet?.getCell('B1').isMerged).toBe(true);
+    expect(sheet?.views[0]?.showGridLines).toBe(false);
+    expect(Array.from({ length: 9 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
       'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
-      'Item / serviço', 'Valor', 'Nota/Recibo', 'N° Nota/Recibo',
-      'Arquivo(s) no ZIP', 'Pendência',
+      'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP', 'Pendência',
     ]);
-    expect(sheet?.getCell('K4').value).toBeNull();
+    expect(sheet?.getCell('J4').value).toBeNull();
     expect(sheet?.getCell('A5').value).toBe('LOJ-001 · Acaraú');
     expect(sheet?.getCell('F5').value).toBe(123.45);
-    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('Conferir vínculo'));
-    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
-    expect(sheet?.autoFilter).toBe('A4:J4');
+    expect(sheet?.getCell('H5').value).toBe('—');
+    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('Conferir vínculo'));
+    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
+    expect(sheet?.autoFilter).toBe('A4:I4');
     const pending = workbook.getWorksheet('Pendências Documentais');
     expect(pending?.rowCount).toBe(2);
+    expect(pending?.views[0]?.showGridLines).toBe(false);
+    expect(workbook.getWorksheet('Resumo')?.views[0]?.showGridLines).toBe(false);
     expect(pending?.getRow(1).values).toEqual([
       undefined, 'Loja(s)', 'Referência', 'Pendência', 'Valor',
     ]);

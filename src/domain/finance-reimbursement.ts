@@ -88,6 +88,15 @@ export function fiscalStateForPayment(
   return docs.some((doc) => !doc.needsStoreReview) ? 'present' : 'review';
 }
 
+/** Stores eligible for reimbursement have a positive amount attributed to them in Payments. */
+export function reimbursementEligibleStoreIds(allRows: UnifiedFinancePaymentRow[]): Set<string> {
+  const eligibleIds = new Set<string>();
+  allRows.forEach((row) => row.storeAllocations.forEach((allocation) => {
+    if (allocation.amountCents > 0n) eligibleIds.add(allocation.storeId);
+  }));
+  return eligibleIds;
+}
+
 export function buildStoreReimbursement(
   allRows: UnifiedFinancePaymentRow[],
   purchases: PurchaseV2[],

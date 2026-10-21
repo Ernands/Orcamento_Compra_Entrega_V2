@@ -4,14 +4,13 @@ import { Modal } from './ui';
 import { createPurchaseAttachmentSignedUrlV2 } from '../data/purchases/purchases-v2-repository';
 import { createWorkDocumentSignedUrl } from '../data/works/works-repository';
 import { downloadStoreReimbursementZip } from '../data/exports/finance-reimbursement-export';
-import { buildStoreReimbursement } from '../domain/finance-reimbursement';
+import { buildStoreReimbursement, reimbursementEligibleStoreIds } from '../domain/finance-reimbursement';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import { formatBRL } from '../domain/supply-calculations';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
 import type { WorkService } from '../domain/works-types';
 
-const INITIAL_STORE_CODES = ['LOJ-001', 'LOJ-006', 'LOJ-025'];
 const STATUS_LABEL = { paid: 'Pago', planned: 'Programado', unscheduled: 'Sem programação' };
 
 export function FinanceReimbursementModal({
@@ -24,11 +23,12 @@ export function FinanceReimbursementModal({
   initialStoreId: string;
   onClose: () => void;
 }) {
-  const options = useMemo(
-    () => stores.filter((store) => INITIAL_STORE_CODES.includes(store.code))
-      .sort((a, b) => INITIAL_STORE_CODES.indexOf(a.code) - INITIAL_STORE_CODES.indexOf(b.code)),
-    [stores],
-  );
+  const options = useMemo(() => {
+    const eligibleIds = reimbursementEligibleStoreIds(rows);
+    return stores
+      .filter((store) => eligibleIds.has(store.id))
+      .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR', { numeric: true }));
+  }, [rows, stores]);
   const [storeId, setStoreId] = useState(
     options.some((store) => store.id === initialStoreId) ? initialStoreId : options[0]?.id || '',
   );
@@ -151,7 +151,7 @@ export function FinanceReimbursementModal({
             </div>
           </>
         ) : (
-          <p>Nenhuma das lojas iniciais está disponível.</p>
+          <p>Nenhuma loja com lançamentos financeiros atribuídos está disponível.</p>
         )}
       </div>
     </Modal>
