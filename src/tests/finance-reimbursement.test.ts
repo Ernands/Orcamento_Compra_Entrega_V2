@@ -187,8 +187,8 @@ describe('solicitação de reembolso por loja', () => {
     });
     expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(2);
     const index = createReimbursementOfflineIndex(report, available);
-    expect(index).toContain('nf1.pdf');
-    expect(index).not.toContain('nf2.pdf');
+    expect(index).toContain('Nota_Fornecedor_CMP-00002.pdf');
+    expect(index).not.toContain('Recibo_Fornecedor_CMP-00002.pdf');
   });
 
   it('higieniza nomes de fornecedor e preserva extensão quando usa recibo de obra', async () => {
