@@ -5,7 +5,7 @@ import occurrences from '../components/finance-payment-occurrences.tsx?raw';
 
 describe('layout compacto das ações de Pagamentos', () => {
   it('mostra ações e status abaixo dos dados, sem coluna lateral e sem rolagem no desktop', () => {
-    expect(page).toContain('className="finance-payment-meta-row"');
+    expect(page).toContain("finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}");
     expect(page).toContain('className="finance-payment-meta-bar"');
     expect(page).toContain('className="finance-payment-meta-status"');
     expect(page).toContain('<td colSpan={7}>');
