@@ -142,6 +142,68 @@ describe('documentação de obras: nota e comprovantes para todo o valor pago', 
     expect(capped.documentedCents).toBe(100000n);
   });
 
+  it('é completa com recibo e comprovantes cobrindo toda a obra quitada', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '1250.00',
+      payments: [payment('p1', '500.00'), payment('p2', '750.00')],
+      documents: [
+        document('recibo', 'receipt', null),
+        document('c1', 'payment_proof', '500.00'),
+        document('c2', 'payment_proof', '750.00'),
+      ],
+    }));
+    expect(totals.documentationStatus).toBe('complete');
+    expect(totals.hasInvoice).toBe(false);
+    expect(totals.hasReceipt).toBe(true);
+    expect(totals.hasFiscalDocument).toBe(true);
+    expect(totals.documentedCents).toBe(125000n);
+    expect(totals.missingDocumentsCents).toBe(0n);
+  });
+
+  it('mantém incompleta com recibo e comprovantes insuficientes', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '1250.00',
+      payments: [payment('p1', '500.00'), payment('p2', '750.00')],
+      documents: [
+        document('recibo', 'receipt', '1250.00'),
+        document('c1', 'payment_proof', '500.00'),
+      ],
+    }));
+    expect(totals.documentationStatus).toBe('incomplete');
+    expect(totals.documentedCents).toBe(50000n);
+    expect(totals.missingDocumentsCents).toBe(75000n);
+  });
+
+  it('mantém incompleta com recibo e comprovante de entrada se houver saldo a pagar', () => {
+    const totals = serviceTotals(service({
+      contractedAmount: '1250.00',
+      payments: [payment('p1', '500.00'), payment('p2', '750.00', 'planned')],
+      documents: [
+        document('recibo', 'receipt', null),
+        document('c1', 'payment_proof', '500.00'),
+      ],
+    }));
+    expect(totals.documentationStatus).toBe('incomplete');
+    expect(totals.documentedCents).toBe(50000n);
+  });
+
+  it('não considera recibo sem arquivo nem recibo isolado como documentação completa', () => {
+    const paymentRows = [payment('p1', '1250.00')];
+    const receipt = document('recibo', 'receipt', '1250.00');
+    const proof = document('comprovante', 'payment_proof', '1250.00');
+    const withoutFile = serviceTotals(service({
+      contractedAmount: '1250.00', payments: paymentRows,
+      documents: [{ ...receipt, storagePath: null }, proof],
+    }));
+    const receiptOnly = serviceTotals(service({
+      contractedAmount: '1250.00', payments: paymentRows, documents: [receipt],
+    }));
+    expect(withoutFile.documentationStatus).toBe('incomplete');
+    expect(withoutFile.documentedCents).toBe(0n);
+    expect(receiptOnly.documentationStatus).toBe('incomplete');
+    expect(receiptOnly.documentedCents).toBe(0n);
+  });
+
   it('não é completa se houver parcela agendada, mesmo com nota e prova', () => {
     const totals = serviceTotals(service({
       contractedAmount: '1000.00',

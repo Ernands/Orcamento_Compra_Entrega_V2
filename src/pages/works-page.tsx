@@ -1643,7 +1643,7 @@ export function WorksPage() {
                         <div>
                           <ReceiptText size={17} />
                           <strong>Orçamentos, notas e recibos</strong>
-                          <span>Um serviço pode possuir vários documentos e anexos.</span>
+                          <span>Completa com nota fiscal ou recibo, comprovantes de pagamento e quitação integral.</span>
                         </div>
                         {canManage && (
                           <button
