@@ -1,15 +1,12 @@
 import type { Store } from '../../domain/types';
 import type { ReimbursementFiscalDocument, ReimbursementLine } from '../../domain/finance-reimbursement';
-import type { FinancePaymentOrigin, FinancePaymentsView } from '../../domain/finance-payments';
+import type { FinancePaymentOrigin } from '../../domain/finance-payments';
 import { FINANCE_PAYMENT_ORIGIN_LABELS } from '../../domain/finance-payments';
 import { formatBRL } from '../../domain/supply-calculations';
 import type { buildStoreReimbursement } from '../../domain/finance-reimbursement';
 
 type ReimbursementReport = ReturnType<typeof buildStoreReimbursement>;
 
-const VIEW_LABEL: Record<FinancePaymentsView, string> = {
-  paid: 'Pago', planned: 'Programado', unscheduled: 'Sem programação',
-};
 const MONEY = 'R$ #,##0.00';
 const GREEN = 'FF1F6F5C';
 const WHITE = 'FFFFFFFF';
@@ -46,7 +43,7 @@ function currentStatus(line: ReimbursementLine, unavailable: Set<string>): strin
   return '';
 }
 
-/** Build an editable workbook using the uploaded model's original first eight columns. */
+/** Build an editable store reimbursement workbook with a store-first detail layout. */
 export async function createStoreReimbursementWorkbook(input: {
   store: Store;
   report: ReimbursementReport;
@@ -70,11 +67,11 @@ export async function createStoreReimbursementWorkbook(input: {
   sheet.getCell('A3').value = 'Detalhamento';
   sheet.getCell('A3').font = { bold: true, size: 12 };
   sheet.getRow(4).values = [
-    'Origem', 'Referência', 'Fornecedor / prestador', 'Item / serviço',
-    'Loja(s)', 'Valor', 'Nota/Recibo', 'N° Nota/Recibo',
-    'Situação', 'Parcela / lançamento', 'Arquivo(s) no ZIP', 'Pendência',
+    'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
+    'Item / serviço', 'Valor', 'Nota/Recibo', 'N° Nota/Recibo',
+    'Arquivo(s) no ZIP', 'Pendência',
   ];
-  sheet.columns = [19, 26, 31, 50, 27, 17, 18, 20, 22, 30, 45, 45]
+  sheet.columns = [27, 19, 26, 31, 50, 17, 18, 20, 45, 45]
     .map((width) => ({ width }));
   const header = sheet.getRow(4);
   header.height = 34;
@@ -89,10 +86,9 @@ export async function createStoreReimbursementWorkbook(input: {
     const names = line.documents.map((doc) => input.zipNames.get(`${doc.source}:${doc.id}`))
       .filter((name): name is string => Boolean(name)).join('; ');
     const row = sheet.addRow([
-      originLabel(line), refs, line.row.supplierName, line.row.description,
-      `${input.store.code} · ${input.store.name}`, Number(line.row.amountCents) / 100,
+      `${input.store.code} · ${input.store.name}`, originLabel(line), refs,
+      line.row.supplierName, line.row.description, Number(line.row.amountCents) / 100,
       fiscalLabel(line), [...new Set(line.documents.map((doc) => doc.number).filter(Boolean))].join(', ') || '—',
-      VIEW_LABEL[line.row.status], line.row.installmentLabel || line.row.id,
       names || '—', currentStatus(line, input.unavailable),
     ]);
     row.getCell(6).numFmt = MONEY;
@@ -100,13 +96,13 @@ export async function createStoreReimbursementWorkbook(input: {
     row.height = 30;
     if (i % 2) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F8F6' } }; });
     if (currentStatus(line, input.unavailable)) {
-      row.getCell(12).font = { bold: true, color: { argb: 'FF9B342B' } };
+      row.getCell(10).font = { bold: true, color: { argb: 'FF9B342B' } };
     }
   });
   const totalLine = sheet.addRow(['TOTAL SOLICITADO', '', '', '', '', Number(input.report.totals.commitmentCents) / 100]);
   totalLine.getCell(6).numFmt = MONEY;
   totalLine.font = { bold: true, color: { argb: GREEN } };
-  sheet.autoFilter = { from: 'A4', to: 'L4' };
+  sheet.autoFilter = { from: 'A4', to: 'J4' };
 
   const summary = workbook.addWorksheet('Resumo');
   summary.columns = [{ width: 37 }, { width: 27 }];
@@ -124,15 +120,15 @@ export async function createStoreReimbursementWorkbook(input: {
   summary.getRow(7).font = { bold: true, color: { argb: GREEN } };
 
   const pending = workbook.addWorksheet('Pendências Documentais');
-  pending.columns = [{ width: 26 }, { width: 29 }, { width: 45 }, { width: 19 }, { width: 45 }];
-  pending.addRow(['Referência', 'Parcela / lançamento', 'Pendência', 'Valor', 'Situação']);
+  pending.columns = [{ width: 27 }, { width: 26 }, { width: 45 }, { width: 19 }];
+  pending.addRow(['Loja(s)', 'Referência', 'Pendência', 'Valor']);
   pending.getRow(1).font = { bold: true, color: { argb: GREEN } };
   input.report.lines.forEach((line) => {
     const status = currentStatus(line, input.unavailable);
     if (!status) return;
     const row = pending.addRow([
-      line.row.referenceCodes.join(' + '), line.row.installmentLabel || line.row.id,
-      status, Number(line.row.amountCents) / 100, VIEW_LABEL[line.row.status],
+      `${input.store.code} · ${input.store.name}`, line.row.referenceCodes.join(' + '),
+      status, Number(line.row.amountCents) / 100,
     ]);
     row.getCell(4).numFmt = MONEY;
   });
