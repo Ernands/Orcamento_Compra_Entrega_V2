@@ -19,8 +19,10 @@ function fileSafe(value: string): string {
 
 /** Keep filenames readable in Windows/ZIP and preserve the requested reference separators. */
 function documentNamePart(value: string, maxLength: number): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g, ' ')
+  return [...value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')]
+    .map((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127 ? ' ' : character)
+    .join('')
+    .replace(/[\\\\/:*?"<>|]/g, ' ')
     .replace(/\s+/g, ' ').trim()
     .replace(/^[. ]+|[. ]+$/g, '')
     .slice(0, maxLength).trim() || 'Nao_informado';
@@ -33,7 +35,7 @@ function documentExtension(doc: ReimbursementFiscalDocument): string {
   const extension = [original, stored]
     .map((value) => value.match(/\.([a-zA-Z0-9]{1,10})$/)?.[1])
     .find((value) => Boolean(value));
-  return extension ? `.${extension!.toLowerCase()}` : '';
+  return extension ? `.${extension.toLowerCase()}` : '';
 }
 
 /** Plan one unique ZIP filename per attachment, using the worksheet's fiscal type, supplier and references. */
