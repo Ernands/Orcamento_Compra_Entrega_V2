@@ -137,8 +137,8 @@ export function groupReimbursementLinesByReference(lines: ReimbursementLine[]): 
     const origin = originLabel(line);
     if (!group.origins.includes(origin)) group.origins.push(origin);
     line.documents.forEach((doc) => {
-      if (!group!.documents.some((existing) => existing.source === doc.source && existing.id === doc.id)) {
-        group!.documents.push(doc);
+      if (!group.documents.some((existing) => existing.source === doc.source && existing.id === doc.id)) {
+        group.documents.push(doc);
       }
     });
   });
