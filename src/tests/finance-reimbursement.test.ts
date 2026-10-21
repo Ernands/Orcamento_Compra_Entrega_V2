@@ -80,4 +80,28 @@ describe('solicitação de reembolso por loja', () => {
     const workRow = { ...row('w', 'unscheduled', 100n), workServiceId: 'work-1', purchaseIds: [] };
     expect(fiscalStateForPayment(workRow, [], works, storeA)).toBe('present');
   });
+  it('mantém o valor e registra simultaneamente vínculo a conferir e falha de anexo no Excel', async () => {
+    const { createStoreReimbursementWorkbook } = await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const p = purchase([attachment('shared', 'invoice', [])]);
+    const report = buildStoreReimbursement([row('p1', 'paid', 12345n)], [p], [], storeA);
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report,
+      generatedAt: new Date('2026-10-20T12:00:00Z'),
+      zipNames: new Map(),
+      unavailable: new Set(['purchase:shared']),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes));
+    const sheet = workbook.getWorksheet('Solicitação de Reembolso');
+    expect(sheet?.getCell('B1').value).toBe(123.45);
+    expect(sheet?.getCell('F5').value).toBe(123.45);
+    expect(String(sheet?.getCell('L5').value)).toContain('Conferir vínculo');
+    expect(String(sheet?.getCell('L5').value)).toContain('falha ao obter anexo');
+    const pending = workbook.getWorksheet('Pendências Documentais');
+    expect(pending?.rowCount).toBe(2);
+    expect(String(pending?.getCell('C2').value)).toContain('falha ao obter anexo');
+  });
+
 });
