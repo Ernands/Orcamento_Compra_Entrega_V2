@@ -64,6 +64,7 @@ import {
   suggestedDeliveryDate,
 } from '../domain/purchase-v2-calculations';
 import { formatBRL, moneyToCents, quantityToThousandths } from '../domain/supply-calculations';
+import { uploadPurchaseDocumentsBatch } from '../domain/purchase-document-batch';
 import type {
   PaymentMethod,
   PurchaseDestinationV2,
@@ -2350,24 +2351,79 @@ function DocumentsModal({
   const [documentAmount, setDocumentAmount] = useState('');
   const [description, setDescription] = useState('');
   const [storeIds, setStoreIds] = useState<string[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<{
+    uploaded: number;
+    failed: Array<{ name: string; reason: string }>;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentContextRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (purchase) { const requestedOrderId = lockedPurchaseOrderId || initialPurchaseOrderId || ''; const order = purchase.orders.find((entry) => entry.id === requestedOrderId); setPurchaseOrderId(order?.id || ''); setDocumentNumber(''); setDocumentDate(''); setDocumentAmount(''); setDescription(''); setStoreIds(order ? [...new Set(order.lines.flatMap((line) => line.stores.map((store) => store.storeId)))] : []); setFile(null); setError(null); } }, [initialPurchaseOrderId, lockedPurchaseOrderId, purchase]);
+  useEffect(() => {
+    if (!purchase) {
+      documentContextRef.current = null;
+      return;
+    }
+    // Refreshing the same purchase must not lose files still pending after a partial upload.
+    const context = [purchase.id, lockedPurchaseOrderId || '', initialPurchaseOrderId || ''].join(':');
+    if (documentContextRef.current === context) return;
+    documentContextRef.current = context;
+    const requestedOrderId = lockedPurchaseOrderId || initialPurchaseOrderId || '';
+    const order = purchase.orders.find((entry) => entry.id === requestedOrderId);
+    setPurchaseOrderId(order?.id || '');
+    setDocumentNumber(''); setDocumentDate(''); setDocumentAmount(''); setDescription('');
+    setStoreIds(order ? [...new Set(order.lines.flatMap((line) => line.stores.map((store) => store.storeId)))] : []);
+    setFiles([]); setUploadProgress(null); setUploadSummary(null); setError(null);
+  }, [initialPurchaseOrderId, lockedPurchaseOrderId, purchase]);
   const toggleStore = (storeId: string) => setStoreIds((current) => current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId]);
   const upload = async () => {
-    if (!purchase || !file) return;
+    if (!purchase || !files.length || saving) return;
     if (!purchaseOrderId) { setError('Selecione a compra relacionada.'); return; }
-    const validation = validatePurchaseAttachmentV2(file);
-    if (validation) { setError(validation); return; }
-    setSaving(true); setError(null);
+    // A different invoice has its own fiscal number/date/amount. Do not stamp
+    // one invoice's values onto all 34 documents in a batch.
+    if (files.length > 1 && (documentNumber.trim() || documentDate || documentAmount.trim())) {
+      setError('Para enviar varios documentos, deixe Numero, Data e Valor em branco. Esses dados sao individuais de cada nota; preencha-os apenas no envio unitario.');
+      return;
+    }
+    const invalid = files.map((entry) => validatePurchaseAttachmentV2(entry)).find(Boolean);
+    if (invalid) { setError(invalid); return; }
+    setSaving(true); setError(null); setUploadSummary(null);
+    setUploadProgress({ processed: 0, total: files.length });
+    const pending = [...files];
     try {
-      await uploadPurchaseAttachmentV3({ purchaseId: purchase.id, purchaseOrderId: purchaseOrderId || null, file, description, documentType, documentNumber, documentDate, documentAmount, storeIds });
-      await onSaved();
-      setDocumentNumber(''); setDocumentDate(''); setDocumentAmount(''); setDescription(''); setStoreIds([]); setFile(null);
-    } catch (failure) { setError(errorMessage(failure, 'Nao foi possivel anexar o documento.')); }
-    finally { setSaving(false); }
+      const result = await uploadPurchaseDocumentsBatch(pending, (file) =>
+        uploadPurchaseAttachmentV3({
+          purchaseId: purchase.id, purchaseOrderId, file, description, documentType,
+          documentNumber, documentDate, documentAmount, storeIds,
+        }), (processed, total) => setUploadProgress({ processed, total }));
+
+      // Retry only unsuccessful uploads; each successful file is already registered.
+      setFiles(result.failed.map((entry) => entry.file));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploadSummary({
+        uploaded: result.uploaded.length,
+        failed: result.failed.map(({ file, reason }) => ({ name: file.name, reason })),
+      });
+      if (result.failed.length) {
+        setError(`${result.failed.length} de ${pending.length} arquivo(s) falharam. Corrija o problema e reenvie somente os pendentes; os demais nao serao duplicados.`);
+      }
+      if (result.uploaded.length) {
+        try { await onSaved(); } catch (failure) {
+          setError(`Documentos salvos, mas a listagem nao atualizou: ${errorMessage(failure, 'Atualize a pagina para conferir.')}`);
+        }
+      }
+      if (!result.failed.length) {
+        setDocumentNumber(''); setDocumentDate(''); setDocumentAmount('');
+        setDescription(''); setStoreIds([]);
+      }
+    } catch (failure) {
+      setError(errorMessage(failure, 'Nao foi possivel concluir o envio dos arquivos.'));
+    } finally {
+      setUploadProgress(null); setSaving(false);
+    }
   };
   const openPurchase = async (id: string, path: string) => { setOpeningId(id); try { window.open(await createPurchaseAttachmentSignedUrlV2(path), '_blank', 'noopener,noreferrer'); } catch { setError('Nao foi possivel abrir o documento.'); } finally { setOpeningId(null); } };
   const openQuote = async (id: string, path: string) => { setOpeningId(id); try { window.open(await createQuoteAttachmentSignedUrlReadOnlyV2(path), '_blank', 'noopener,noreferrer'); } catch { setError('Nao foi possivel abrir o documento da cotacao.'); } finally { setOpeningId(null); } };
@@ -2380,10 +2436,25 @@ function DocumentsModal({
         <label className="field">Numero do documento<input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></label>
         <label className="field">Data<input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} /></label>
         <label className="field">Valor<input value={documentAmount} onChange={(event) => setDocumentAmount(event.target.value)} /></label>
-        <label className="field">Arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+        <label className="field">Arquivos<input
+          ref={fileInputRef} type="file" multiple disabled={saving}
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx"
+          onChange={(event) => {
+            setFiles(Array.from(event.target.files || []));
+            setUploadSummary(null); setUploadProgress(null); setError(null);
+          }}
+        /><small>{files.length ? `${files.length} arquivo(s) pronto(s) para envio` : 'Nenhum arquivo selecionado'}</small></label>
       </div><label className="field">Descricao<input value={description} onChange={(event) => setDescription(event.target.value)} /></label>
       <div className="purchase-v2-store-scope"><span>Lojas relacionadas <small>Opcional; sem selecao = documento geral da compra.</small></span><div>{purchase.stores.map((store) => <label key={store.storeId}><input type="checkbox" checked={storeIds.includes(store.storeId)} onChange={() => toggleStore(store.storeId)} />{store.code} · {store.city}/{store.state}</label>)}</div></div>
-      <div className="modal-actions"><button type="button" className="button button--secondary" onClick={onClose}>Voltar</button><button type="button" className="button button--primary" disabled={!file || saving} onClick={() => void upload()}>{saving ? 'Enviando...' : 'Anexar documento'}</button></div></section>}
+      {files.length > 1 && <p className="purchase-v2-muted" role="note">Envio em lote: tipo, descricao e lojas selecionadas valem para todos os arquivos. Numero, Data e Valor precisam ficar vazios, pois cada nota tem seus proprios dados fiscais.</p>}
+      {uploadProgress && <p role="status" aria-live="polite">Enviando: {uploadProgress.processed} de {uploadProgress.total} arquivo(s) processado(s).</p>}
+      {uploadSummary && <div className="purchase-v2-upload-summary" role="status" aria-live="polite">
+        <strong>{uploadSummary.uploaded} arquivo(s) anexado(s) nesta tentativa; {uploadSummary.failed.length} com falha.</strong>
+        {uploadSummary.failed.length > 0 && <ul>{uploadSummary.failed.map((failure, index) =>
+          <li key={`${failure.name}:${index}`}><strong>{failure.name}</strong> — {failure.reason}</li>
+        )}</ul>}
+      </div>}
+      <div className="modal-actions"><button type="button" className="button button--secondary" disabled={saving} onClick={onClose}>Voltar</button><button type="button" className="button button--primary" disabled={!files.length || saving} onClick={() => void upload()}>{saving ? `Enviando ${uploadProgress?.processed || 0}/${uploadProgress?.total || files.length}...` : uploadSummary?.failed.length ? `Reenviar ${files.length} pendente(s)` : files.length > 1 ? `Anexar ${files.length} arquivos` : 'Anexar documento'}</button></div></section>}
       {error && <div className="form-error">{error}</div>}
       <section><h4>Arquivos desta compra</h4>{visibleAttachments.length ? <div className="quote-attachment-list">{visibleAttachments.map((attachment) => <article key={attachment.id}><FileText size={18}/><div><strong>{attachment.originalName}</strong><span>{DOCUMENT_LABELS[attachment.documentType]} · {purchaseOrderContextLabel(purchase, attachment.purchaseOrderId)}{attachment.documentNumber ? ` · ${attachment.documentNumber}` : ''}{attachment.stores.length ? ` · ${attachment.stores.map((store)=>store.code).join(', ')}` : ''}</span></div><span>{attachment.documentDate ? formatDate(attachment.documentDate) : new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span><button type="button" className="button button--secondary button--small" disabled={openingId===attachment.id} onClick={() => void openPurchase(attachment.id,attachment.storagePath)}>Abrir</button>{canEdit && <IconButton label={`Remover ${attachment.originalName}`} onClick={() => void remove(attachment.id)}><XCircle size={16}/></IconButton>}</article>)}</div> : <EmptyState title="Nenhum arquivo nesta compra" detail="Notas, recibos, comprovantes e ordens de compra aparecerao aqui." />}</section>
       {!lockedPurchaseOrderId && <section><h4>Documentos da Cotacao · somente leitura</h4>{purchase.quoteAttachments.length ? <div className="quote-attachment-list">{purchase.quoteAttachments.map((attachment) => <article key={attachment.id}><FileText size={18}/><div><strong>{attachment.originalName}</strong><span>{QUOTE_DOCUMENT_LABELS[attachment.documentType] || attachment.documentType} · origem {purchase.quoteCode}</span></div><span>{new Intl.DateTimeFormat('pt-BR').format(new Date(attachment.createdAt))}</span><button type="button" className="button button--secondary button--small" disabled={openingId===attachment.id} onClick={() => void openQuote(attachment.id,attachment.storagePath)}>Abrir</button></article>)}</div> : <EmptyState title="Sem documentos na cotacao" detail="Nenhum arquivo de origem esta disponivel para esta compra." />}</section>}
