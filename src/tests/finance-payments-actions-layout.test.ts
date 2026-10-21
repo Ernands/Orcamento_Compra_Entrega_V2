@@ -3,14 +3,20 @@ import page from '../pages/finance-payments-page.tsx?raw';
 import styles from '../pages/finance-payments-page.css?raw';
 import occurrences from '../components/finance-payment-occurrences.tsx?raw';
 
-describe('layout da coluna de ações de Pagamentos', () => {
-  it('define largura estável e texto sem quebra para as ações', () => {
-    expect(page).toContain('className="finance-payments-actions-cell"');
-    expect(page).toContain('className="finance-payments-actions-heading"');
-    expect(styles).toContain('min-width: 164px');
-    expect(styles).toContain('.finance-payment-actions {');
-    expect(styles).toContain('grid-template-columns: minmax(0, 1fr)');
-    expect(styles).toContain('white-space: nowrap');
+describe('layout compacto das ações de Pagamentos', () => {
+  it('mostra ações e status abaixo dos dados, sem coluna lateral e sem rolagem no desktop', () => {
+    expect(page).toContain('className="finance-payment-meta-row"');
+    expect(page).toContain('className="finance-payment-meta-bar"');
+    expect(page).toContain('className="finance-payment-meta-status"');
+    expect(page).toContain('<td colSpan={7}>');
+    expect(page).not.toContain('className="finance-payments-actions-cell"');
+    expect(page).not.toContain('className="finance-payments-actions-heading"');
+    expect(styles).toContain('table-layout: fixed');
+    expect(styles).toContain('.finance-payment-meta-bar .finance-payment-actions {');
+    expect(styles).toContain('justify-content: flex-end');
+    expect(styles).toContain('flex-wrap: wrap');
+    expect(styles).toContain('@media (max-width: 980px)');
+    expect(styles).not.toContain('min-width: 1350px');
     expect(styles).toContain(':focus-visible');
   });
 
@@ -36,6 +42,6 @@ describe('layout da coluna de ações de Pagamentos', () => {
   it('elimina os estilos de links dispersos da versão anterior', () => {
     expect(styles).not.toContain('.finance-payment-origin-link {');
     expect(styles).not.toContain('.finance-payment-document-link {');
-    expect(styles).not.toContain('.finance-payment-actions {\n  display: flex;');
+    expect(styles).toContain('.finance-payment-meta-bar .finance-payment-actions {');
   });
 });
