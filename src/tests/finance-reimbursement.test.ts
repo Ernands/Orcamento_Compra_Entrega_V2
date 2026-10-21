@@ -106,7 +106,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(sheet?.getCell('F5').value).toBe(123.45);
     expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('Conferir vínculo'));
     expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
-    expect(sheet?.autoFilter).toEqual({ from: 'A4', to: 'J4' });
+    expect(sheet?.autoFilter).toBe('A4:J4');
     const pending = workbook.getWorksheet('Pendências Documentais');
     expect(pending?.rowCount).toBe(2);
     expect(pending?.getRow(1).values).toEqual([
