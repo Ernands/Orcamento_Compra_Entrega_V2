@@ -38,10 +38,11 @@ function fiscalLabel(line: ReimbursementLine): string {
 
 function currentStatus(line: ReimbursementLine, unavailable: Set<string>): string {
   if (!line.documents.length) return 'Sem nota ou recibo';
-  if (line.fiscalState === 'review') return 'Conferir vínculo da nota/recibo à loja';
-  if (line.documents.some((doc) => unavailable.has(`${doc.source}:${doc.id}`))) {
-    return 'Falha ao obter arquivo; verificar anexo';
-  }
+  const needsReview = line.fiscalState === 'review';
+  const downloadFailed = line.documents.some((doc) => unavailable.has(`${doc.source}:${doc.id}`));
+  if (needsReview && downloadFailed) return 'Conferir vínculo à loja; falha ao obter anexo';
+  if (needsReview) return 'Conferir vínculo da nota/recibo à loja';
+  if (downloadFailed) return 'Falha ao obter arquivo; verificar anexo';
   return '';
 }
 
@@ -191,6 +192,7 @@ export async function downloadStoreReimbursementZip(input: {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(href);
+  // Keep the blob alive while the browser starts processing the download.
+  setTimeout(() => URL.revokeObjectURL(href), 60_000);
   return { failed: unavailable.size, missing, review };
 }
