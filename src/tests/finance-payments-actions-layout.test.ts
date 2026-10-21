@@ -31,8 +31,8 @@ describe('layout compacto das ações de Pagamentos', () => {
   });
 
   it('delimita cada lançamento com espaçamento e bordas leves, inclusive em telas menores', () => {
-    expect(page).toContain('<tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>');
-    expect(page).toContain('<tr className={`finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>');
+    expect(page).toContain("finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}");
+    expect(page).toContain("finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}");
     expect(styles).toContain('border-top: 8px solid #f0f4f1');
     expect(styles).toContain('border-left: 1px solid #dce6df');
     expect(styles).toContain('font-size: 0.85rem');
