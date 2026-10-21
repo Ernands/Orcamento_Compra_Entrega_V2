@@ -734,12 +734,12 @@ export function FinancePaymentsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((row) => {
+                    {filteredRows.map((row, index) => {
                       const origin = rowOriginLabel(row);
                       const store = `${rowStoreLabel(row)} · ${row.states.join(', ') || 'UF não informada'}`;
                       return (
                         <Fragment key={row.id}>
-                          <tr className="finance-payment-info-row">
+                          <tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>
                           {view === 'unscheduled' ? (
                             <>
                               <td data-label="Origem"><strong>{origin}</strong></td>
@@ -786,7 +786,7 @@ export function FinancePaymentsPage() {
                           )}
                           <td data-label="Valor" className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
                         </tr>
-                        <tr className="finance-payment-meta-row">
+                        <tr className={`finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>
                           <td colSpan={7}>
                             <div className="finance-payment-meta-bar">
                               <div className="finance-payment-meta-status">
