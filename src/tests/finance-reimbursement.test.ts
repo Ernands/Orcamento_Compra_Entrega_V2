@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildStoreReimbursement, fiscalStateForPayment } from '../domain/finance-reimbursement';
+import { buildStoreReimbursement, fiscalStateForPayment, reimbursementEligibleStoreIds } from '../domain/finance-reimbursement';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { WorkService } from '../domain/works-types';
@@ -33,6 +33,28 @@ const attachment = (id: string, type: string, stores: unknown[] = [{ storeId: st
   documentNumber: id, storagePath: 'compras/' + id + '.pdf', stores,
 });
 describe('solicitação de reembolso por loja', () => {
+  it('disponibiliza todas as lojas com valores atribuídos, não apenas as três do piloto', () => {
+    const first = row('p1', 'paid', 10000n);
+    const onlyStoreA = {
+      ...row('p2', 'planned', 20000n),
+      storeAllocations: [first.storeAllocations[0]],
+      unallocatedCents: 20000n,
+    };
+    const storeC = 'store-c';
+    const third = {
+      ...row('p3', 'unscheduled', 30000n),
+      storeIds: [storeC], storeCodes: ['LOJ-027'],
+      storeAllocations: [{
+        storeId: storeC, storeCode: 'LOJ-027', state: 'MG',
+        amountCents: 30000n, originAllocations: orig(30000n),
+      }],
+    };
+    expect([...reimbursementEligibleStoreIds([first, onlyStoreA, third])].sort()).toEqual([
+      storeA, storeB, storeC,
+    ]);
+    expect([...reimbursementEligibleStoreIds([onlyStoreA])]).toEqual([storeA]);
+    expect([...reimbursementEligibleStoreIds([{ ...onlyStoreA, storeAllocations: [] }])]).toEqual([]);
+  });
   it('soma pago, programado e sem programação, limitado ao rateio da loja', () => {
     const p = purchase([attachment('nf1', 'invoice')]);
     const report = buildStoreReimbursement([
