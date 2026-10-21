@@ -377,8 +377,20 @@
 .finance-payments-table thead th:nth-child(6) { width: 18%; }
 .finance-payments-table thead th:nth-child(7) { width: 12%; }
 
+.finance-payments-table .finance-payment-info-row,
+.finance-payments-table .finance-payment-meta-row {
+  --finance-payment-card-bg: #fff;
+  --finance-payment-footer-bg: #f8faf9;
+}
+
+/* Alternating color follows the payment record, not the two individual table rows. */
+.finance-payments-table .finance-payment-entry--striped {
+  --finance-payment-card-bg: #edf6f1;
+  --finance-payment-footer-bg: #e6f1eb;
+}
+
 .finance-payments-table .finance-payment-info-row > td {
-  background: #fff;
+  background: var(--finance-payment-card-bg);
   border-top: 8px solid #f0f4f1;
   border-bottom: 0;
   padding: 11px 11px 7px;
@@ -407,7 +419,7 @@
 .finance-payments-table .finance-payment-meta-row > td {
   max-width: none;
   padding: 6px 11px 9px;
-  background: #f8faf9;
+  background: var(--finance-payment-footer-bg);
   border-left: 1px solid #dce6df;
   border-right: 1px solid #dce6df;
   border-bottom: 8px solid #f0f4f1;
@@ -507,7 +519,7 @@
     gap: 10px 16px;
     margin: 8px 9px 0;
     padding: 12px 12px 6px;
-    background: #fff;
+    background: var(--finance-payment-card-bg);
     border: 1px solid #dce6df;
     border-bottom: 0;
     border-radius: 9px 9px 0 0;
@@ -541,7 +553,7 @@
   .finance-payments-table .finance-payment-meta-row > td {
     padding: 8px 12px 10px;
     margin: 0 9px 8px;
-    background: #f8faf9;
+    background: var(--finance-payment-footer-bg);
     border: 1px solid #dce6df;
     border-top: 0;
     border-radius: 0 0 9px 9px;
