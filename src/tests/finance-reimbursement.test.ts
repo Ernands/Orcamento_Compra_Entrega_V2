@@ -97,11 +97,11 @@ describe('solicitação de reembolso por loja', () => {
     const sheet = workbook.getWorksheet('Solicitação de Reembolso');
     expect(sheet?.getCell('B1').value).toBe(123.45);
     expect(sheet?.getCell('F5').value).toBe(123.45);
-    expect(String(sheet?.getCell('L5').value)).toContain('Conferir vínculo');
-    expect(String(sheet?.getCell('L5').value)).toContain('falha ao obter anexo');
+    expect(sheet?.getCell('L5').value).toEqual(expect.stringContaining('Conferir vínculo'));
+    expect(sheet?.getCell('L5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
     const pending = workbook.getWorksheet('Pendências Documentais');
     expect(pending?.rowCount).toBe(2);
-    expect(String(pending?.getCell('C2').value)).toContain('falha ao obter anexo');
+    expect(pending?.getCell('C2').value).toEqual(expect.stringContaining('falha ao obter anexo'));
   });
 
 });
