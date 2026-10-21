@@ -14,7 +14,7 @@ import {
   Scale,
   WalletCards,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import {
@@ -731,48 +731,47 @@ export function FinancePaymentsPage() {
                       <th>{view === 'unscheduled' ? 'Vencimento' : 'Forma'}</th>
                       <th>{view === 'unscheduled' ? 'Forma' : 'Identificação / parcela'}</th>
                       <th>Valor</th>
-                      <th>Nota/Recibo</th>
-                      <th className="finance-payments-actions-heading">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((row) => {
+                    {filteredRows.map((row, index) => {
                       const origin = rowOriginLabel(row);
                       const store = `${rowStoreLabel(row)} · ${row.states.join(', ') || 'UF não informada'}`;
                       return (
-                        <tr key={row.id}>
+                        <Fragment key={row.id}>
+                          <tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>
                           {view === 'unscheduled' ? (
                             <>
-                              <td><strong>{origin}</strong></td>
-                              <td>
+                              <td data-label="Origem"><strong>{origin}</strong></td>
+                              <td data-label="Referência">
                                 <strong>{referenceLabel(row)}</strong>
                                 <small>{row.description}</small>
                               </td>
-                              <td><strong>{row.supplierName}</strong></td>
-                              <td><strong>{store}</strong></td>
-                              <td><span className="finance-payment-missing">Não informado</span></td>
-                              <td><span className="finance-payment-missing">Não informada</span></td>
+                              <td data-label="Fornecedor / prestador"><strong>{row.supplierName}</strong></td>
+                              <td data-label="Loja / UF"><strong>{store}</strong></td>
+                              <td data-label="Vencimento"><span className="finance-payment-missing">Não informado</span></td>
+                              <td data-label="Forma"><span className="finance-payment-missing">Não informada</span></td>
                             </>
                           ) : (
                             <>
-                              <td>
+                              <td data-label={view === 'paid' ? 'Data pagamento' : 'Vencimento'}>
                                 {view === 'paid'
                                   ? <FinancePaymentDatesCell row={row} />
                                   : <strong>{formatDate(row.date)}</strong>}
                               </td>
-                              <td><strong>{origin}</strong></td>
-                              <td>
+                              <td data-label="Origem"><strong>{origin}</strong></td>
+                              <td data-label="Referência">
                                 <strong>{referenceLabel(row)}</strong>
                                 <small>{row.description}</small>
                               </td>
-                              <td>
+                              <td data-label="Fornecedor / prestador">
                                 <strong>{row.supplierName}</strong>
                                 <small>{store}</small>
                               </td>
-                              <td>
+                              <td data-label="Forma">
                                 <strong>{row.paymentMethod ? PAYMENT_LABELS[row.paymentMethod] || row.paymentMethod : '—'}</strong>
                               </td>
-                              <td>
+                              <td data-label="Identificação / parcela">
                                 <strong>{row.sourceLabel || row.installmentLabel}</strong>
                                 {row.sourceLabel && row.installmentLabel !== row.sourceLabel && (
                                   <small>{row.installmentLabel}</small>
@@ -785,9 +784,14 @@ export function FinancePaymentsPage() {
                               </td>
                             </>
                           )}
-                          <td className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
-                          <td>
-                            {(() => {
+                          <td data-label="Valor" className="finance-payments-money"><strong>{formatBRL(row.amountCents)}</strong></td>
+                        </tr>
+                        <tr className={`finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>
+                          <td colSpan={7}>
+                            <div className="finance-payment-meta-bar">
+                              <div className="finance-payment-meta-status">
+                                <span className="finance-payment-meta-label">Nota/Recibo</span>
+                                {(() => {
                               const fiscal = fiscalStateForPayment(
                                 row, purchases, works,
                                 row.storeIds.length === 1 ? row.storeIds[0] : undefined,
@@ -798,9 +802,8 @@ export function FinancePaymentsPage() {
                                 </span>
                               );
                             })()}
-                          </td>
-                          <td className="finance-payments-actions-cell">
-                            <div className="finance-payment-actions">
+                              </div>
+                              <div className="finance-payment-actions">
                               {view === 'planned' && canManageFinance && (
                                 <button
                                   type="button"
@@ -846,8 +849,10 @@ export function FinancePaymentsPage() {
                                 <span>Ver anexos</span>
                               </button>
                             </div>
+                            </div>
                           </td>
                         </tr>
+                        </Fragment>
                       );
                     })}
                   </tbody>
