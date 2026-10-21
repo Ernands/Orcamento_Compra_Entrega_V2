@@ -381,6 +381,7 @@
 }
 
 .finance-payments-table .finance-payment-meta-row > td {
+  max-width: none;
   padding: 6px 10px 10px;
   background: #f9fcfa;
   border-bottom: 1px solid var(--line);
