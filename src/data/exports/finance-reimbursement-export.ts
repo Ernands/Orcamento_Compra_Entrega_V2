@@ -17,6 +17,54 @@ function fileSafe(value: string): string {
     .replace(/^[_.]+|[_.]+$/g, '').slice(0, 85) || 'Documento';
 }
 
+/** Keep filenames readable in Windows/ZIP and preserve the requested reference separators. */
+function documentNamePart(value: string, maxLength: number): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+    .replace(/^[. ]+|[. ]+$/g, '')
+    .slice(0, maxLength).trim() || 'Nao_informado';
+}
+
+function documentExtension(doc: ReimbursementFiscalDocument): string {
+  // Prefer the extension of the original uploaded filename; then its storage path.
+  const original = doc.name.split(/[\\/]/).pop() || '';
+  const stored = doc.storagePath.split(/[?#]/, 1)[0].split('/').pop() || '';
+  const extension = [original, stored]
+    .map((value) => value.match(/\.([a-zA-Z0-9]{1,10})$/)?.[1])
+    .find((value) => Boolean(value));
+  return extension ? `.${extension!.toLowerCase()}` : '';
+}
+
+/** Plan one unique ZIP filename per attachment, using the worksheet's fiscal type, supplier and references. */
+export function planReimbursementZipFileNames(report: ReimbursementReport): Map<string, string> {
+  const names = new Map<string, string>();
+  const reserved = new Set<string>();
+
+  report.documents.forEach((doc) => {
+    const key = `${doc.source}:${doc.id}`;
+    const linked = report.lines.filter((line) =>
+      line.documents.some((entry) => entry.source === doc.source && entry.id === doc.id));
+    const suppliers = [...new Set(linked.map((line) => line.row.supplierName).filter(Boolean))];
+    const references = [...new Set(linked.flatMap((line) => line.row.referenceCodes).filter(Boolean))];
+    const type = doc.type === 'invoice' ? 'Nota' : 'Recibo';
+    const supplier = documentNamePart(suppliers.join(' + ') || 'Fornecedor', 55);
+    const reference = documentNamePart(references.join(' + ') || 'Sem referencia', 100);
+    const base = `${type}_${supplier}_${reference}`.slice(0, 175).trim().replace(/[. ]+$/g, '');
+    const extension = documentExtension(doc);
+    let file = `${base}${extension}`;
+    let suffix = 1;
+    while (reserved.has(file.toLowerCase())) {
+      file = `${base}_${suffix}${extension}`;
+      suffix += 1;
+    }
+    reserved.add(file.toLowerCase());
+    names.set(key, `Notas_e_Recibos/${file}`);
+  });
+
+  return names;
+}
+
 function originLabel(line: ReimbursementLine): string {
   const origins = (Object.keys(line.row.originAllocations) as FinancePaymentOrigin[])
     .filter((key) => line.row.originAllocations[key] > 0n);
@@ -146,6 +194,7 @@ export async function downloadStoreReimbursementZip(input: {
   const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   const zipNames = new Map<string, string>();
+  const plannedNames = planReimbursementZipFileNames(input.report);
   const unavailable = new Set<string>();
 
   // Download once per unique attachment; failed files remain visible as pending in Excel.
@@ -155,7 +204,8 @@ export async function downloadStoreReimbursementZip(input: {
       const url = await input.getSignedUrl(doc);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const filename = `Notas_e_Recibos/${doc.source}_${fileSafe(doc.id)}_${fileSafe(doc.name)}`;
+      const filename = plannedNames.get(key);
+      if (!filename) throw new Error('Documento sem nome de exportação.');
       zip.file(filename, await response.arrayBuffer());
       zipNames.set(key, filename);
     } catch {
