@@ -31,14 +31,25 @@ describe('layout compacto das ações de Pagamentos', () => {
   });
 
   it('delimita cada lançamento com espaçamento e bordas leves, inclusive em telas menores', () => {
-    expect(page).toContain('<tr className="finance-payment-info-row">');
-    expect(page).toContain('<tr className="finance-payment-meta-row">');
+    expect(page).toContain('<tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>');
+    expect(page).toContain('<tr className={`finance-payment-meta-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>');
     expect(styles).toContain('border-top: 8px solid #f0f4f1');
     expect(styles).toContain('border-left: 1px solid #dce6df');
     expect(styles).toContain('font-size: 0.85rem');
     expect(styles).toContain('border-radius: 9px 9px 0 0');
     expect(styles).toContain('border-radius: 0 0 9px 9px');
     expect(styles).toContain('@media (max-width: 520px)');
+  });
+
+  it('alterna branco e verde suave por lançamento inteiro, inclusive sua faixa de ações', () => {
+    expect(page).toContain('filteredRows.map((row, index)');
+    expect((page.match(/index % 2 === 1 \? 'finance-payment-entry--striped'/g) || []).length).toBe(2);
+    expect(styles).toContain('.finance-payments-table .finance-payment-entry--striped {');
+    expect(styles).toContain('--finance-payment-card-bg: #edf6f1');
+    expect(styles).toContain('--finance-payment-footer-bg: #e6f1eb');
+    expect(styles).toContain('background: var(--finance-payment-card-bg)');
+    expect(styles).toContain('background: var(--finance-payment-footer-bg)');
+    expect(styles).toContain('@media (max-width: 980px)');
   });
 
   it('mantém links, permissões e callbacks existentes', () => {
