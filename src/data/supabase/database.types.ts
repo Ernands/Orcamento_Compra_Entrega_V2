@@ -16,6 +16,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      store_financial_closures: {
+        Row: {
+          store_id: string
+          state: string
+          closed_at: string | null
+          closed_by: string | null
+          closed_by_name: string | null
+          reopened_at: string | null
+          reopened_by: string | null
+          reopened_by_name: string | null
+          reopen_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          store_id: string
+          state?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_by_name?: string | null
+          reopened_at?: string | null
+          reopened_by?: string | null
+          reopened_by_name?: string | null
+          reopen_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          store_id?: string
+          state?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_by_name?: string | null
+          reopened_at?: string | null
+          reopened_by?: string | null
+          reopened_by_name?: string | null
+          reopen_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      store_financial_closure_events: {
+        Row: {
+          id: string
+          store_id: string
+          event: string
+          actor_usuario_id: string | null
+          actor_name: string | null
+          occurred_at: string
+          reason: string | null
+          details: Json
+        }
+        Insert: {
+          id?: string
+          store_id: string
+          event: string
+          actor_usuario_id?: string | null
+          actor_name?: string | null
+          occurred_at?: string
+          reason?: string | null
+          details?: Json
+        }
+        Update: {
+          id?: string
+          store_id?: string
+          event?: string
+          actor_usuario_id?: string | null
+          actor_name?: string | null
+          occurred_at?: string
+          reason?: string | null
+          details?: Json
+        }
+        Relationships: []
+      }
       acoes: {
         Row: {
           chave: string
@@ -3381,6 +3453,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      change_store_financial_closure: {
+        Args: { p_store_id: string; p_action: string; p_confirm_text: string; p_reason?: string | null }
+        Returns: Json
+      }
       admin_create_user_record: {
         Args: {
           p_actor_auth_user_id: string
