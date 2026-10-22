@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceOverviewExcel,
@@ -541,6 +542,7 @@ export function FinancePage() {
   const [month] = useState(currentMonth);
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
+  const [closureFilter, setClosureFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [query, setQuery] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [overviewExporting, setOverviewExporting] = useState<'pdf' | 'excel' | null>(null);
@@ -639,9 +641,10 @@ export function FinancePage() {
         visibleStores
           .filter((store) => !stateFilter || store.state === stateFilter)
           .filter((store) => !storeFilter || store.id === storeFilter)
+          .filter((store) => closureFilter === 'all' || store.financialClosure?.state === closureFilter)
           .map((store) => store.id),
       ),
-    [stateFilter, storeFilter, visibleStores],
+    [closureFilter, stateFilter, storeFilter, visibleStores],
   );
 
   const filteredOverview = useMemo(
@@ -989,6 +992,15 @@ export function FinancePage() {
               ))}
           </select>
         </label>
+        <label className="finance-store-close-filter">
+          Status da loja
+          <select aria-label="Status da loja" value={closureFilter}
+            onChange={(e) => setClosureFilter(e.target.value as 'all' | 'open' | 'closed')}>
+            <option value="all">Todas</option>
+            <option value="open">Em andamento</option>
+            <option value="closed">Finalizadas</option>
+          </select>
+        </label>
       </section>
 
       <div className="finance-tabs" role="tablist" aria-label="Visoes do Financeiro">
@@ -1107,6 +1119,9 @@ export function FinancePage() {
                             <strong>{row.code}</strong>
                             <span>{row.name}</span>
                             <small>{row.city}/{row.state}</small>
+                             {stores.find((item) => item.id === row.storeId)?.financialClosure?.state === 'closed' && (
+                               <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>
+                             )}
                             {canStoreDetail && (
                               <Link
                                 to={`/financeiro/lojas/${row.storeId}`}
@@ -1227,6 +1242,9 @@ export function FinancePage() {
                           <div className="finance-store-identity">
                             <span>{store.code}</span>
                             <strong>{store.name}</strong>
+                             {stores.find((item) => item.id === store.storeId)?.financialClosure?.state === 'closed' && (
+                               <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>
+                             )}
                             <small>
                               {store.city}/{store.state}
                             </small>
