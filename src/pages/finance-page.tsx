@@ -534,6 +534,7 @@ export function FinancePage() {
   const [plannedBudgetItems, setPlannedBudgetItems] = useState<PlannedBudgetItem[]>([]);
   const [reimbursements, setReimbursements] = useState<FinanceReimbursement[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const closureByStoreId = useMemo(() => new Map(stores.map((store) => [store.id, store.financialClosure?.state])), [stores]);
   const [works, setWorks] = useState<WorkService[]>([]);
   const [budgets, setBudgets] = useState<FinanceStoreBudget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1119,7 +1120,7 @@ export function FinancePage() {
                             <strong>{row.code}</strong>
                             <span>{row.name}</span>
                             <small>{row.city}/{row.state}</small>
-                             {stores.find((item) => item.id === row.storeId)?.financialClosure?.state === 'closed' && (
+                             {closureByStoreId.get(row.storeId) === 'closed' && (
                                <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>
                              )}
                             {canStoreDetail && (
@@ -1242,7 +1243,7 @@ export function FinancePage() {
                           <div className="finance-store-identity">
                             <span>{store.code}</span>
                             <strong>{store.name}</strong>
-                             {stores.find((item) => item.id === store.storeId)?.financialClosure?.state === 'closed' && (
+                             {closureByStoreId.get(store.storeId) === 'closed' && (
                                <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>
                              )}
                             <small>
