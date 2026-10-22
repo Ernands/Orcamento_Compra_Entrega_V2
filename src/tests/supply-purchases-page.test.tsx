@@ -17,6 +17,12 @@ import type { PurchaseItemV2, PurchaseOrderLineV2, PurchaseV2 } from '../domain/
 import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
+vi.mock('../data/stores/store-financial-closure-repository', () => ({
+  listStoreFinancialClosures: vi.fn(async (ids: string[]) =>
+    new Map(ids.map((id) => [id, { storeId: id, state: 'open' }])),
+  ),
+}));
+
 vi.mock('../data/purchases/purchases-v2-repository', async () => {
   const actual = await vi.importActual('../data/purchases/purchases-v2-repository');
   return {
