@@ -153,7 +153,7 @@ BEGIN
    'supply_purchase_orders','supply_purchase_order_items','supply_purchase_order_line_stores',
    'supply_purchase_payments','supply_purchase_payment_occurrences',
    'works_services','works_service_payments','works_service_components',
-   'finance_reimbursements','finance_reimbursement_items',
+   'finance_reimbursement_items',
    'finance_store_budgets'
  ] LOOP
    EXECUTE format('CREATE TRIGGER %I BEFORE INSERT OR UPDATE OR DELETE ON public.%I
@@ -161,6 +161,27 @@ BEGIN
     'financial_lock_'||tbl,tbl);
  END LOOP;
 END; $$;
+
+
+-- Existing reimbursement metadata (bank protocol/status/decision) remains editable,
+-- even after closure. Changing its owner store or deleting its history is forbidden.
+CREATE FUNCTION private.guard_reimbursement_reference_change() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $
+BEGIN
+ IF TG_OP='DELETE' THEN
+   PERFORM private.assert_store_financially_open(OLD.store_id);
+   RETURN OLD;
+ END IF;
+ IF OLD.store_id IS DISTINCT FROM NEW.store_id THEN
+   PERFORM private.assert_store_financially_open(OLD.store_id);
+   PERFORM private.assert_store_financially_open(NEW.store_id);
+ END IF;
+ RETURN NEW;
+END; $;
+CREATE TRIGGER financial_reimbursement_protect_reference
+ BEFORE UPDATE OR DELETE ON public.finance_reimbursements
+ FOR EACH ROW EXECUTE FUNCTION private.guard_reimbursement_reference_change();
 
 -- Documents may be appended while closed. Removal/modification of historical
 -- documents is blocked to prevent replacing an invoice or altering its fiscal value.
