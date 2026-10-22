@@ -29,6 +29,7 @@ import {
   downloadFinanceAccountReconciliationExcel,
   downloadFinanceAccountReconciliationPdf,
 } from '../data/exports/finance-account-reconciliation-exports';
+import { exportErrorMessage } from '../data/exports/export-errors';
 import { listSupplyPurchasePaymentOccurrencesV2 } from '../data/purchases/payment-occurrences-repository';
 import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listStores } from '../data/stores/stores-repository';
@@ -439,7 +440,7 @@ export function FinanceAccountReconciliationPage() {
       if (type === 'excel') await downloadFinanceAccountReconciliationExcel(input);
       else await downloadFinanceAccountReconciliationPdf(input);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : 'Não foi possível gerar o relatório.');
+      setError(exportErrorMessage(exportError, 'Não foi possível gerar o relatório.'));
     } finally {
       setExporting(null);
     }

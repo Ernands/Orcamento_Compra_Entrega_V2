@@ -4,6 +4,7 @@ import {
   downloadFinancePaymentsExcel,
   downloadFinancePaymentsPdf,
 } from '../data/exports/finance-payments-exports';
+import { exportErrorMessage } from '../data/exports/export-errors';
 import type { FinancePaymentEvent } from '../domain/finance-types';
 import type { Store } from '../domain/types';
 
@@ -61,11 +62,7 @@ export function FinancePaymentsExportActions({
       if (format === 'pdf') await downloadFinancePaymentsPdf(input);
       else await downloadFinancePaymentsExcel(input);
     } catch (error) {
-      onError(
-        error instanceof Error && error.message
-          ? error.message
-          : 'Não foi possível gerar a exportação de Pagamentos.',
-      );
+      onError(exportErrorMessage(error, 'Não foi possível gerar a exportação de Pagamentos.'));
     } finally {
       setExporting(null);
     }
