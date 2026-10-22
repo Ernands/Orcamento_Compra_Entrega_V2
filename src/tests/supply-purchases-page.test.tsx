@@ -18,8 +18,8 @@ import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
 vi.mock('../data/stores/store-financial-closure-repository', () => ({
-  listStoreFinancialClosures: vi.fn(async (ids: string[]) =>
-    new Map(ids.map((id) => [id, { storeId: id, state: 'open' }])),
+  listStoreFinancialClosures: vi.fn((ids: string[]) =>
+    Promise.resolve(new Map(ids.map((id) => [id, { storeId: id, state: 'open' }]))),
   ),
 }));
 
