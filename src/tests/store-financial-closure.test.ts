@@ -12,7 +12,7 @@ describe('fechamento financeiro por loja (migração isolada em DEV)', () => {
     expect(migration).toContain('CREATE TABLE public.store_financial_closures');
     expect(migration).toContain("CHECK(state IN ('open','closed'))");
     expect(migration).not.toContain('ALTER TABLE public.lojas ADD COLUMN status');
-    expect(repository).toContain("state: 'unavailable'");
+    expect(repository).toContain("base(id, 'unavailable')");
   });
   it('usa RPC com permissao verificavel e confirmacao de duas etapas', () => {
     expect(migration).toContain("'stores','finalize_reopen'");
