@@ -808,7 +808,7 @@ export function FinancePaymentsPage() {
                             })()}
                               </div>
                               <div className="finance-payment-actions">
-                              {view === 'planned' && canManageFinance && (
+                              {view === 'planned' && canManageFinance && !belongsToClosedStore && (
                                 <button
                                   type="button"
                                   className="finance-payment-action finance-payment-action--edit"
