@@ -1,4 +1,4 @@
-import { ArrowRight, MapPin, Plus, Search, Store as StoreIcon, UserRound } from 'lucide-react';
+import { ArrowRight, LockKeyhole, MapPin, Plus, Search, Store as StoreIcon, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
@@ -6,6 +6,7 @@ import { StoreFormModal } from '../components/store-form-modal';
 import { createStore, listResponsibleUsers, listStores } from '../data/stores/stores-repository';
 import type { ResponsibleUser, Store } from '../domain/types';
 import { useSession } from '../app/session-provider';
+import '../styles/store-financial-close.css';
 
 export function StoresPage() {
   const [stores, setStores] = useState<Store[]>([]);
@@ -116,6 +117,10 @@ export function StoresPage() {
                 <span>{store.responsibleName || 'Nao definido'}</span>
               </div>
               <StatusBadge status={store.status} />
+              <span className={`store-close-badge ${store.financialClosure?.state === 'closed' ? 'store-close-badge--closed' : ''}`}>
+                {store.financialClosure?.state === 'closed' && <LockKeyhole size={14} />}
+                {store.financialClosure?.state === 'closed' ? 'Finalizada' : store.financialClosure?.state === 'unavailable' ? 'Indisponivel' : 'Em andamento'}
+              </span>
               <Link
                 className="icon-button"
                 to={`/lojas/${store.id}/implantacao`}
