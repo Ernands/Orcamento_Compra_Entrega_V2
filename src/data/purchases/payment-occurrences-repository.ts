@@ -75,15 +75,67 @@ export async function listSupplyPurchasePaymentOccurrencesV2(): Promise<Purchase
   }));
 }
 
+export function sanitizeOccurrenceAttachmentReferences(
+  occurrences: PurchasePaymentOccurrenceInputV2[],
+  validAttachmentIds: ReadonlySet<string>,
+): { occurrences: PurchasePaymentOccurrenceInputV2[]; unlinkedCount: number } {
+  let unlinkedCount = 0;
+  const safeOccurrences = occurrences.map((occurrence) => {
+    if (!occurrence.attachmentId || validAttachmentIds.has(occurrence.attachmentId)) {
+      return { ...occurrence };
+    }
+    unlinkedCount += 1;
+    // Never point a payment occurrence to a soft-deleted or unrelated attachment.
+    // A similarly named replacement PDF is NOT automatically the same evidence.
+    return { ...occurrence, attachmentId: null };
+  });
+  return { occurrences: safeOccurrences, unlinkedCount };
+}
+
 export async function replaceSupplyPurchasePaymentOccurrencesV2(
   paymentId: string,
   occurrences: PurchasePaymentOccurrenceInputV2[],
-): Promise<void> {
+  confirmUnlink?: (count: number) => boolean,
+): Promise<{ occurrences: PurchasePaymentOccurrenceInputV2[]; unlinkedCount: number }> {
+  const attachmentIds = [...new Set(occurrences.flatMap((entry) =>
+    entry.attachmentId ? [entry.attachmentId] : []))];
+  let safeOccurrences = occurrences;
+  let unlinkedCount = 0;
+
+  if (attachmentIds.length) {
+    const { data: payment, error: paymentError } = await supabase
+      .from('supply_purchase_payments')
+      .select('purchase_id')
+      .eq('id', paymentId)
+      .single();
+    if (paymentError || !payment) {
+      throw new Error('Não foi possível conferir os vínculos dos comprovantes deste pagamento.');
+    }
+    const { data: validAttachments, error: attachmentError } = await supabase
+      .from('supply_purchase_attachments')
+      .select('id')
+      .eq('purchase_id', payment.purchase_id)
+      .is('deleted_at', null)
+      .in('id', attachmentIds);
+    if (attachmentError) {
+      throw new Error('Não foi possível conferir os comprovantes ativos da compra.');
+    }
+    const sanitized = sanitizeOccurrenceAttachmentReferences(
+      occurrences, new Set((validAttachments || []).map((entry) => entry.id)),
+    );
+    safeOccurrences = sanitized.occurrences;
+    unlinkedCount = sanitized.unlinkedCount;
+    if (unlinkedCount && !confirmUnlink?.(unlinkedCount)) {
+      throw new Error('Envio cancelado. Confirme a remoção do vínculo a comprovantes excluídos para salvar o detalhamento.');
+    }
+  }
+
   const { error } = await supabase.rpc('replace_supply_purchase_payment_occurrences' as never, {
     p_payment_id: paymentId,
-    p_occurrences: buildOccurrencePayload(occurrences),
+    p_occurrences: buildOccurrencePayload(safeOccurrences),
   } as never);
   if (error) throw new Error(error.message);
+  return { occurrences: safeOccurrences, unlinkedCount };
 }
 
 function operationPayload(values: RegisterPurchaseOperationWithOccurrencesInputV2) {
