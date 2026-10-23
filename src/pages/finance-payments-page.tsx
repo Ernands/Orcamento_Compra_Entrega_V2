@@ -25,6 +25,7 @@ import {
 import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
 import { FinanceReimbursementModal } from '../components/finance-reimbursement-modal';
 import { fiscalStateForPayment } from '../domain/finance-reimbursement';
+import { financePaymentStoreLabel, financePaymentStoreTitle } from '../domain/finance-payment-store-label';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listSupplyPurchasePaymentOccurrencesV2 } from '../data/purchases/payment-occurrences-repository';
 import { updatePlannedFinancePayment } from '../data/finance/finance-repository';
@@ -93,14 +94,6 @@ function formatDate(value: string | null): string {
 
 function validView(value: string | null): FinancePaymentsView {
   return value === 'planned' || value === 'unscheduled' || value === 'paid' ? value : 'paid';
-}
-
-function rowStoreLabel(row: UnifiedFinancePaymentRow): string {
-  if (row.storeCodes.length === 1) return row.storeCodes[0];
-  if (row.storeCodes.length > 1) return `${row.storeCodes.length} lojas`;
-  if (row.storeIds.length === 1) return '1 loja';
-  if (row.storeIds.length > 1) return `${row.storeIds.length} lojas`;
-  return 'Sem loja definida';
 }
 
 function rowOriginLabel(row: UnifiedFinancePaymentRow): string {
@@ -203,6 +196,10 @@ export function FinancePaymentsPage() {
   const rows = useMemo(
     () => decorateFinancePaymentsWithOccurrences(buildUnifiedFinancePayments(purchases, works), occurrences),
     [occurrences, purchases, works],
+  );
+  const storesById = useMemo(
+    () => new Map(stores.map((store) => [store.id, store])),
+    [stores],
   );
   const visibleStores = useMemo(
     () => filterInactiveStoresWithoutFinancialValues(
@@ -727,7 +724,7 @@ export function FinancePaymentsPage() {
                       <th>{view === 'paid' ? 'Data pagamento' : view === 'planned' ? 'Vencimento' : 'Origem'}</th>
                       <th>{view === 'unscheduled' ? 'Referência' : 'Origem'}</th>
                       <th>{view === 'unscheduled' ? 'Fornecedor / prestador' : 'Referência'}</th>
-                      <th>{view === 'unscheduled' ? 'Loja / UF' : 'Fornecedor / prestador'}</th>
+                      <th>{view === 'unscheduled' ? 'Loja / cidade / UF' : 'Fornecedor / prestador'}</th>
                       <th>{view === 'unscheduled' ? 'Vencimento' : 'Forma'}</th>
                       <th>{view === 'unscheduled' ? 'Forma' : 'Identificação / parcela'}</th>
                       <th>Valor</th>
@@ -736,7 +733,8 @@ export function FinancePaymentsPage() {
                   <tbody>
                     {filteredRows.map((row, index) => {
                       const origin = rowOriginLabel(row);
-                      const store = `${rowStoreLabel(row)} · ${row.states.join(', ') || 'UF não informada'}`;
+                      const store = financePaymentStoreLabel(row, storesById);
+                      const storeTitle = financePaymentStoreTitle(row, storesById);
                       return (
                         <Fragment key={row.id}>
                           <tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>
@@ -748,7 +746,7 @@ export function FinancePaymentsPage() {
                                 <small>{row.description}</small>
                               </td>
                               <td data-label="Fornecedor / prestador"><strong>{row.supplierName}</strong></td>
-                              <td data-label="Loja / UF"><strong>{store}</strong></td>
+                              <td data-label="Loja / cidade / UF"><strong title={storeTitle}>{store}</strong></td>
                               <td data-label="Vencimento"><span className="finance-payment-missing">Não informado</span></td>
                               <td data-label="Forma"><span className="finance-payment-missing">Não informada</span></td>
                             </>
@@ -766,7 +764,7 @@ export function FinancePaymentsPage() {
                               </td>
                               <td data-label="Fornecedor / prestador">
                                 <strong>{row.supplierName}</strong>
-                                <small>{store}</small>
+                                <small title={storeTitle}>{store}</small>
                               </td>
                               <td data-label="Forma">
                                 <strong>{row.paymentMethod ? PAYMENT_LABELS[row.paymentMethod] || row.paymentMethod : '—'}</strong>
