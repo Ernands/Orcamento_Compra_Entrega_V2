@@ -108,6 +108,13 @@ BEGIN
     v_direct_store := (v_row->>'store_id')::uuid;
   END IF;
   IF v_direct_store IS NOT NULL THEN PERFORM private.assert_store_financially_open(v_direct_store); END IF;
+  -- A work payment/component may carry a stale or reassigned store_id.
+  -- Always guard the parent service's store as well, on both OLD and NEW rows.
+  IF TG_TABLE_NAME IN ('works_service_payments','works_service_components') THEN
+    SELECT ws.store_id INTO v_store FROM public.works_services ws
+    WHERE ws.id=NULLIF(v_row->>'service_id','')::uuid;
+    IF v_store IS NOT NULL THEN PERFORM private.assert_store_financially_open(v_store); END IF;
+  END IF;
   CASE TG_TABLE_NAME
    WHEN 'supply_purchases','supply_purchase_stores','supply_purchase_payments',
         'supply_purchase_items','supply_purchase_orders','supply_purchase_destinations',
@@ -195,6 +202,9 @@ BEGIN
    IF TG_TABLE_NAME='works_service_documents' THEN
      v_store := NULLIF(v_doc->>'store_id','')::uuid;
      PERFORM private.assert_store_financially_open(v_store);
+     SELECT ws.store_id INTO v_store FROM public.works_services ws
+     WHERE ws.id=NULLIF(v_doc->>'service_id','')::uuid;
+     IF v_store IS NOT NULL THEN PERFORM private.assert_store_financially_open(v_store); END IF;
    ELSE
      v_parent := NULLIF(v_doc->>'purchase_id','')::uuid;
      FOR v_store IN SELECT store_id FROM private.finance_purchase_store_ids(v_parent) LOOP
@@ -233,7 +243,10 @@ BEGIN
  v_actor := app.current_usuario_id();
  SELECT nome INTO v_name FROM public.usuarios WHERE id=v_actor;
  IF TG_TABLE_NAME='works_service_documents' THEN
-    FOR v_store IN SELECT NEW.store_id LOOP
+    FOR v_store IN SELECT DISTINCT stores.store_id
+      FROM (SELECT NEW.store_id AS store_id UNION ALL
+            SELECT ws.store_id FROM public.works_services ws WHERE ws.id=NEW.service_id) stores
+      WHERE stores.store_id IS NOT NULL LOOP
       IF EXISTS(SELECT 1 FROM public.store_financial_closures c WHERE c.store_id=v_store AND c.state='closed') THEN
        INSERT INTO public.store_financial_closure_events(store_id,event,actor_usuario_id,actor_name,details)
        VALUES(v_store,'document_added',v_actor,v_name,jsonb_build_object('document_id',NEW.id,'source','work','document_type',NEW.document_type));
