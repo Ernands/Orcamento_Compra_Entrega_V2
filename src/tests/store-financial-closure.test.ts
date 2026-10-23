@@ -35,6 +35,11 @@ describe('fechamento financeiro por loja (migração isolada em DEV)', () => {
     expect(migration).toContain('Esta loja está finalizada e não permite novas movimentações financeiras.');
     expect(migration).toContain('private.finance_purchase_store_ids');
     expect(migration).toContain('SELECT to_jsonb(OLD)');
+    expect(migration).toContain("TG_TABLE_NAME IN ('works_service_payments','works_service_components')");
+    expect(migration).toContain('SELECT ws.store_id INTO v_store FROM public.works_services ws');
+    expect(migration).toContain("WHERE ws.id=NULLIF(v_row->>'service_id','')::uuid");
+    expect(migration).toContain('WHERE ws.id=NEW.service_id');
+
   });
   it('mantem historico append-only e aceita documentos novos sem permitir substituicao', () => {
     expect(migration).toContain('CREATE TABLE public.store_financial_closure_events');
