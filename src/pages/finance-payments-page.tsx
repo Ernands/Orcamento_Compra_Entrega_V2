@@ -17,6 +17,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import '../styles/store-financial-close.css';
 import {
   FinancePaymentDatesAction,
   FinancePaymentDatesCell,
@@ -737,6 +738,8 @@ export function FinancePaymentsPage() {
                     {filteredRows.map((row, index) => {
                       const origin = rowOriginLabel(row);
                       const store = `${rowStoreLabel(row)} · ${row.states.join(', ') || 'UF não informada'}`;
+                      const belongsToClosedStore = row.storeIds.some((id) =>
+                        stores.some((store) => store.id === id && store.financialClosure?.state === 'closed'));
                       return (
                         <Fragment key={row.id}>
                           <tr className={`finance-payment-info-row ${index % 2 === 1 ? 'finance-payment-entry--striped' : ''}`}>
@@ -791,6 +794,7 @@ export function FinancePaymentsPage() {
                             <div className="finance-payment-meta-bar">
                               <div className="finance-payment-meta-status">
                                 <span className="finance-payment-meta-label">Nota/Recibo</span>
+                                {belongsToClosedStore && <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>}
                                 {(() => {
                               const fiscal = fiscalStateForPayment(
                                 row, purchases, works,
@@ -804,7 +808,7 @@ export function FinancePaymentsPage() {
                             })()}
                               </div>
                               <div className="finance-payment-actions">
-                              {view === 'planned' && canManageFinance && (
+                              {view === 'planned' && canManageFinance && !belongsToClosedStore && (
                                 <button
                                   type="button"
                                   className="finance-payment-action finance-payment-action--edit"

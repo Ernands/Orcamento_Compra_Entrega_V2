@@ -24,6 +24,7 @@ export type Capability =
   | 'stores.create'
   | 'stores.edit'
   | 'stores.delete'
+  | 'stores.finalize_reopen'
   | 'access.view'
   | 'access.create'
   | 'access.edit'
@@ -97,6 +98,7 @@ export interface Store {
   status: StoreStatus;
   plannedOpeningDate: string | null;
   notes: string | null;
+  financialClosure?: import('../data/stores/store-financial-closure-repository').StoreFinancialClosure;
 }
 
 export interface StoreFormValues {
