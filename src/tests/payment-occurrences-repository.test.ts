@@ -2,7 +2,45 @@ import { describe, expect, it } from 'vitest';
 import {
   buildOccurrencePayload,
   buildPaymentWithOccurrencePayload,
+  sanitizeOccurrenceAttachmentReferences,
 } from '../data/purchases/payment-occurrences-repository';
+import occurrenceModal from '../components/finance-payment-occurrences.tsx?raw';
+
+describe('referências de comprovantes excluídos nas ocorrências', () => {
+  const values = [
+    { occurredOn: '2026-09-28', amount: '23632,45', paymentMethod: 'pix' as const,
+      referenceLabel: 'PIX 1', attachmentId: 'deleted-proof' },
+    { occurredOn: '2026-10-01', amount: '1593,69', paymentMethod: 'pix' as const,
+      referenceLabel: 'PIX 2', attachmentId: 'active-proof' },
+  ];
+
+  it('desassocia somente comprovante excluído, sem modificar datas, valores ou formas', () => {
+    const original = structuredClone(values);
+    const resolved = sanitizeOccurrenceAttachmentReferences(values, new Set(['active-proof']));
+    expect(resolved.unlinkedCount).toBe(1);
+    expect(resolved.occurrences).toEqual([
+      { ...values[0], attachmentId: null },
+      values[1],
+    ]);
+    expect(values).toEqual(original);
+    expect(resolved.occurrences.map((v) => v.amount)).toEqual(['23632,45','1593,69']);
+    expect(resolved.occurrences.map((v) => v.occurredOn)).toEqual(['2026-09-28','2026-10-01']);
+  });
+
+  it('não modifica comprovantes válidos nem associa PDFs automaticamente pelo nome', () => {
+    const resolved = sanitizeOccurrenceAttachmentReferences(values, new Set(['deleted-proof','active-proof']));
+    expect(resolved.unlinkedCount).toBe(0);
+    expect(resolved.occurrences).toEqual(values);
+    expect(resolved.occurrences).not.toBe(values);
+  });
+
+  it('mostra confirmação antes de desassociar e usa o detalhamento editado no cabeçalho', () => {
+    expect(occurrenceModal).toContain('(count) => window.confirm(');
+    expect(occurrenceModal).toContain('setUnlinkedProofs(result.unlinkedCount)');
+    expect(occurrenceModal).toContain('const displayedDetailed = editing ? draftTotal : detailed');
+    expect(occurrenceModal).toContain('const displayedDifference = editing ? editDifference : difference');
+  });
+});
 
 describe('payment occurrences repository', () => {
   it('normaliza payload manual sem alterar o valor oficial do pagamento', () => {
