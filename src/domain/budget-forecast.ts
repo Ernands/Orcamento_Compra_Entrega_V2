@@ -93,8 +93,10 @@ export function buildBudgetForecast(
   payments: UnifiedFinancePaymentRow[],
   filters: ForecastFilters,
   evidence?: ForecastEvidence,
+  eligibleStoreIds?: ReadonlySet<string>,
 ): ForecastSnapshot {
-  const chosenStores = selectForecastStores(stores, filters);
+  const chosenStores = selectForecastStores(stores, filters)
+    .filter((store)=>!eligibleStoreIds||eligibleStoreIds.has(store.id));
   const byStoreId = new Map(chosenStores.map((store) => [store.id, store]));
   const selectedIds = new Set(byStoreId.keys());
   const chosenRows = overview.filter((row) => selectedIds.has(row.storeId));
@@ -171,7 +173,7 @@ export function buildBudgetForecast(
   }
 
   const anyFilter = Boolean(filters.state || filters.storeId) ||
-    filters.operation !== 'all' || filters.implantation !== 'all';
+    filters.operation !== 'all' || filters.implantation !== 'all' || Boolean(eligibleStoreIds);
   const ledger = anyFilter
     ? scopeFinancePaymentsByStores(payments, [...selectedIds])
     : payments;
