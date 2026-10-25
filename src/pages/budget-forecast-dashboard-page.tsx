@@ -1,5 +1,5 @@
 import {
-  ArrowDownToLine, Banknote, Building2, CheckCircle2, ClipboardList,
+  ArrowDownToLine, Banknote, Building2, ClipboardList,
   Coins, FileCheck2, FileText, Handshake, Info, Landmark,
   RefreshCcw, TrendingUp, WalletCards,
 } from 'lucide-react';
@@ -125,7 +125,7 @@ export function BudgetForecastDashboardPage() {
     [dataset, filters]);
   const updateFilter = <K extends keyof ForecastFilters,>(key: K, value: ForecastFilters[K]) => {
     setFilters((current) => key === 'state'
-      ? { ...current, state: value as string, storeId: '' }
+      ? { ...current, state: value, storeId: '' }
       : { ...current, [key]: value });
   };
   const indicators = useMemo((): Record<ForecastIndicator, MetricCardConfig> | null =>
