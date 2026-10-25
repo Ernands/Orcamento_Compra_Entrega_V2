@@ -84,9 +84,14 @@ function OverviewMetric({label,value,icon,isBalance=false}:OverviewMetricProps) 
       <span className="financial-composition__overview-metric-icon" aria-hidden="true">{icon}</span>
       <div className="financial-composition__overview-metric-body">
         <span className="financial-composition__overview-metric-label">{label}</span>
-        <strong className="financial-composition__overview-metric-value"
-          title={formatBRL(value)}>{formatBRL(value)}</strong>
       </div>
+      <span className="financial-composition__overview-metric-money"
+        title={formatBRL(value)}>
+        <small>R$</small>
+        <strong className="financial-composition__overview-metric-value">
+          {formatBRL(value).replace(/^R\$\s*/, '')}
+        </strong>
+      </span>
     </article>
   );
 }
