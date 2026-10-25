@@ -6,6 +6,7 @@ import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
 import { BudgetForecastDashboardPage } from '../pages/budget-forecast-dashboard-page';
+import { FinancialCompositionPage } from '../pages/financial-composition-page';
 import { FinancePage } from '../pages/finance-page';
 import { FinancePaymentsPage } from '../pages/finance-payments-page';
 import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
@@ -124,6 +125,16 @@ export function App() {
                 <RequireCapability capability="dashboard.view">
                   <RequireCapability capability="finance.overview_view">
                     <BudgetForecastDashboardPage />
+                  </RequireCapability>
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/composicao-financeira"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <RequireCapability capability="finance.overview_view">
+                    <FinancialCompositionPage />
                   </RequireCapability>
                 </RequireCapability>
               }
