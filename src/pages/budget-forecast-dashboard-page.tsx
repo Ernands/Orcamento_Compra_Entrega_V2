@@ -17,6 +17,9 @@ import { buildUnifiedFinancePayments } from '../domain/finance-payments';
 import { formatBRL } from '../domain/supply-calculations';
 import { buildBudgetForecast, type ForecastFilters, type ForecastIndicator } from '../domain/budget-forecast';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
+import type { FinanceStoreRow } from '../domain/finance-types';
+import type { WorkService } from '../domain/works-types';
+import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { Store } from '../domain/types';
 import './budget-forecast-dashboard.css';
@@ -28,6 +31,9 @@ type ForecastDataset = {
   stores: Store[];
   overview: FinanceOverviewStoreRow[];
   payments: UnifiedFinancePaymentRow[];
+  storePurchases: FinanceStoreRow[];
+  works: WorkService[];
+  plannedBudgetItems: PlannedBudgetItem[];
 };
 type MetricCardConfig = {
   key: ForecastIndicator;
@@ -93,7 +99,10 @@ export function BudgetForecastDashboardPage() {
         stores, purchases, works, budgets,
         purchaseStoreRows, plannedBudgetItems: planned.items,
       });
-      setDataset({ stores, overview, payments: buildUnifiedFinancePayments(purchases, works) });
+      setDataset({
+        stores, overview, payments: buildUnifiedFinancePayments(purchases, works),
+        storePurchases: purchaseStoreRows, works, plannedBudgetItems: planned.items,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível consultar os dados financeiros.');
     } finally {
@@ -109,7 +118,10 @@ export function BudgetForecastDashboardPage() {
     (dataset?.stores || []).filter((store) => !filters.state || store.state === filters.state),
     [dataset, filters.state]);
   const forecast = useMemo(() =>
-    dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters) : null,
+    dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters, {
+      storePurchases: dataset.storePurchases, works: dataset.works,
+      plannedBudgetItems: dataset.plannedBudgetItems,
+    }) : null,
     [dataset, filters]);
   const updateFilter = <K extends keyof ForecastFilters,>(key: K, value: ForecastFilters[K]) => {
     setFilters((current) => key === 'state'
@@ -158,7 +170,10 @@ export function BudgetForecastDashboardPage() {
     keys.forEach((key) => forecast.details[key].forEach((item) => {
       lines.push([
         indicators[key].label,
-        key === 'activeStores' ? '1' : (Number(item.amountCents) / 100).toFixed(2).replace('.', ','),
+        key === 'activeStores' ? '1' : (() => {
+          const abs = item.amountCents < 0n ? -item.amountCents : item.amountCents;
+          return `${item.amountCents < 0n ? '-' : ''}${abs / 100n},${String(abs % 100n).padStart(2, '0')}`;
+        })(),
         `${item.storeCode} · ${item.storeName}`,item.state,item.reference,item.category,item.status,
       ]);
     }));
