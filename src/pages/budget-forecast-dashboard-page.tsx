@@ -61,14 +61,14 @@ function ForecastCard({
       aria-label={`Detalhar ${metric.label}: ${valueText(metric.value, metric.isCount)}`}>
       <span className="forecast-card__content">
         <span className="forecast-card__label">
-          <span className="forecast-card__icon">{metric.icon}</span>
           <span>{metric.label}</span>
           <Info className="forecast-card__info" size={13} aria-hidden="true" />
         </span>
         <strong className="forecast-card__value">{valueText(metric.value, metric.isCount)}</strong>
         {metric.note && <small className="forecast-card__note">{metric.note}</small>}
       </span>
-      <ChevronRight className="forecast-card__more" size={16} aria-hidden="true" />
+      <span className="forecast-card__icon" aria-hidden="true">{metric.icon}</span>
+      <ChevronRight className="forecast-card__more" size={15} aria-hidden="true" />
     </button>
   );
 }
@@ -250,7 +250,9 @@ export function BudgetForecastDashboardPage() {
             <div className="forecast-card-grid forecast-card-grid--three">
               {(['contracted','contractBalance'] as const).map((key)=>
                 <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}
-              <div className="forecast-progress">
+
+            </div>
+            <div className="forecast-progress">
                 <div className="forecast-progress__label">
                   <TrendingUp size={18} aria-hidden="true" />
                   <span>Execução Orçamentária (%)</span>
@@ -265,7 +267,6 @@ export function BudgetForecastDashboardPage() {
                 </div>
                 {forecast.executionPercent !== null && forecast.executionPercent > 100 && <small>Orçamento previsto ultrapassado.</small>}
               </div>
-            </div>
           </ForecastSection>
           <ForecastSection color="green" title="Execução Financeira" icon={<WalletCards size={18}/>}>
             <div className="forecast-card-grid">{(['paid','payable'] as const).map((key)=>
