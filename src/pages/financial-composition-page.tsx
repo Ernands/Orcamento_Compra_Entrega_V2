@@ -305,8 +305,7 @@ export function FinancialCompositionPage() {
                   <th>Loja / Descrição</th><th>Grupo</th><th>Orçado</th><th>Realizado</th>
                   <th>Pago</th><th>A pagar</th><th>Situação</th><th>Detalhes</th>
                 </tr></thead>
-                <tbody>
-                  {visibleLines.map((line)=>{
+                {visibleLines.map((line)=>{
                     const isOpen=expanded===line.id;
                     const href=paymentLink(line);
                     return <tbody key={line.id} className="financial-composition__record">
@@ -350,7 +349,6 @@ export function FinancialCompositionPage() {
                       </td></tr>}
                     </tbody>;
                   })}
-                </tbody>
               </table>
             </div>}
           {filteredLines.length>limit&&<button type="button"
