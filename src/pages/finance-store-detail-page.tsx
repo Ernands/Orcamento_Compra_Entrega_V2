@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceStoreDetailExcel,
@@ -436,6 +437,9 @@ export function FinanceStoreDetailPage() {
           </Link>
           <span className="eyebrow">Financeiro · Detalhe da loja</span>
           <h2>{store.code} · {store.name}</h2>
+           <span className={`store-close-badge ${store.financialClosure?.state === 'closed' ? 'store-close-badge--closed' : ''}`}>
+             {store.financialClosure?.state === 'closed' ? '🔒 Finalizada' : 'Em andamento'}
+           </span>
           <p>{store.city}/{store.state}</p>
         </div>
         <div className="finance-store-detail__actions">
