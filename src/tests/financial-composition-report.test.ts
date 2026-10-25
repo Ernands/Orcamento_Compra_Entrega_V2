@@ -25,7 +25,7 @@ const works=[
     budgetAmount:'110.00',contractedAmount:'90.00',status:'approved',progressPercent:0,
     payments:[{id:'p2',status:'planned',amount:'90.00'}],documents:[],components:[],
   },
-] as WorkService[];
+] as unknown as WorkService[];
 const overview=[
   {storeId:'s1',code:'LOJ-001',budgetBbCents:5000000n,budgetTotalCents:12000n,
     realizedTotalCents:10000n,realizedVarianceToBbCents:4990000n,
