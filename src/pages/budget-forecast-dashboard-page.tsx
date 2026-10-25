@@ -59,6 +59,7 @@ function ForecastCard({
       onClick={() => onClick(metric.key)}
       title={`${metric.description} Clique para ver a composição.`}
       aria-label={`Detalhar ${metric.label}: ${valueText(metric.value, metric.isCount)}`}>
+      <span className="forecast-card__icon" aria-hidden="true">{metric.icon}</span>
       <span className="forecast-card__content">
         <span className="forecast-card__label">
           <span>{metric.label}</span>
@@ -67,7 +68,6 @@ function ForecastCard({
         <strong className="forecast-card__value">{valueText(metric.value, metric.isCount)}</strong>
         {metric.note && <small className="forecast-card__note">{metric.note}</small>}
       </span>
-      <span className="forecast-card__icon" aria-hidden="true">{metric.icon}</span>
       <ChevronRight className="forecast-card__more" size={15} aria-hidden="true" />
     </button>
   );
@@ -140,11 +140,17 @@ export function BudgetForecastDashboardPage() {
   const indicators = useMemo((): Record<ForecastIndicator, MetricCardConfig> | null =>
     !forecast ? null : ({
       bb: { key: 'bb', label: 'Verba BB Reembolsável', icon: <Coins size={18} />,
-        value: forecast.bbCents, note: 'Total da verba BB atribuída às lojas.',
-        description: 'Total de verba BB atribuído às lojas selecionadas.' },
+        value: forecast.bbCents,
+        note: forecast.inactiveStoresWithBudget > 0
+          ? `Inclui ${formatBRL(forecast.inactiveBudgetCents)} de ${forecast.inactiveStoresWithBudget} ${forecast.inactiveStoresWithBudget === 1 ? 'loja inativa' : 'lojas inativas'}.`
+          : 'Total da verba BB atribuída às lojas.',
+        description: 'Total de verba BB atribuído às lojas selecionadas, inclusive inativas com verba registrada.' },
       activeStores: { key: 'activeStores', label: 'Lojas Ativas com Verba', icon: <Building2 size={18} />,
         isCount: true, value: forecast.activeStores,
-        description: 'Quantidade única de lojas operacionais ativas com verba BB, inclusive lojas finalizadas.' },
+        note: forecast.inactiveStoresWithBudget > 0
+          ? `${forecast.storesWithBudget} lojas com verba no total; ${forecast.inactiveStoresWithBudget} ${forecast.inactiveStoresWithBudget === 1 ? 'inativa' : 'inativas'}.`
+          : 'Contagem somente das lojas ativas com verba.',
+        description: 'Quantidade única de lojas operacionais ativas com verba BB, inclusive lojas finalizadas. O total da verba pode incluir lojas inativas com valores cadastrados.' },
       planned: { key: 'planned', label: 'Orçamento Previsto', icon: <ClipboardList size={18}/>,
         value: forecast.plannedCents, note: 'Total planejado para implantação.',
         description: 'Orçamento previsto de itens e obras, conforme Financeiro → Visão Geral.' },
