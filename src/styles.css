@@ -808,31 +808,12 @@ svg {
 .app-main {
   min-width: 0;
 }
-.topbar {
-  height: 89px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 clamp(20px, 4vw, 48px);
-  background: #fff;
-  border-bottom: 1px solid var(--line);
-}
-.topbar > .icon-button {
+/* All authenticated pages own their titles; the duplicate shell topbar is removed. */
+.app-mobile-menu {
   display: none;
-}
-.topbar__eyebrow {
-  display: none;
-  color: var(--brand);
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-.topbar h1 {
-  margin: 0;
-  font-size: 1.08rem;
 }
 .page-content {
-  padding: clamp(24px, 4vw, 48px);
+  padding: clamp(20px, 2.8vw, 36px);
 }
 .page-stack {
   width: min(100%, 1240px);
@@ -2199,18 +2180,26 @@ svg {
   .sidebar {
     display: none;
   }
-  .topbar {
-    height: 72px;
-    padding: 0 18px;
+  .app-mobile-menu {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    z-index: 30;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #c9d1d9;
+    border-radius: 6px;
+    background: #fff;
+    color: #22354b;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(26, 43, 62, .07);
   }
-  .topbar > .icon-button {
-    display: inline-flex;
-  }
-  .topbar__eyebrow {
-    display: block;
-  }
-  .topbar h1 {
-    font-size: 0.95rem;
+  .app-mobile-menu:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
   }
   .mobile-nav-backdrop {
     position: fixed;
@@ -2242,7 +2231,7 @@ svg {
     grid-template-columns: 36px minmax(0, 1fr) 38px 38px;
   }
   .page-content {
-    padding: 24px 18px 36px;
+    padding: 62px 18px 32px;
   }
   .page-heading {
     align-items: flex-start;
