@@ -87,18 +87,28 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(zero.executionPercent).toBeNull();
   expect(zero.contractBalanceCents).toBe(-600n);
  });
- it('usa faixas institucionais finas e uma linha de indicadores sem cartões decorativos',()=>{
-  expect(style).toContain('border-top: 4px solid var(--forecast-accent)');
+ it('restaura faixas coloridas, posiciona os ícones à direita e volta a barra abaixo dos indicadores',()=>{
+  expect(style).toContain('border-top: 7px solid var(--forecast-accent)');
+  const previousAccents = ['#ffdb54','#bea5ff','#96c9ff','#91eda7','#ffc28c'];
+  for(const accent of previousAccents) expect(style).toContain(`--forecast-accent: ${accent}`);
+  for(const softTone of ['#fdf4d8','#f0eafc','#e9f3fd','#e8f5ed','#fdf0e3']) {
+    expect(style).toContain(softTone);
+  }
+  expect(style).toContain('background: var(--forecast-soft, #f2f5f6)');
   expect(style).toContain('border-right: 1px solid #e3e9ed');
   expect(style).toContain('border-radius: 0;');
   expect(style).toContain('box-shadow: none;');
   expect(style).toContain('@media (max-width: 670px)');
   expect(style).toContain('.forecast-card:focus-visible');
   expect(page).toContain('className="forecast-card__more"');
-  expect(page).toContain('forecast-card-grid forecast-card-grid--three');
+  const card = page.split('function ForecastCard(')[1].split('function ForecastSection(')[0];
+  expect(card.indexOf('className="forecast-card__value"')).toBeLessThan(card.indexOf('className="forecast-card__icon"'));
   const contracts = page.split('title="Contratações"')[1].split('title="Execução Financeira"')[0];
   expect(contracts).toContain("(['contracted','contractBalance'] as const)");
-  expect(contracts).toContain('className="forecast-progress"');
+  expect(contracts).toContain('className="forecast-card-grid"');
+  expect(contracts).not.toContain('forecast-card-grid--three');
+  expect(contracts.indexOf('</div>\n            <div className="forecast-progress">')).toBeGreaterThan(0);
+  expect(contracts).toContain('role="progressbar"');
   expect(contracts).toContain('Execução Orçamentária (%)');
   expect(page).toContain('Verba BB Reembolsável − Orçamento Previsto');
   expect(page).toContain('Programado + Não programado');
