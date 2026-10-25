@@ -84,15 +84,15 @@
   padding: 0 14px 12px;
   background: #fff;
   border: 1px solid #dbe2e7;
-  border-top: 4px solid var(--forecast-accent);
+  border-top: 7px solid var(--forecast-accent);
   border-radius: 6px;
   box-shadow: none;
 }
-.forecast-section--bb { --forecast-accent: #d4b03e; --forecast-tone: #8f7116; }
-.forecast-section--purple { --forecast-accent: #8e7ab4; --forecast-tone: #756195; }
-.forecast-section--blue { --forecast-accent: #5185b4; --forecast-tone: #4c789e; }
-.forecast-section--green { --forecast-accent: #529879; --forecast-tone: #3d8064; }
-.forecast-section--orange { --forecast-accent: #c9945b; --forecast-tone: #9f7346; }
+.forecast-section--bb { --forecast-accent: #ffdb54; --forecast-tone: #937214; --forecast-soft: #fdf4d8; }
+.forecast-section--purple { --forecast-accent: #bea5ff; --forecast-tone: #736096; --forecast-soft: #f0eafc; }
+.forecast-section--blue { --forecast-accent: #96c9ff; --forecast-tone: #45749b; --forecast-soft: #e9f3fd; }
+.forecast-section--green { --forecast-accent: #91eda7; --forecast-tone: #397954; --forecast-soft: #e8f5ed; }
+.forecast-section--orange { --forecast-accent: #ffc28c; --forecast-tone: #946a42; --forecast-soft: #fdf0e3; }
 .forecast-section__heading {
   display: flex;
   align-items: center;
@@ -128,15 +128,16 @@
 .forecast-card-grid--three { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .forecast-card {
   appearance: none;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 7px;
+  gap: 15px;
   width: 100%;
   min-width: 0;
   min-height: 116px;
   margin: 0;
-  padding: 16px 20px;
+  padding: 16px 34px 16px 20px;
   text-align: left;
   font: inherit;
   color: inherit;
@@ -149,7 +150,7 @@
   transition: background-color .14s ease;
 }
 .forecast-card:last-child { border-right: 0; }
-.forecast-card-grid--three .forecast-card { padding: 15px 16px; }
+.forecast-card-grid--three .forecast-card { padding: 15px 34px 15px 16px; }
 .forecast-card:hover { background: #f5f8fa; box-shadow: inset 0 0 0 1px #bfceda; transform: none; }
 .forecast-card:focus-visible { outline: 2px solid #4176b4; outline-offset: -3px; }
 .forecast-card__content {
@@ -173,10 +174,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--forecast-tone);
   flex: none;
+  width: 48px;
+  height: 48px;
+  border: 1px solid color-mix(in srgb, var(--forecast-tone) 13%, transparent);
+  border-radius: 50%;
+  color: var(--forecast-tone);
+  background: var(--forecast-soft, #f2f5f6);
 }
-.forecast-card__icon svg { width: 17px; height: 17px; stroke-width: 1.8; }
+.forecast-card__icon svg { width: 23px; height: 23px; stroke-width: 1.7; }
+.forecast-card-grid--three .forecast-card__icon { width: 43px; height: 43px; }
+.forecast-card-grid--three .forecast-card__icon svg { width: 21px; height: 21px; }
 .forecast-card__info { color: #8996a4; flex: none; }
 .forecast-card__value {
   display: block;
@@ -199,49 +207,52 @@
   line-height: 1.35;
 }
 .forecast-card__more {
-  align-self: center;
+  position: absolute;
+  top: 12px;
+  right: 10px;
   flex: none;
   color: #8b9cac;
-  opacity: .55;
+  opacity: .45;
   transition: transform .14s ease,opacity .14s ease;
 }
 .forecast-card:hover .forecast-card__more,
 .forecast-card:focus-visible .forecast-card__more { opacity: 1; transform: translateX(2px); }
 .forecast-progress {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 7px 16px;
   min-width: 0;
-  min-height: 116px;
-  padding: 15px 16px;
-  background: #fff;
-  border: 0;
-  border-radius: 0;
+  margin-top: 10px;
+  padding: 12px 14px;
+  min-height: auto;
+  background: #f8fafb;
+  border: 1px solid #e0e7ec;
+  border-radius: 5px;
   box-shadow: none;
 }
 .forecast-progress__label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  color: #4a5b6b;
-  font-size: .8rem;
-  font-weight: 550;
+  gap: 7px;
+  color: #405568;
+  font-size: .81rem;
+  font-weight: 600;
   line-height: 1.35;
 }
 .forecast-progress__label svg:first-child { color: var(--forecast-tone); }
 .forecast-progress__label svg:last-child { color: #8996a4; }
 .forecast-progress > strong {
-  font-size: clamp(1.2rem,1.55vw,1.53rem);
+  font-size: 1.06rem;
   font-weight: 650;
-  line-height: 1.17;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
   color: #172b46;
 }
 .forecast-progress__track {
-  height: 5px;
+  grid-column: 1 / -1;
+  height: 6px;
   overflow: hidden;
   border-radius: 999px;
   background: #e5ebf0;
@@ -254,7 +265,12 @@
   transition: width .18s ease;
 }
 .forecast-progress__track--over > span { background: #b47d4e; }
-.forecast-progress small { font-size: .71rem; color: #a46e44; font-weight: 500; }
+.forecast-progress small {
+  grid-column: 1 / -1;
+  font-size: .71rem;
+  color: #a46e44;
+  font-weight: 500;
+}
 .forecast-detail { display: grid; gap: 12px; }
 .forecast-detail__total {
   display: flex;
@@ -277,7 +293,7 @@
 @media (max-width: 1020px) {
   .forecast-card-grid--three { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .forecast-card-grid--three .forecast-card:nth-child(2) { border-right: 0; }
-  .forecast-progress { grid-column: 1 / -1; min-height: 80px; border-top: 1px solid #e3e9ed; }
+  .forecast-card-grid--three .forecast-card:last-child { grid-column: 1 / -1; border-top: 1px solid #e3e9ed; }
 }
 @media (max-width: 670px) {
   .forecast-card-grid,.forecast-card-grid--three { grid-template-columns: minmax(0,1fr); }
@@ -289,7 +305,10 @@
   }
   .forecast-card:last-child { border-bottom: 0; }
   .forecast-card-grid--three .forecast-card:nth-child(2) { border-bottom: 1px solid #e3e9ed; }
-  .forecast-progress { grid-column: auto; min-height: 97px; border-top: 0; }
+  .forecast-progress { grid-column: auto; min-height: auto; margin-top: 9px; padding: 11px 12px; }
+  .forecast-card__icon { width: 42px; height: 42px; }
+  .forecast-card__icon svg { width: 20px; height: 20px; }
+  .forecast-card, .forecast-card-grid--three .forecast-card { padding-right: 32px; }
   .forecast-section { padding: 0 10px 10px; }
   .forecast-filters label { flex: 1 1 calc(50% - 10px); }
   .forecast-page-heading { flex-wrap: wrap; }
