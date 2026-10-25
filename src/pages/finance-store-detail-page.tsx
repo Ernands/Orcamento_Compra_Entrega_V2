@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
 import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
@@ -474,7 +475,7 @@ export function FinanceStoreDetailPage() {
             <article>
               <Landmark size={20} />
               <span>Verba BB</span>
-              <strong>{formatBRL(overview.budgetBbCents)}</strong>
+              <FinanceAmount cents={overview.budgetBbCents} />
               <small
                 className={`finance-store-bb-available ${
                   availableBbCents < 0n ? 'is-negative' : 'is-positive'
@@ -486,7 +487,7 @@ export function FinanceStoreDetailPage() {
             <article>
               <ReceiptText size={20} />
               <span>Orçado total</span>
-              <strong>{formatBRL(overview.budgetTotalCents)}</strong>
+              <FinanceAmount cents={overview.budgetTotalCents} />
             </article>
           </div>
         </div>
@@ -496,12 +497,12 @@ export function FinanceStoreDetailPage() {
             <article className="is-primary">
               <Building2 size={20} />
               <span>Realizado</span>
-              <strong>{formatBRL(overview.realizedTotalCents)}</strong>
+              <FinanceAmount cents={overview.realizedTotalCents} />
             </article>
             <article className={overview.realizedVarianceToBbCents < 0n ? 'is-negative' : 'is-positive'}>
               <CheckCircle2 size={20} />
               <span>Dif. em relação à verba</span>
-              <strong>{formatBRL(overview.realizedVarianceToBbCents)}</strong>
+              <FinanceAmount cents={overview.realizedVarianceToBbCents} />
             </article>
           </div>
         </div>
@@ -511,12 +512,12 @@ export function FinanceStoreDetailPage() {
             <article>
               <WalletCards size={20} />
               <span>Pago</span>
-              <strong>{formatBRL(overview.paidCents)}</strong>
+              <FinanceAmount cents={overview.paidCents} />
             </article>
             <article>
               <WalletCards size={20} />
               <span>A pagar</span>
-              <strong>{formatBRL(overview.payableCents)}</strong>
+              <FinanceAmount cents={overview.payableCents} />
             </article>
           </div>
         </div>
