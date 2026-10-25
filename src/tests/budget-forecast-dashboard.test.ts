@@ -87,6 +87,23 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(zero.executionPercent).toBeNull();
   expect(zero.contractBalanceCents).toBe(-600n);
  });
+ it('usa faixas institucionais finas e uma linha de indicadores sem cartões decorativos',()=>{
+  expect(style).toContain('border-top: 4px solid var(--forecast-accent)');
+  expect(style).toContain('border-right: 1px solid #e3e9ed');
+  expect(style).toContain('border-radius: 0;');
+  expect(style).toContain('box-shadow: none;');
+  expect(style).toContain('@media (max-width: 670px)');
+  expect(style).toContain('.forecast-card:focus-visible');
+  expect(page).toContain('className="forecast-card__more"');
+  expect(page).toContain('forecast-card-grid forecast-card-grid--three');
+  const contracts = page.split('title="Contratações"')[1].split('title="Execução Financeira"')[0];
+  expect(contracts).toContain("(['contracted','contractBalance'] as const)");
+  expect(contracts).toContain('className="forecast-progress"');
+  expect(contracts).toContain('Execução Orçamentária (%)');
+  expect(page).toContain('Verba BB Reembolsável − Orçamento Previsto');
+  expect(page).toContain('Programado + Não programado');
+  expect(page).toContain('Orçamento previsto ultrapassado.');
+ });
  it('oculta abas antigas, mantém código legado e cria cinco quadros sem prospector',()=>{
   expect(app).toContain('path="dashboard/previsao-orcamentaria"');
   expect(legacy).toContain('temporariamente ocultas');
