@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
 import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listStores } from '../data/stores/stores-repository';
@@ -1356,19 +1357,19 @@ export function WorksPage() {
         </div>
       </header>
 
-      <section className="works-kpis works-kpis--grouped">
+      <section className="works-kpis works-kpis--grouped" aria-label="Resumo de Obras e Serviços">
         <div className="works-kpi-group works-kpi-group--budget">
           <span className="works-kpi-group__title">Planejamento</span>
           <div>
             <article>
               <HardHat size={21} />
               <span>Orçado em obras</span>
-              <strong>{formatBRL(totals.budgetCents)}</strong>
+              <FinanceAmount cents={totals.budgetCents} />
             </article>
             <article>
               <Building2 size={21} />
               <span>Contratado</span>
-              <strong>{formatBRL(totals.contractedCents)}</strong>
+              <FinanceAmount cents={totals.contractedCents} />
             </article>
           </div>
         </div>
@@ -1378,12 +1379,12 @@ export function WorksPage() {
             <article className="works-kpi--paid">
               <WalletCards size={21} />
               <span>Pago</span>
-              <strong>{formatBRL(totals.paidCents)}</strong>
+              <FinanceAmount cents={totals.paidCents} />
             </article>
             <article>
               <CalendarDays size={21} />
               <span>A pagar</span>
-              <strong>{formatBRL(totals.payableCents)}</strong>
+              <FinanceAmount cents={totals.payableCents} />
             </article>
           </div>
         </div>
@@ -1393,7 +1394,7 @@ export function WorksPage() {
             <article className={totals.missingDocumentsCents > 0n ? 'works-kpi--warning' : 'works-kpi--ok'}>
               <ReceiptText size={21} />
               <span>Falta documentar</span>
-              <strong>{formatBRL(totals.missingDocumentsCents)}</strong>
+              <FinanceAmount cents={totals.missingDocumentsCents} />
             </article>
           </div>
         </div>
