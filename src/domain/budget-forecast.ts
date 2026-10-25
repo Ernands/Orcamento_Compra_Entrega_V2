@@ -33,6 +33,9 @@ export interface ForecastDetail {
 export interface ForecastSnapshot {
   bbCents: bigint;
   activeStores: number;
+  storesWithBudget: number;
+  inactiveStoresWithBudget: number;
+  inactiveBudgetCents: bigint;
   plannedCents: bigint;
   forecastBalanceCents: bigint;
   contractedCents: bigint;
@@ -100,9 +103,15 @@ export function buildBudgetForecast(
   chosenRows.forEach((row) => {
     const store = byStoreId.get(row.storeId)!;
     const basis = `Financeiro · ${row.code}`;
-    details.bb.push(perStore(row, store, 'bb', row.budgetBbCents, 'Verba BB', basis));
+    details.bb.push({
+      ...perStore(row, store, 'bb', row.budgetBbCents, 'Verba BB', basis),
+      status: store.status === 'active' ? 'Ativa' : 'Inativa',
+    });
     if (store.status === 'active' && row.budgetBbCents > 0n) {
-      details.activeStores.push(perStore(row, store, 'activeStores', 1n, 'Loja ativa com verba', basis));
+      details.activeStores.push({
+        ...perStore(row, store, 'activeStores', 1n, 'Loja ativa com verba', basis),
+        status: 'Ativa',
+      });
     }
     details.planned.push(perStore(row, store, 'planned', row.budgetTotalCents, 'Orçamento previsto', basis));
     details.forecastBalance.push(perStore(row, store, 'forecastBalance',
@@ -201,13 +210,21 @@ export function buildBudgetForecast(
   });
 
   const bbCents = sum(details.bb);
+  const withBudget = chosenRows.filter((row) => row.budgetBbCents > 0n);
+  const inactiveWithBudget = withBudget.filter((row) =>
+    byStoreId.get(row.storeId)?.status === 'inactive');
+  const storesWithBudget = withBudget.length;
+  const inactiveStoresWithBudget = inactiveWithBudget.length;
+  const inactiveBudgetCents = inactiveWithBudget.reduce((total, row) =>
+    total + row.budgetBbCents, 0n);
   const plannedCents = sum(details.planned);
   const contractedCents = sum(details.contracted);
   const paidCents = paymentAmounts.paidCents;
   const payableCents = paymentAmounts.plannedCents + paymentAmounts.unscheduledCents;
 
   return {
-    bbCents, activeStores: details.activeStores.length, plannedCents,
+    bbCents, activeStores: details.activeStores.length, storesWithBudget,
+    inactiveStoresWithBudget, inactiveBudgetCents, plannedCents,
     forecastBalanceCents: bbCents - plannedCents,
     contractedCents, contractBalanceCents: plannedCents - contractedCents,
     paidCents, payableCents, bbBalanceCents: bbCents - contractedCents,
