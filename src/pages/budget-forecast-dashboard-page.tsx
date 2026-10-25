@@ -111,7 +111,7 @@ export function BudgetForecastDashboardPage() {
   const forecast = useMemo(() =>
     dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters) : null,
     [dataset, filters]);
-  const updateFilter = <K extends keyof ForecastFilters>(key: K, value: ForecastFilters[K]) => {
+  const updateFilter = <K extends keyof ForecastFilters,>(key: K, value: ForecastFilters[K]) => {
     setFilters((current) => key === 'state'
       ? { ...current, state: value as string, storeId: '' }
       : { ...current, [key]: value });
