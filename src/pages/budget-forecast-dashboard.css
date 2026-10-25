@@ -55,3 +55,6 @@
 @media(max-width:970px){.forecast-card-grid--three{grid-template-columns:1fr}.forecast-card-grid--three .forecast-card{min-height:105px}}
 @media(max-width:690px){.forecast-card-grid{grid-template-columns:1fr}.forecast-card{min-height:110px;padding:16px}.forecast-filters label{flex:1 1 calc(50% - 12px)}.forecast-page-heading{flex-wrap:wrap}.forecast-section{padding:12px}.forecast-card__icon{width:52px;height:52px}.forecast-section__heading h3{font-size:1.05rem}}
 @media(max-width:430px){.forecast-filters label{flex:1 1 100%}.forecast-filters .button{flex:1}.forecast-card{gap:11px;padding:13px}.forecast-card strong{font-size:1.27rem}}
+
+.forecast-filters select:disabled{opacity:.66;cursor:not-allowed}
+.forecast-closure-notice{padding:12px 15px;border:1px solid #eddbaf;border-radius:9px;background:#fffbef;color:#73521d;font-size:.84rem;line-height:1.5}
