@@ -59,7 +59,7 @@ describe('DashboardPage', () => {
     vi.mocked(loadSupplyDashboard).mockResolvedValue(supply);
   });
 
-  it('carrega a visao geral e oferece troca direta entre os modulos', async () => {
+  it('carrega a visao geral legada sem exibir as abas temporariamente ocultas', async () => {
     render(
       <MemoryRouter>
         <DashboardPage view="overview" />
@@ -68,15 +68,11 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Total de lojas')).toBeInTheDocument();
     expect(screen.getByText('Itens ativos')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Visao Geral/ })).toHaveAttribute('href', '/dashboard');
-    expect(screen.getByRole('link', { name: /Implantacao/ })).toHaveAttribute(
-      'href',
-      '/dashboard/implantacao',
-    );
-    expect(screen.getByRole('link', { name: /Suprimentos/ })).toHaveAttribute(
-      'href',
-      '/dashboard/suprimentos',
-    );
+    // Componentes legados continuam executáveis por rota direta, mas as abas
+    // foram ocultadas temporariamente da navegação para o usuário.
+    expect(screen.queryByRole('link', { name: /Visao Geral/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Implantacao/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Suprimentos/ })).not.toBeInTheDocument();
     expect(loadImplementationDashboard).toHaveBeenCalledOnce();
     expect(loadSupplyDashboard).toHaveBeenCalledOnce();
   });
