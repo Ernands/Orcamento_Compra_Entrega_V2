@@ -5,6 +5,7 @@ import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
+import { BudgetForecastDashboardPage } from '../pages/budget-forecast-dashboard-page';
 import { FinancePage } from '../pages/finance-page';
 import { FinancePaymentsPage } from '../pages/finance-payments-page';
 import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
@@ -113,7 +114,15 @@ export function App() {
               path="dashboard"
               element={
                 <RequireCapability capability="dashboard.view">
-                  <DashboardPage view="overview" />
+                  <Navigate to="/dashboard/previsao-orcamentaria" replace />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/previsao-orcamentaria"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <BudgetForecastDashboardPage />
                 </RequireCapability>
               }
             />
