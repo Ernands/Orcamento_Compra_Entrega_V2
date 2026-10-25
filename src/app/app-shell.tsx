@@ -207,7 +207,7 @@ export function AppShell() {
         </span>
       </div>
       <nav className="sidebar__nav" aria-label="Navegacao principal">
-        {can('dashboard.view') && (
+        {can('dashboard.view') && can('finance.overview_view') && (
           <>
             {!compact && <span className="nav-section">Dashboard</span>}
             <NavLink to="/dashboard/previsao-orcamentaria" onClick={() => setMobileOpen(false)}>
