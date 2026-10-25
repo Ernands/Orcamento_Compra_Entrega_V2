@@ -17,7 +17,140 @@
 .financial-composition__store-count {color:#607589;font-size:.8rem;font-weight:650}
 .financial-composition__method {display:block;padding:0 14px 13px;color:#738192;font-size:.72rem;line-height:1.5}
 .financial-composition__reconcile-note {padding:10px 14px;margin:6px 12px 12px;border:1px solid #e6ce94;background:#fff9e7;border-radius:5px;color:#7c5823;font-size:.79rem}
-.financial-composition .finance-store-detail__kpis article strong {overflow-wrap:anywhere;white-space:normal;text-overflow:clip;font-size:clamp(.98rem,1.45vw,1.13rem);font-variant-numeric:tabular-nums}
+/* Match the neutral panels, accent strips and icon treatment of Previsão Orçamentária.
+   These rules are isolated from Financeiro > Detalhe da Loja. */
+.financial-composition__overview {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:stretch;
+  gap:12px;
+}
+.financial-composition__overview-section {
+  --composition-accent:#bdc7d3;
+  --composition-tone:#617080;
+  --composition-soft:#f2f5f6;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  padding:0 12px 12px;
+  background:#fff;
+  border:1px solid #dbe2e7;
+  border-top:7px solid var(--composition-accent);
+  border-radius:6px;
+  box-shadow:none;
+}
+.financial-composition__overview-section--planning {
+  --composition-accent:#bea5ff;
+  --composition-tone:#736096;
+  --composition-soft:#f0eafc;
+}
+.financial-composition__overview-section--execution {
+  --composition-accent:#96c9ff;
+  --composition-tone:#45749b;
+  --composition-soft:#e9f3fd;
+}
+.financial-composition__overview-section--financial {
+  --composition-accent:#91eda7;
+  --composition-tone:#397954;
+  --composition-soft:#e8f5ed;
+}
+.financial-composition__overview-heading {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:47px;
+  padding:10px 3px;
+  color:var(--composition-tone);
+}
+.financial-composition__overview-heading h3 {
+  margin:0;
+  color:#26364b;
+  font-size:.95rem;
+  font-weight:650;
+  letter-spacing:-.01em;
+}
+.financial-composition__overview-metrics {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  min-width:0;
+  height:100%;
+  border:1px solid #dce3e9;
+  border-radius:5px;
+  overflow:hidden;
+  background:#fff;
+}
+.financial-composition__overview-metric {
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  align-items:start;
+  column-gap:9px;
+  min-width:0;
+  min-height:112px;
+  padding:17px 10px 13px;
+  background:#fff;
+}
+.financial-composition__overview-metric + .financial-composition__overview-metric {
+  border-left:1px solid #e3e9ed;
+}
+.financial-composition__overview-metric-icon {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  border:1px solid color-mix(in srgb,var(--composition-tone) 13%,transparent);
+  border-radius:50%;
+  background:var(--composition-soft);
+  color:var(--composition-tone);
+}
+.financial-composition__overview-metric-icon svg {width:20px;height:20px;stroke-width:1.7}
+.financial-composition__overview-metric-body {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  min-width:0;
+}
+.financial-composition__overview-metric-label {
+  display:block;
+  min-height:2.35rem;
+  color:#4a5b6b;
+  font-size:.73rem;
+  font-weight:600;
+  line-height:1.35;
+  overflow-wrap:break-word;
+}
+.financial-composition__overview-metric-value {
+  display:block;
+  max-width:100%;
+  color:#172b46;
+  font-size:clamp(1rem,1.28vw,1.27rem);
+  font-weight:650;
+  letter-spacing:-.02em;
+  line-height:1.18;
+  overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums;
+}
+.financial-composition__overview-metric.is-positive .financial-composition__overview-metric-value {color:#27664b}
+.financial-composition__overview-metric.is-negative .financial-composition__overview-metric-value {color:#9c4141}
+.financial-composition__overview-metric.is-zero .financial-composition__overview-metric-value {color:#576475}
+@media(max-width:1430px) {
+  .financial-composition__overview {grid-template-columns:1fr}
+  .financial-composition__overview-metric {min-height:105px;padding:15px 18px}
+  .financial-composition__overview-metric-label {min-height:1.25rem}
+  .financial-composition__overview-metric-value {font-size:1.35rem}
+}
+@media(max-width:550px) {
+  .financial-composition__overview-section {padding:0 10px 10px}
+  .financial-composition__overview-metrics {grid-template-columns:1fr}
+  .financial-composition__overview-metric {min-height:85px}
+  .financial-composition__overview-metric + .financial-composition__overview-metric {
+    border-left:0;
+    border-top:1px solid #e3e9ed;
+  }
+  .financial-composition__overview-metric-label {min-height:0}
+  .financial-composition__overview-metric-value {font-size:1.2rem}
+}
 .financial-composition__detail {min-width:0;display:grid;gap:10px;background:#fff;border:1px solid #d9e2e9;border-radius:8px;padding:13px}
 .financial-composition__detail-heading {display:flex;justify-content:space-between;align-items:center;gap:12px}
 .financial-composition__detail-heading h3 {margin:0;color:#1e374f;font-size:1.08rem}
@@ -49,5 +182,5 @@
 .financial-composition__expanded-actions .button {display:inline-flex;align-items:center;gap:6px}
 .financial-composition__sentinel {height:1px;pointer-events:none}
 @media(max-width:1130px){.financial-composition__filters{grid-template-columns:repeat(2,minmax(0,1fr))}.financial-composition__filters button{justify-self:start}}
-@media(max-width:760px){.financial-composition .finance-store-detail__kpis--grouped{grid-template-columns:1fr}.financial-composition__expanded-body{grid-template-columns:1fr}.financial-composition__detail-heading{align-items:flex-start;flex-wrap:wrap}}
+@media(max-width:760px){.financial-composition__overview{grid-template-columns:1fr}.financial-composition__expanded-body{grid-template-columns:1fr}.financial-composition__detail-heading{align-items:flex-start;flex-wrap:wrap}}
 @media(max-width:550px){.financial-composition__filters{grid-template-columns:1fr}.financial-composition__filters button{width:100%}.financial-composition__store-count{display:none}}
