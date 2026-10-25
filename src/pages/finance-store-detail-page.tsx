@@ -426,6 +426,9 @@ export function FinanceStoreDetailPage() {
   }
 
   const availableBbCents = overview.budgetBbCents - overview.budgetTotalCents;
+  // Total da loja: diferença de execução contra o orçamento, não contra a verba BB.
+  // Positivo significa realizado acima do orçado.
+  const executionDifferenceCents = overview.realizedTotalCents - overview.budgetTotalCents;
 
   return (
     <div className="page-stack finance-store-detail">
@@ -564,9 +567,9 @@ export function FinanceStoreDetailPage() {
                 <td><strong>Total da loja</strong></td>
                 <td><strong>{formatBRL(overview.budgetTotalCents)}</strong></td>
                 <td><strong>{formatBRL(overview.realizedTotalCents)}</strong></td>
-                <td>
-                  <strong className={overview.realizedVarianceToBbCents < 0n ? 'value-negative' : 'value-positive'}>
-                    {formatBRL(overview.realizedVarianceToBbCents)}
+                <td title="Total realizado menos total orçado">
+                  <strong className={executionDifferenceCents > 0n ? 'value-negative' : 'value-positive'}>
+                    {formatBRL(executionDifferenceCents)}
                   </strong>
                 </td>
                 <td><strong>{formatBRL(overview.paidCents)}</strong></td>
