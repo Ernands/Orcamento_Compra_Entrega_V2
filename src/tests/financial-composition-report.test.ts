@@ -6,6 +6,7 @@ import type { WorkService } from '../domain/works-types';
 import app from '../app/app.tsx?raw';
 import shell from '../app/app-shell.tsx?raw';
 import page from '../pages/financial-composition-page.tsx?raw';
+import compositionCss from '../pages/financial-composition-page.css?raw';
 
 const stores=[
   {id:'s1',code:'LOJ-001',name:'ACARAU - CE',city:'ACARAU',state:'CE',status:'active'},
@@ -98,6 +99,27 @@ describe('Dashboard / Composição Financeira',()=>{
   expect(page).not.toContain('Exibir mais registros');
   expect(page).not.toContain('financial-composition__footer');
   expect(page).not.toContain('Disponível BB:');
+ });
+ it('usa o padrão executivo da Previsão Orçamentária com valores e rótulos alinhados',()=>{
+  expect(page).toContain('financial-composition__overview-section--planning');
+  expect(page).toContain('financial-composition__overview-section--execution');
+  expect(page).toContain('financial-composition__overview-section--financial');
+  expect(page).toContain('financial-composition__overview-metric-label');
+  expect(page).toContain('financial-composition__overview-metric-value');
+  expect(page).toContain('value={t.budgetBbCents}');
+  expect(page).toContain('value={t.budgetTotalCents}');
+  expect(page).toContain('value={t.realizedTotalCents}');
+  expect(page).toContain('value={t.realizedVarianceToBbCents}');
+  expect(page).toContain('value={t.paidCents}');
+  expect(page).toContain('value={t.payableCents}');
+  expect(page).not.toContain('finance-store-detail__kpis--grouped');
+  expect(compositionCss).toContain('border-top:7px solid var(--composition-accent)');
+  expect(compositionCss).toContain('--composition-accent:#bea5ff');
+  expect(compositionCss).toContain('--composition-accent:#96c9ff');
+  expect(compositionCss).toContain('--composition-accent:#91eda7');
+  expect(compositionCss).toContain('min-height:2.35rem');
+  expect(compositionCss).toContain('font-variant-numeric:tabular-nums');
+  expect(compositionCss).toContain('@media(max-width:550px)');
  });
  it('registra rota, permissões e menu na ordem solicitada',()=>{
   expect(app).toContain('path="dashboard/composicao-financeira"');
