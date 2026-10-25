@@ -92,7 +92,7 @@ describe('AppShell', () => {
   });
 
   it('mostra apenas a Previsão Orçamentária e oculta as visões antigas', () => {
-    renderShell(['dashboard.view', 'items.view']);
+    renderShell(['dashboard.view', 'finance.overview_view', 'items.view']);
     const links = screen.getAllByRole('link', { name: 'Previsão Orçamentária' });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0]).toHaveAttribute('href', '/dashboard/previsao-orcamentaria');
