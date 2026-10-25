@@ -180,6 +180,10 @@ export function AppShell() {
               <Calculator size={19} />
               Composição Financeira
             </NavLink>
+            <NavLink to="/dashboard/reembolso" onClick={() => setMobileOpen(false)}>
+              <WalletCards size={19} />
+              Reembolso
+            </NavLink>
           </>
         )}
 
