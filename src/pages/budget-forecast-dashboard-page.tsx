@@ -253,17 +253,17 @@ export function BudgetForecastDashboardPage() {
             </div>
             <div className="forecast-progress">
               <div className="forecast-progress__label">
-                  <TrendingUp size={18} aria-hidden="true" />
-                  <span>Execução Orçamentária (%)</span>
-                  <Info size={13} aria-hidden="true"/>
-                </div>
+                <TrendingUp size={18} aria-hidden="true" />
+                <span>Execução Orçamentária (%)</span>
+                <Info size={13} aria-hidden="true" />
+              </div>
               <strong>{forecast.executionPercent === null ? 'Não aplicável'
-                  : `${forecast.executionPercent.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%`}</strong>
+                : `${forecast.executionPercent.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%`}</strong>
               <div className={`forecast-progress__track ${forecast.executionPercent !== null && forecast.executionPercent > 100 ? 'forecast-progress__track--over' : ''}`}
-                  role="progressbar" aria-label="Percentual de execução" aria-valuemin={0}
-                  aria-valuemax={100} aria-valuenow={Math.min(100,Math.max(0,forecast.executionPercent||0))}>
-                  <span style={{width:`${Math.min(100,Math.max(0,forecast.executionPercent||0))}%`}} />
-                </div>
+                role="progressbar" aria-label="Percentual de execução" aria-valuemin={0}
+                aria-valuemax={100} aria-valuenow={Math.min(100,Math.max(0,forecast.executionPercent||0))}>
+                <span style={{width:`${Math.min(100,Math.max(0,forecast.executionPercent||0))}%`}} />
+              </div>
               {forecast.executionPercent !== null && forecast.executionPercent > 100 && <small>Orçamento previsto ultrapassado.</small>}
             </div>
           </ForecastSection>
