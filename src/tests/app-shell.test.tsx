@@ -102,6 +102,17 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Lojas' })).not.toBeInTheDocument();
   });
 
+  it('remove o cabeçalho global duplicado sem perder o acesso ao menu móvel', async () => {
+    const user = userEvent.setup();
+    renderShell(['stores.view']);
+    expect(document.querySelector('.topbar')).not.toBeInTheDocument();
+    expect(screen.getByText('Conteudo lojas')).toBeInTheDocument();
+    const openMobile = screen.getByRole('button', { name: 'Abrir menu' });
+    expect(openMobile).toHaveClass('app-mobile-menu');
+    await user.click(openMobile);
+    expect(screen.getByRole('button', { name: 'Fechar menu' })).toBeInTheDocument();
+  });
+
   it('recolhe a barra lateral e persiste a preferencia no navegador', async () => {
     const user = userEvent.setup();
     renderShell(['stores.view', 'items.view', 'quotes.view']);
