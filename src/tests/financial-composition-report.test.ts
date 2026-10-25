@@ -80,6 +80,25 @@ describe('Dashboard / Composição Financeira',()=>{
   expect(page).toContain('Não individualizado');
   expect(page).toContain('const canSeePayments');
  });
+ it('permite filtrar todas as situações financeiras sem alterar os indicadores oficiais',()=>{
+  expect(page).toContain("const [status,setStatus] = useState<StatusFilter>('all')");
+  for(const option of ['Orçado','Pago','Parcialmente pago','A pagar','Não individualizado']) {
+    expect(page).toContain(option);
+  }
+  expect(page).toContain("line.status===statusNames[status]");
+  expect(page).toContain("setStatus('all')");
+  expect(page).toContain('...filteredLines.map((r)=>[');
+  expect(page).toContain('report.totals');
+ });
+ it('carrega mais registros automaticamente e remove resumo financeiro duplicado',()=>{
+  expect(page).toContain('IntersectionObserver');
+  expect(page).toContain('root:scrollRoot');
+  expect(page).toContain('filteredLines.slice(0,limit)');
+  expect(page).toContain('className="financial-composition__sentinel"');
+  expect(page).not.toContain('Exibir mais registros');
+  expect(page).not.toContain('financial-composition__footer');
+  expect(page).not.toContain('Disponível BB:');
+ });
  it('registra rota, permissões e menu na ordem solicitada',()=>{
   expect(app).toContain('path="dashboard/composicao-financeira"');
   expect(app).toContain('FinancialCompositionPage');
