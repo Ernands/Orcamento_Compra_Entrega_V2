@@ -4,6 +4,7 @@ import {
   buildPurchaseOrderRpcPayloadV2,
   buildPurchasePaymentRpcPayloadV2,
   paidAtFromDateV2,
+  purchasePaymentDecimalV2,
 } from '../data/purchases/purchases-v2-repository';
 
 function values(shippingAmount: string) {
@@ -52,7 +53,7 @@ describe('buildPurchasePaymentRpcPayloadV2', () => {
       p_purchase_order_id: 'order-1',
       p_payment_method: 'pix',
       p_source_label: 'Conta operacional',
-      p_amount: '4880',
+      p_amount: '4880.00',
       p_entry_amount: null,
       p_installment_count: 2,
       p_first_due_date: null,
@@ -122,7 +123,7 @@ describe('atualizacao de parcela existente', () => {
     expect(rpc).toMatchObject({
       p_payment_id: 'parcela-original',
       p_purchase_order_id: 'pedido-original',
-      p_amount: '14652,96',
+      p_amount: '14652.96',
       p_status: 'paid',
       p_first_due_date: '2026-10-13',
       p_paid_at: '2026-10-09T12:00:00.000Z',
@@ -133,4 +134,50 @@ describe('atualizacao de parcela existente', () => {
     expect(() => paidAtFromDateV2('')).toThrow();
     expect(() => paidAtFromDateV2('2026-02-30')).toThrow();
   });
+});
+
+describe('pagamentos com pontuacao brasileira', () => {
+  it.each([
+    ['5.684,00', '5684.00'],
+    ['5684,00', '5684.00'],
+    ['5.684', '5684.00'],
+    ['R$ 5.684,00', '5684.00'],
+    ['5684.00', '5684.00'],
+    ['1.234.567,89', '1234567.89'],
+    ['1,234.56', '1234.56'],
+    ['5,90', '5.90'],
+    ['0', '0.00'],
+  ])('normaliza %s como %s antes de gravar no PostgreSQL', (entered, expected) => {
+    expect(purchasePaymentDecimalV2(entered)).toBe(expected);
+  });
+
+  it('normaliza valor e entrada ao atualizar a mesma parcela', () => {
+    const payload = buildPurchasePaymentRpcPayloadV2({
+      id: 'parcela-00003',
+      purchaseId: 'compra-00003',
+      purchaseOrderId: 'pedido-miranda',
+      paymentMethod: 'boleto',
+      sourceLabel: 'Boleto Miranda 1/5',
+      amount: '5.684,00',
+      entryAmount: '1.000,50',
+      installmentCount: '',
+      firstDueDate: '2026-10-13',
+      status: 'paid',
+      paidAt: paidAtFromDateV2('2026-10-08'),
+      notes: 'Parcela combinada',
+    });
+    expect(payload).toMatchObject({
+      p_payment_id: 'parcela-00003',
+      p_amount: '5684.00',
+      p_entry_amount: '1000.50',
+      p_first_due_date: '2026-10-13',
+      p_status: 'paid',
+    });
+  });
+
+  it.each(['', 'abc', '5.684,000', '1,2,3', '1.234,5.6'])(
+    'rejeita texto monetario invalido %s antes de enviar a RPC', (entered) => {
+      expect(() => purchasePaymentDecimalV2(entered)).toThrow();
+    },
+  );
 });
