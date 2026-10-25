@@ -379,17 +379,22 @@
 .finance-overview-toggle,
 .finance-overview-toggle.button {
   min-height: 34px;
-  color: #7a4200 !important;
-  background: #ffead0 !important;
-  border-color: #e7ad60 !important;
+  color: #256b4b !important;
+  background: #e8f5ed !important;
+  border-color: #a7d7ba !important;
   font-weight: 850;
 }
 
 .finance-overview-toggle:hover,
 .finance-overview-toggle.button:hover {
-  color: #5f3300 !important;
-  background: #ffddb1 !important;
-  border-color: #d9953e !important;
+  color: #19583b !important;
+  background: #d5ecde !important;
+  border-color: #77bb95 !important;
+}
+.finance-overview-toggle:focus-visible,
+.finance-overview-toggle.button:focus-visible {
+  outline: 2px solid #256b4b;
+  outline-offset: 2px;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(-n + 6) {
