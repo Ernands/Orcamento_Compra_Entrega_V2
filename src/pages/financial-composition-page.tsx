@@ -22,7 +22,7 @@ import type { FinanceStoreRow } from '../domain/finance-types';
 import type { PlannedBudgetItem } from '../domain/planned-budget-types';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
-import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
+import type { WorkService } from '../domain/works-types';
 import '../pages/finance-store-detail-page.css';
 import './financial-composition-page.css';
 
