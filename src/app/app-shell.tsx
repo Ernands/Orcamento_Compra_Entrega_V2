@@ -28,29 +28,6 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { IconButton } from '../components/ui';
 import { useSession } from './session-provider';
 
-const routeTitles: Record<string, string> = {
-  '/dashboard': 'Previsão Orçamentária',
-  '/dashboard/previsao-orcamentaria': 'Previsão Orçamentária',
-  '/dashboard/implantacao': 'Dashboard de Implantacao',
-  '/dashboard/suprimentos': 'Dashboard de Suprimentos',
-  '/lojas': 'Lojas',
-  '/acessos': 'Acessos',
-  '/alterar-senha': 'Alterar senha',
-  '/implantacao/pendencias': 'Pendencias',
-  '/implantacao/checklist-mestre': 'Checklist Mestre',
-  '/suprimentos/itens': 'Itens',
-  '/suprimentos/orcamento-previsto': 'Orçamento Previsto',
-  '/suprimentos/necessidades': 'Necessidades',
-  '/suprimentos/fornecedores': 'Fornecedores',
-  '/suprimentos/cotacoes': 'Cotacoes',
-  '/suprimentos/compras': 'Compras',
-  '/suprimentos/comparativo': 'Comparativo',
-  '/obras': 'Obras e Serviços',
-  '/financeiro': 'Financeiro',
-  '/financeiro/pagamentos': 'Pagamentos',
-  '/financeiro/conciliacao-conta': 'Conciliação Conta',
-};
-
 const SECTION_STORAGE = {
   implantation: 'implanta27.sidebar.implantation',
   supply: 'implanta27.sidebar.supply',
@@ -106,21 +83,6 @@ export function AppShell() {
     can('purchases.view');
   const canViewImplementationSection =
     can('stores.view') || can('checklists.view') || can('implementation.view');
-  const title = location.pathname === '/financeiro/pagamentos'
-    ? 'Pagamentos'
-    : location.pathname.startsWith('/financeiro/lojas/')
-    ? 'Detalhe financeiro da loja'
-    : location.pathname.startsWith('/suprimentos/orcamento-previsto/')
-      ? 'Detalhe do Orçamento Previsto'
-    : location.pathname.startsWith('/suprimentos/itens/')
-      ? 'Detalhe do item'
-    : location.pathname.startsWith('/lojas/')
-      ? location.pathname.endsWith('/anexos')
-        ? 'Anexos da loja'
-        : location.pathname.endsWith('/resumo-necessidades')
-          ? 'Resumo e Necessidades'
-          : 'Implantacao da loja'
-      : routeTitles[location.pathname] || 'Implanta Lojas Mais BB';
 
   useEffect(() => {
     if (location.pathname.startsWith('/lojas') || location.pathname.startsWith('/implantacao/')) {
@@ -432,15 +394,15 @@ export function AppShell() {
         </div>
       )}
       <div className="app-main">
-        <header className="topbar">
-          <IconButton label="Abrir menu" onClick={() => setMobileOpen(true)}>
-            <Menu size={21} />
-          </IconButton>
-          <div>
-            <span className="topbar__eyebrow">Implanta Lojas Mais BB</span>
-            <h1>{title}</h1>
-          </div>
-        </header>
+        <button
+          type="button"
+          className="app-mobile-menu"
+          aria-label="Abrir menu"
+          title="Abrir menu"
+          onClick={() => setMobileOpen(true)}
+        >
+          <Menu size={21} />
+        </button>
         <main className="page-content">
           <Outlet />
         </main>
