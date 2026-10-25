@@ -91,11 +91,14 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Fornecedores' })).not.toBeInTheDocument();
   });
 
-  it('mostra as tres visoes do dashboard com acesso a suprimentos', () => {
+  it('mostra apenas a Previsão Orçamentária e oculta as visões antigas', () => {
     renderShell(['dashboard.view', 'items.view']);
-    expect(screen.getAllByRole('link', { name: 'Visao Geral' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Implantacao' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Suprimentos' }).length).toBeGreaterThan(0);
+    const links = screen.getAllByRole('link', { name: 'Previsão Orçamentária' });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute('href', '/dashboard/previsao-orcamentaria');
+    expect(screen.queryByRole('link', { name: 'Visao Geral' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Implantacao' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Suprimentos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Lojas' })).not.toBeInTheDocument();
   });
 
