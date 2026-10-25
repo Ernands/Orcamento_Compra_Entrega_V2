@@ -51,6 +51,7 @@ import {
   listWorkServices,
 } from '../data/works/works-repository';
 import './finance-store-detail-page.css';
+import '../styles/finance-kpi-unified.css';
 
 const WORK_STATUS_LABELS: Record<WorkService['status'], string> = {
   budget: 'Orçamento',
