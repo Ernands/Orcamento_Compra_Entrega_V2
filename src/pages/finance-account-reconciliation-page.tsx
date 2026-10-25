@@ -53,6 +53,7 @@ import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
 import type { WorkService } from '../domain/works-types';
 import './finance-account-reconciliation-page.css';
+import '../styles/finance-kpi-unified.css';
 
 const PAYMENT_LABELS: Record<string, string> = {
   pix: 'PIX',
