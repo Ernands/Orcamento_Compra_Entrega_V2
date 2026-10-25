@@ -4,6 +4,11 @@ import {
   type UnifiedFinancePaymentRow,
 } from './finance-payments';
 import type { Store } from './types';
+import type { FinanceStoreRow } from './finance-types';
+import type { WorkService } from './works-types';
+import type { PlannedBudgetItem } from './planned-budget-types';
+import { plannedBudgetAllocations } from './planned-budget-calculations';
+import { moneyToCents } from './supply-calculations';
 
 export type ForecastIndicator =
   | 'bb' | 'activeStores' | 'planned' | 'forecastBalance'
@@ -37,6 +42,11 @@ export interface ForecastSnapshot {
   bbBalanceCents: bigint;
   executionPercent: number | null;
   details: Record<ForecastIndicator, ForecastDetail[]>;
+}
+export interface ForecastEvidence {
+  storePurchases: FinanceStoreRow[];
+  works: WorkService[];
+  plannedBudgetItems: PlannedBudgetItem[];
 }
 const emptyDetails = (): Record<ForecastIndicator, ForecastDetail[]> => ({
   bb: [], activeStores: [], planned: [], forecastBalance: [], contracted: [],
@@ -79,6 +89,7 @@ export function buildBudgetForecast(
   overview: FinanceOverviewStoreRow[],
   payments: UnifiedFinancePaymentRow[],
   filters: ForecastFilters,
+  evidence?: ForecastEvidence,
 ): ForecastSnapshot {
   const chosenStores = selectForecastStores(stores, filters);
   const byStoreId = new Map(chosenStores.map((store) => [store.id, store]));
@@ -103,6 +114,52 @@ export function buildBudgetForecast(
     details.bbBalance.push(perStore(row, store, 'bbBalance',
       row.budgetBbCents - row.realizedTotalCents, 'Verba − contratado', basis));
   });
+
+  // Expand the contracted and planned store summaries into their real records
+  // when (and only when) the source-level cents reconcile with Financeiro.
+  // If source records cannot account for the exact store total, preserve the
+  // original consolidated store row rather than creating artificial entries.
+  if (evidence) {
+    const purchasesByStore = new Map(evidence.storePurchases.map((row) => [row.storeId, row]));
+    const allocationsByStore = new Map<string, ReturnType<typeof plannedBudgetAllocations>>();
+    plannedBudgetAllocations(evidence.plannedBudgetItems).forEach((allocation) => {
+      const current = allocationsByStore.get(allocation.storeId) || [];
+      current.push(allocation);
+      allocationsByStore.set(allocation.storeId, current);
+    });
+    chosenRows.forEach((row) => {
+      const store = byStoreId.get(row.storeId)!;
+      const make = (id: string, reference: string, category: string,
+        amountCents: bigint, status: string): ForecastDetail => ({
+        id, ...storeInfo(store), reference, category, amountCents, status,
+      });
+      const contracted = [
+        ...(purchasesByStore.get(row.storeId)?.purchases || []).map((purchase) =>
+          make(`contracted:${row.storeId}:${purchase.id}`, purchase.purchaseCode,
+            'Compra · ' + purchase.supplierName, purchase.realizedCents, 'Realizado')),
+        ...evidence.works.filter((work) => work.storeId === row.storeId && work.status !== 'cancelled')
+          .map((work) => make(`contracted:${row.storeId}:${work.id}`,work.code,
+            'Obras e Serviços · ' + work.category, moneyToCents(work.contractedAmount),work.status)),
+      ];
+      if (contracted.length && sum(contracted) === row.realizedTotalCents) {
+        details.contracted = details.contracted.filter((detail) => detail.id !== `contracted:${row.storeId}`)
+          .concat(contracted);
+      }
+      const planned = [
+        ...(allocationsByStore.get(row.storeId) || []).map((allocation) => make(
+          `planned:${row.storeId}:${allocation.budgetItemId}:${allocation.segmentId}`,
+          allocation.itemCode, 'Orçamento previsto · ' + allocation.segmentName,
+          allocation.totalCents, 'Orçado')),
+        ...evidence.works.filter((work) => work.storeId === row.storeId && work.status !== 'cancelled')
+          .map((work) => make(`planned:${row.storeId}:${work.id}`, work.code,
+            'Obras e Serviços · orçamento', moneyToCents(work.budgetAmount), work.status)),
+      ];
+      if (planned.length && sum(planned) === row.budgetTotalCents) {
+        details.planned = details.planned.filter((detail) => detail.id !== `planned:${row.storeId}`)
+          .concat(planned);
+      }
+    });
+  }
 
   const anyFilter = Boolean(filters.state || filters.storeId) ||
     filters.operation !== 'all' || filters.implantation !== 'all';
