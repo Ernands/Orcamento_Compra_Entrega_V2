@@ -30,7 +30,8 @@ import { IconButton } from '../components/ui';
 import { useSession } from './session-provider';
 
 const routeTitles: Record<string, string> = {
-  '/dashboard': 'Visao Geral',
+  '/dashboard': 'Previsão Orçamentária',
+  '/dashboard/previsao-orcamentaria': 'Previsão Orçamentária',
   '/dashboard/implantacao': 'Dashboard de Implantacao',
   '/dashboard/suprimentos': 'Dashboard de Suprimentos',
   '/lojas': 'Lojas',
@@ -210,20 +211,10 @@ export function AppShell() {
         {can('dashboard.view') && (
           <>
             {!compact && <span className="nav-section">Dashboard</span>}
-            <NavLink to="/dashboard" end onClick={() => setMobileOpen(false)}>
+            <NavLink to="/dashboard/previsao-orcamentaria" onClick={() => setMobileOpen(false)}>
               <LayoutDashboard size={19} />
-              Visao Geral
+              Previsão Orçamentária
             </NavLink>
-            <NavLink to="/dashboard/implantacao" onClick={() => setMobileOpen(false)}>
-              <Building2 size={19} />
-              Implantacao
-            </NavLink>
-            {canViewSupply && (
-              <NavLink to="/dashboard/suprimentos" onClick={() => setMobileOpen(false)}>
-                <Boxes size={19} />
-                Suprimentos
-              </NavLink>
-            )}
           </>
         )}
 
