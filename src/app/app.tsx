@@ -122,7 +122,9 @@ export function App() {
               path="dashboard/previsao-orcamentaria"
               element={
                 <RequireCapability capability="dashboard.view">
-                  <BudgetForecastDashboardPage />
+                  <RequireCapability capability="finance.overview_view">
+                    <BudgetForecastDashboardPage />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />
