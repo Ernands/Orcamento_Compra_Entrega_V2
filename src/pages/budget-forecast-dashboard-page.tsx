@@ -11,11 +11,14 @@ import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository
 import { listWorkServices, listFinanceStoreBudgets } from '../data/works/works-repository';
 import { listPlannedBudget } from '../data/planned-budget/planned-budget-repository';
 import { listFinanceReimbursements } from '../data/finance/finance-repository';
+import { listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
+import { buildManagerialReimbursements, managerialTotals, reimbursementStatusLabels,
+  type ManagerialReimbursementEntry, type ReimbursementStatus } from '../domain/managerial-reimbursements';
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import { buildUnifiedFinancePayments } from '../domain/finance-payments';
 import { formatBRL } from '../domain/supply-calculations';
-import { buildBudgetForecast, type ForecastFilters, type ForecastIndicator } from '../domain/budget-forecast';
+import { buildBudgetForecast, selectForecastStores, type ForecastFilters, type ForecastIndicator } from '../domain/budget-forecast';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
 import type { FinanceStoreRow } from '../domain/finance-types';
 import type { WorkService } from '../domain/works-types';
@@ -34,6 +37,7 @@ type ForecastDataset = {
   storePurchases: FinanceStoreRow[];
   works: WorkService[];
   plannedBudgetItems: PlannedBudgetItem[];
+  managerialEntries: ManagerialReimbursementEntry[];
 };
 type MetricCardConfig = {
   key: ForecastIndicator;
@@ -89,6 +93,8 @@ export function BudgetForecastDashboardPage() {
   const { can } = useSession();
   const [dataset, setDataset] = useState<ForecastDataset | null>(null);
   const [filters, setFilters] = useState<ForecastFilters>(DEFAULT_FILTERS);
+  const [considerReimbursements,setConsiderReimbursements] = useState(false);
+  const [reimbursementStatusFilter,setReimbursementStatusFilter] = useState<ReimbursementStatus|'all'>('all');
   const [openIndicator, setOpenIndicator] = useState<ForecastIndicator | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +103,10 @@ export function BudgetForecastDashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [stores, purchases, works, budgets, planned, reimbursements] = await Promise.all([
+      const [stores, purchases, works, budgets, planned, reimbursements, managerialEntries] = await Promise.all([
         listStores(), listSupplyPurchasesV2(), listWorkServices(),
         listFinanceStoreBudgets(), listPlannedBudget(), listFinanceReimbursements(),
+        listManagerialReimbursements(),
       ]);
       const purchaseStoreRows = buildFinanceStoreRows(purchases, reimbursements);
       const overview = buildFinanceOverviewRows({
@@ -108,7 +115,7 @@ export function BudgetForecastDashboardPage() {
       });
       setDataset({
         stores, overview, payments: buildUnifiedFinancePayments(purchases, works),
-        storePurchases: purchaseStoreRows, works, plannedBudgetItems: planned.items,
+        storePurchases: purchaseStoreRows, works, plannedBudgetItems: planned.items, managerialEntries,
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível consultar os dados financeiros.');
@@ -126,12 +133,26 @@ export function BudgetForecastDashboardPage() {
     [dataset, filters.state]);
   const closureUnavailable = Boolean(dataset?.stores.some((store) =>
     store.financialClosure?.state === 'unavailable'));
+  const managerialRows=useMemo(() => dataset
+    ? buildManagerialReimbursements(dataset.stores,dataset.overview,dataset.managerialEntries) : [],
+    [dataset]);
+  const eligibleReimbursementStoreIds=useMemo(()=>{
+    if(!considerReimbursements||reimbursementStatusFilter==='all')return undefined;
+    return new Set(managerialRows.filter(row=>row.reimbursementStatus===reimbursementStatusFilter)
+      .map(row=>row.storeId));
+  },[considerReimbursements,reimbursementStatusFilter,managerialRows]);
   const forecast = useMemo(() =>
     dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters, {
       storePurchases: dataset.storePurchases, works: dataset.works,
       plannedBudgetItems: dataset.plannedBudgetItems,
-    }) : null,
-    [dataset, filters]);
+    },eligibleReimbursementStoreIds) : null,
+    [dataset, filters,eligibleReimbursementStoreIds]);
+  const filteredManagerialTotals=useMemo(()=>{
+    if(!dataset)return null;
+    const chosenIds=new Set(selectForecastStores(dataset.stores,filters).map(s=>s.id));
+    return managerialTotals(managerialRows.filter(r=>chosenIds.has(r.storeId) &&
+      (!eligibleReimbursementStoreIds||eligibleReimbursementStoreIds.has(r.storeId))));
+  },[dataset,filters,managerialRows,eligibleReimbursementStoreIds]);
   const updateFilter = <K extends keyof ForecastFilters,>(key: K, value: ForecastFilters[K]) => {
     setFilters((current) => key === 'state'
       ? { ...current, state: value, storeId: '' }
@@ -230,7 +251,23 @@ export function BudgetForecastDashboardPage() {
           <option value="all">Todas</option><option value="open">Em andamento</option>
           <option value="closed">Finalizadas</option>
         </select></label>
-        <button type="button" className="button button--secondary" onClick={() => setFilters(DEFAULT_FILTERS)}>
+        <label>Considerar reembolsos
+          <select value={considerReimbursements?'yes':'no'} onChange={e=>{
+            setConsiderReimbursements(e.target.value==='yes');setReimbursementStatusFilter('all');
+          }}>
+            <option value="no">Não</option><option value="yes">Sim</option>
+          </select>
+        </label>
+        {considerReimbursements && <label>Situação do reembolso
+          <select value={reimbursementStatusFilter} onChange={e=>
+            setReimbursementStatusFilter(e.target.value as ReimbursementStatus|'all')}>
+            <option value="all">Todas</option>
+            {Object.entries(reimbursementStatusLabels).map(([key,label])=>
+              <option key={key} value={key}>{label}</option>)}
+          </select></label>}
+        <button type="button" className="button button--secondary" onClick={() => {
+          setFilters(DEFAULT_FILTERS);setConsiderReimbursements(false);setReimbursementStatusFilter('all');
+        }}>
           <RefreshCcw size={16}/> Limpar filtros</button>
         <button type="button" className="button button--primary" onClick={exportCsv}
           disabled={!forecast || !can('dashboard.view')}><ArrowDownToLine size={16}/> Exportar CSV</button>
@@ -277,6 +314,23 @@ export function BudgetForecastDashboardPage() {
             <div className="forecast-card-grid">{(['paid','payable'] as const).map((key)=>
               <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}</div>
           </ForecastSection>
+          {considerReimbursements && filteredManagerialTotals && <ForecastSection color="green"
+            title="Reembolsos — Visão gerencial" icon={<WalletCards size={18}/>}>
+            <div className="forecast-card-grid forecast-card-grid--reimbursement">
+              {([
+                ['Total solicitado',filteredManagerialTotals.requestedCents],
+                ['Total reembolsado',filteredManagerialTotals.receivedCents],
+                ['Pendente de reembolso',filteredManagerialTotals.pendingCents],
+                ['Desembolso líquido',forecast.paidCents-filteredManagerialTotals.receivedCents],
+              ] as const).map(([label,value])=><article className="forecast-card forecast-reimbursement-card"
+                key={label}><span className="forecast-card__content">
+                  <span className="forecast-card__label">{label}</span>
+                  <strong className="forecast-card__value">{formatBRL(value)}</strong>
+                </span></article>)}
+            </div>
+            <p className="forecast-reimbursement-note">Visão opcional: desembolso líquido =
+              Pago − Reembolsado. Não altera orçamento, realizado, pago ou verba BB.</p>
+          </ForecastSection>}
           <ForecastSection color="orange" title="Comparativo Final da Verba" icon={<Coins size={18}/>}>
             <div className="forecast-card-grid forecast-card-grid--three">
               {(['bb','contracted','bbBalance'] as const).map((key)=>
