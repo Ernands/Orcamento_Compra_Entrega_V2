@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   createFinanceAccountAttachmentSignedUrl,
@@ -478,32 +479,32 @@ export function FinanceAccountReconciliationPage() {
           <section className="finance-account-kpis" aria-label="Consolidado da conta">
             <article className="finance-account-kpi finance-account-kpi--investment">
               <span>Investimento acumulado</span>
-              <strong>{formatBRL(consolidated.investmentCents)}</strong>
+              <FinanceAmount cents={consolidated.investmentCents} />
               <small>Valores colocados na Conta BB para o projeto.</small>
             </article>
             <article className="finance-account-kpi finance-account-kpi--payments">
               <span>Pagamentos realizados</span>
-              <strong>{formatBRL(consolidated.systemPaymentsCents)}</strong>
+              <FinanceAmount cents={consolidated.systemPaymentsCents} />
               <small>Ocorrências pagas registradas no sistema.</small>
             </article>
             <article className="finance-account-kpi finance-account-kpi--adjustments">
               <span>Acertos líquidos</span>
-              <strong>{formatBRL(consolidated.adjustmentCreditCents - consolidated.adjustmentDebitCents)}</strong>
+              <FinanceAmount cents={consolidated.adjustmentCreditCents - consolidated.adjustmentDebitCents} />
               <small>Positivos {formatBRL(consolidated.adjustmentCreditCents)} · negativos {formatBRL(consolidated.adjustmentDebitCents)}</small>
             </article>
             <article className="finance-account-kpi finance-account-kpi--expected">
               <span>Saldo esperado</span>
-              <strong>{formatBRL(consolidated.expectedBalanceCents)}</strong>
+              <FinanceAmount cents={consolidated.expectedBalanceCents} />
               <small>Investimentos − pagamentos + acertos positivos − negativos.</small>
             </article>
             <article className="finance-account-kpi finance-account-kpi--bank">
               <span>Saldo informado BB</span>
-              <strong>{consolidated.actualBalanceCents === null ? 'Não informado' : formatBRL(consolidated.actualBalanceCents)}</strong>
+              {consolidated.actualBalanceCents === null ? <strong>Não informado</strong> : <FinanceAmount cents={consolidated.actualBalanceCents} />}
               <small>{consolidated.actualBalanceDate ? `Última posição em ${dateLabel(consolidated.actualBalanceDate)}` : 'Sem posição bancária registrada.'}</small>
             </article>
             <article className={`finance-account-kpi finance-account-kpi--difference ${consolidated.balanceDifferenceCents === 0n ? 'finance-account-kpi--positive' : consolidated.balanceDifferenceCents === null ? 'finance-account-kpi--warning' : 'finance-account-kpi--danger'}`}>
               <span>Diferença da conta</span>
-              <strong>{consolidated.balanceDifferenceCents === null ? 'Não calculada' : formatBRL(consolidated.balanceDifferenceCents)}</strong>
+              {consolidated.balanceDifferenceCents === null ? <strong>Não calculada</strong> : <FinanceAmount cents={consolidated.balanceDifferenceCents} />}
               <small>Saldo BB − saldo esperado pelo sistema.</small>
             </article>
             <article className="finance-account-kpi finance-account-kpi--conference">
