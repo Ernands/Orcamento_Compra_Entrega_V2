@@ -2,7 +2,7 @@ import {
   ArrowDownToLine, Building2, CheckCircle2, ChevronDown, ChevronRight, FileText,
   Landmark, ReceiptText, RefreshCcw, Search, WalletCards,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading } from '../components/ui';
@@ -42,6 +42,16 @@ const groupNames = {
   works: 'Obras e Serviços',
 } as const;
 type GroupFilter = keyof typeof groupNames;
+const statusNames = {
+  all: 'Todas as situações',
+  budget: 'Orçado',
+  paid: 'Pago',
+  partial: 'Parcialmente pago',
+  due: 'A pagar',
+  unknown: 'Não individualizado',
+} as const;
+type StatusFilter = keyof typeof statusNames;
+const DETAIL_BATCH_SIZE = 60;
 const amount = (cents: bigint | null) => cents === null ? '—' : formatBRL(cents);
 function moneyCsv(cents: bigint | null) {
   if (cents === null) return 'Não individualizado';
@@ -68,9 +78,17 @@ export function FinancialCompositionPage() {
   const [error,setError] = useState<string|null>(null);
   const [storeId,setStoreId] = useState('');
   const [group,setGroup] = useState<GroupFilter>('all');
+  const [status,setStatus] = useState<StatusFilter>('all');
   const [search,setSearch] = useState('');
   const [expanded,setExpanded] = useState<string|null>(null);
-  const [limit,setLimit] = useState(60);
+  const [limit,setLimit] = useState(DETAIL_BATCH_SIZE);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const resetDetailView = () => {
+    setExpanded(null);
+    setLimit(DETAIL_BATCH_SIZE);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);setError(null);
@@ -103,11 +121,28 @@ export function FinancialCompositionPage() {
   const filteredLines = useMemo(()=>{
     if(!report) return [];
     const query = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    return report.lines.filter((line)=>group==='all'||line.group===group).filter((line)=>
-      !query || [line.storeLabel,line.reference,line.name,line.origin,line.status].join(' ')
-        .normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(query));
-  },[report,group,search]);
+    return report.lines.filter((line)=>
+      (group==='all'||line.group===group) &&
+      (status==='all'||line.status===statusNames[status]) &&
+      (!query || [line.storeLabel,line.reference,line.name,line.origin,line.status].join(' ')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(query)));
+  },[report,group,status,search]);
   const visibleLines = filteredLines.slice(0,limit);
+
+  // Keep the initial DOM small. Append the next block automatically when users
+  // approach the bottom of this report's own scrolling region.
+  useEffect(()=>{
+    const scrollRoot = scrollRef.current;
+    const sentinel = sentinelRef.current;
+    if(!scrollRoot||!sentinel||filteredLines.length<=limit)return;
+    const observer = new IntersectionObserver(([entry])=>{
+      if(entry.isIntersecting) {
+        setLimit((current)=>Math.min(current+DETAIL_BATCH_SIZE,filteredLines.length));
+      }
+    },{root:scrollRoot,rootMargin:'0px 0px 240px 0px'});
+    observer.observe(sentinel);
+    return ()=>observer.disconnect();
+  },[filteredLines.length,limit]);
   const canSeePayments = can('finance.view') && can('finance.payments_view');
   const canSeeDetail = can('finance.view') && can('finance.store_detail_view');
 
@@ -150,7 +185,6 @@ export function FinancialCompositionPage() {
     downloadCsv(rows);
   };
   const t=report?.totals;
-  const availableBb = t ? t.budgetBbCents-t.budgetTotalCents : 0n;
   return (
     <div className="page-stack finance-store-detail financial-composition">
       <header className="finance-store-detail__heading">
@@ -169,7 +203,7 @@ export function FinancialCompositionPage() {
       <section className="financial-composition__filters" aria-label="Filtros da Composição Financeira">
         <label>Loja
           <select value={storeId} onChange={(event)=>{
-            setStoreId(event.target.value);setExpanded(null);setLimit(60);}}>
+            setStoreId(event.target.value);resetDetailView();}}>
             <option value="">Todas as lojas — consolidado</option>
             {(data?.stores||[]).map((store)=>
               <option value={store.id} key={store.id}>
@@ -179,19 +213,26 @@ export function FinancialCompositionPage() {
         </label>
         <label>Grupo
           <select value={group} onChange={(event)=>{
-            setGroup(event.target.value as GroupFilter);setLimit(60);setExpanded(null);}}>
+            setGroup(event.target.value as GroupFilter);resetDetailView();}}>
             {(Object.entries(groupNames) as Array<[GroupFilter,string]>).map(([key,name])=>
+              <option key={key} value={key}>{name}</option>)}
+          </select>
+        </label>
+        <label>Situação financeira
+          <select value={status} onChange={(event)=>{
+            setStatus(event.target.value as StatusFilter);resetDetailView();}}>
+            {(Object.entries(statusNames) as Array<[StatusFilter,string]>).map(([key,name])=>
               <option key={key} value={key}>{name}</option>)}
           </select>
         </label>
         <label>Buscar
           <span className="financial-composition__search"><Search size={16}/>
-            <input value={search} onChange={(event)=>{setSearch(event.target.value);setLimit(60);}}
+            <input value={search} onChange={(event)=>{setSearch(event.target.value);resetDetailView();}}
               placeholder="Item, serviço, código, fornecedor..." />
           </span>
         </label>
         <button type="button" className="button button--secondary button--small"
-          onClick={()=>{setStoreId('');setGroup('all');setSearch('');setExpanded(null);setLimit(60);}}>
+          onClick={()=>{setStoreId('');setGroup('all');setStatus('all');setSearch('');resetDetailView();}}>
           Limpar filtros
         </button>
       </section>
@@ -205,9 +246,6 @@ export function FinancialCompositionPage() {
               <article>
                 <Landmark size={20}/><span>Verba BB</span>
                 <strong title={formatBRL(t.budgetBbCents)}>{formatBRL(t.budgetBbCents)}</strong>
-                <small className={`finance-store-bb-available ${availableBb<0n?'is-negative':'is-positive'}`}>
-                  Disponível BB: {formatBRL(availableBb)}
-                </small>
               </article>
               <article>
                 <ReceiptText size={20}/><span>Orçado total</span>
@@ -298,8 +336,9 @@ export function FinancialCompositionPage() {
             Valores de obras vêm diretamente dos pagamentos dos serviços.
           </p>
           {filteredLines.length===0 ? <EmptyState title="Nenhum registro encontrado"
-              detail="Altere a loja, o grupo ou a busca para localizar outros registros."/> :
-            <div className="financial-composition__scroll">
+              detail="Altere a loja, o grupo, a situação financeira ou a busca para localizar outros registros."/> :
+            <div className="financial-composition__scroll" ref={scrollRef}
+              tabIndex={0} aria-label="Registros financeiros, rolagem automática">
               <table className="financial-composition__table">
                 <thead><tr>
                   <th>Loja / Descrição</th><th>Grupo</th><th>Orçado</th><th>Realizado</th>
@@ -350,16 +389,9 @@ export function FinancialCompositionPage() {
                     </tbody>;
                   })}
               </table>
+              {filteredLines.length>limit&&<div ref={sentinelRef}
+                className="financial-composition__sentinel" aria-hidden="true"/>}
             </div>}
-          {filteredLines.length>limit&&<button type="button"
-            className="button button--secondary financial-composition__load-more"
-            onClick={()=>setLimit((current)=>current+60)}>
-            Exibir mais registros ({filteredLines.length-limit} restantes)
-          </button>}
-          <div className="financial-composition__footer">
-            <span>Os filtros de grupo e pesquisa afetam somente as linhas. Os totais acima são definidos pelo filtro de loja.</span>
-            <strong>Totais oficiais: Orçado {formatBRL(t.budgetTotalCents)} · Realizado {formatBRL(t.realizedTotalCents)} · Pago {formatBRL(t.paidCents)} · A pagar {formatBRL(t.payableCents)}</strong>
-          </div>
         </section>
       </>}
     </div>
