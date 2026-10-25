@@ -176,6 +176,10 @@ export function AppShell() {
               <LayoutDashboard size={19} />
               Previsão Orçamentária
             </NavLink>
+            <NavLink to="/dashboard/composicao-financeira" onClick={() => setMobileOpen(false)}>
+              <Calculator size={19} />
+              Composição Financeira
+            </NavLink>
           </>
         )}
 
