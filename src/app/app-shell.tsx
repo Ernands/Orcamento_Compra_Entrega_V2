@@ -1,6 +1,5 @@
 import {
   Building2,
-  Boxes,
   ChevronRight,
   ClipboardCheck,
   ChartNoAxesCombined,
