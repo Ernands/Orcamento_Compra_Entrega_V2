@@ -323,3 +323,10 @@
 @media (prefers-reduced-motion: reduce) {
   .forecast-card,.forecast-card__more,.forecast-progress__track > span { transition: none; }
 }
+
+/* Optional reimbursement comparison, separate from the official forecast KPIs. */
+.forecast-card-grid--reimbursement {grid-template-columns:repeat(2,minmax(0,1fr))}
+.forecast-reimbursement-card {cursor:default;text-align:left}
+.forecast-reimbursement-card:hover {transform:none}
+.forecast-reimbursement-note {margin:5px 0;color:#687b8b;font-size:.76rem}
+@media(max-width:680px) {.forecast-card-grid--reimbursement{grid-template-columns:1fr}}
