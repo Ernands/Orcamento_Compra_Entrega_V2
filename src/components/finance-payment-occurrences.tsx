@@ -136,6 +136,7 @@ export function FinancePaymentOccurrencesModal({
   const [savedOccurrences, setSavedOccurrences] = useState<FinancePaymentOccurrenceDisplay[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [unlinkedProofs, setUnlinkedProofs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const nextKey = useRef(1);
 
@@ -149,6 +150,7 @@ export function FinancePaymentOccurrencesModal({
     setEditing(false);
     setSaving(false);
     setSaved(false);
+    setUnlinkedProofs(0);
     setError(null);
   }, [row]);
 
@@ -168,9 +170,12 @@ export function FinancePaymentOccurrencesModal({
   const official = financePaymentOfficialAmount(row);
   const detailed = occurrences.reduce((sum, occurrence) => sum + occurrence.amountCents, 0n);
   const difference = detailed - official;
-  const divergence = difference !== 0n;
   const editable = canEdit && row.workServiceId === null && row.paymentIds.length === 1;
   const editDifference = draftTotal === null ? null : draftTotal - official;
+  // Editing must report the CURRENT input, not yesterday's saved divergence.
+  const displayedDetailed = editing ? draftTotal : detailed;
+  const displayedDifference = editing ? editDifference : difference;
+  const divergence = displayedDifference !== null && displayedDifference !== 0n;
 
   const updateDraft = (key: string, change: Partial<OccurrenceDraft>) => {
     setDrafts((current) => current.map((draft) => draft.key === key ? { ...draft, ...change } : draft));
@@ -191,6 +196,7 @@ export function FinancePaymentOccurrencesModal({
   const startEditing = () => {
     setDrafts(draftsFromOccurrences(row, occurrences));
     setSaved(false);
+    setUnlinkedProofs(0);
     setError(null);
     setEditing(true);
   };
@@ -215,8 +221,20 @@ export function FinancePaymentOccurrencesModal({
         };
       });
       setSaving(true);
-      await replaceSupplyPurchasePaymentOccurrencesV2(row.paymentIds[0], values);
-      setSavedOccurrences(displayFromDrafts(drafts));
+      const result = await replaceSupplyPurchasePaymentOccurrencesV2(
+        row.paymentIds[0],
+        values,
+        (count) => window.confirm(
+          `${count} ocorrência(s) está(ão) vinculada(s) a comprovante(s) excluído(s) ou não pertencente(s) a esta compra. ` +
+          'O detalhamento será salvo sem esses vínculos; nenhum PDF ou valor será excluído. Deseja continuar?',
+        ),
+      );
+      const savedDrafts = drafts.map((draft, index) => ({
+        ...draft, attachmentId: result.occurrences[index]?.attachmentId || null,
+      }));
+      setDrafts(savedDrafts);
+      setUnlinkedProofs(result.unlinkedCount);
+      setSavedOccurrences(displayFromDrafts(savedDrafts));
       setEditing(false);
       setSaved(true);
     } catch (failure) {
@@ -236,8 +254,8 @@ export function FinancePaymentOccurrencesModal({
     >
       <div className={`finance-payment-occurrence-summary ${divergence ? 'is-divergent' : 'is-reconciled'}`}>
         <div><span>Valor oficial</span><strong>{formatBRL(official)}</strong></div>
-        <div><span>Soma detalhada</span><strong>{formatBRL(detailed)}</strong></div>
-        <div><span>Diferença (detalhado − oficial)</span><strong>{formatBRL(difference)}</strong></div>
+        <div><span>Soma detalhada</span><strong>{displayedDetailed === null ? 'Valor inválido' : formatBRL(displayedDetailed)}</strong></div>
+        <div><span>Diferença (detalhado − oficial)</span><strong>{displayedDifference === null ? '—' : formatBRL(displayedDifference)}</strong></div>
       </div>
 
       {divergence && (
@@ -253,6 +271,7 @@ export function FinancePaymentOccurrencesModal({
       {saved && (
         <div className="finance-payment-occurrence-saved" role="status">
           Detalhamento salvo. A próxima atualização da tela usará essas datas também na coluna, filtros e exportação.
+          {unlinkedProofs > 0 && <span> {unlinkedProofs} vínculo(s) a comprovante(s) indisponível(is) foram desassociados, sem excluir arquivos.</span>}
         </div>
       )}
 
