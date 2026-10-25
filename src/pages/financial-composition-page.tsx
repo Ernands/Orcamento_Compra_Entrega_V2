@@ -1,8 +1,8 @@
 import {
-  ArrowDownToLine, Building2, CheckCircle2, ChevronDown, ChevronRight, FileText,
+  ArrowDownToLine, Building2, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, FileText,
   Landmark, ReceiptText, RefreshCcw, Search, WalletCards,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading } from '../components/ui';
@@ -70,6 +70,25 @@ function financialStatus(row: CompositionLine) {
   return <span className={`financial-composition__status financial-composition__status--${row.status === 'Pago' ? 'paid' : row.status === 'Orçado' ? 'budget' : row.status === 'Não individualizado' ? 'unknown' : 'due'}`}>
     {row.status}
   </span>;
+}
+type OverviewMetricProps = {
+  label: string;
+  value: bigint;
+  icon: ReactNode;
+  isBalance?: boolean;
+};
+function OverviewMetric({label,value,icon,isBalance=false}:OverviewMetricProps) {
+  const tone = !isBalance ? '' : value<0n ? ' is-negative' : value>0n ? ' is-positive' : ' is-zero';
+  return (
+    <article className={`financial-composition__overview-metric${tone}`}>
+      <span className="financial-composition__overview-metric-icon" aria-hidden="true">{icon}</span>
+      <div className="financial-composition__overview-metric-body">
+        <span className="financial-composition__overview-metric-label">{label}</span>
+        <strong className="financial-composition__overview-metric-value"
+          title={formatBRL(value)}>{formatBRL(value)}</strong>
+      </div>
+    </article>
+  );
 }
 export function FinancialCompositionPage() {
   const { can } = useSession();
@@ -238,43 +257,42 @@ export function FinancialCompositionPage() {
       </section>
       {loading ? <InlineLoading label="Consolidando informações financeiras..." /> :
         error ? <ErrorState message={error} onRetry={()=>void load()}/> : report && t && <>
-        <section className="finance-store-detail__kpis finance-store-detail__kpis--grouped"
+        <section className="financial-composition__overview"
           aria-label="Resumo financeiro consolidado">
-          <div className="finance-store-detail__kpi-group finance-store-detail__kpi-group--budget">
-            <span className="finance-store-detail__kpi-group-title">Planejamento</span>
-            <div>
-              <article>
-                <Landmark size={20}/><span>Verba BB</span>
-                <strong title={formatBRL(t.budgetBbCents)}>{formatBRL(t.budgetBbCents)}</strong>
-              </article>
-              <article>
-                <ReceiptText size={20}/><span>Orçado total</span>
-                <strong title={formatBRL(t.budgetTotalCents)}>{formatBRL(t.budgetTotalCents)}</strong>
-              </article>
+          <section className="financial-composition__overview-section financial-composition__overview-section--planning"
+            aria-labelledby="financial-composition-planning">
+            <header className="financial-composition__overview-heading">
+              <ClipboardList size={19} aria-hidden="true"/>
+              <h3 id="financial-composition-planning">Planejamento</h3>
+            </header>
+            <div className="financial-composition__overview-metrics">
+              <OverviewMetric label="Verba BB" value={t.budgetBbCents} icon={<Landmark size={21}/>}/>
+              <OverviewMetric label="Orçado total" value={t.budgetTotalCents} icon={<ReceiptText size={21}/>}/>
             </div>
-          </div>
-          <div className="finance-store-detail__kpi-group finance-store-detail__kpi-group--execution">
-            <span className="finance-store-detail__kpi-group-title">Execução</span>
-            <div>
-              <article className="is-primary">
-                <Building2 size={20}/><span>Realizado</span>
-                <strong title={formatBRL(t.realizedTotalCents)}>{formatBRL(t.realizedTotalCents)}</strong>
-              </article>
-              <article className={t.realizedVarianceToBbCents<0n?'is-negative':'is-positive'}>
-                <CheckCircle2 size={20}/><span>Dif. em relação à verba</span>
-                <strong title={formatBRL(t.realizedVarianceToBbCents)}>{formatBRL(t.realizedVarianceToBbCents)}</strong>
-              </article>
+          </section>
+          <section className="financial-composition__overview-section financial-composition__overview-section--execution"
+            aria-labelledby="financial-composition-execution">
+            <header className="financial-composition__overview-heading">
+              <Building2 size={19} aria-hidden="true"/>
+              <h3 id="financial-composition-execution">Execução</h3>
+            </header>
+            <div className="financial-composition__overview-metrics">
+              <OverviewMetric label="Realizado" value={t.realizedTotalCents} icon={<Building2 size={21}/>}/>
+              <OverviewMetric label="Dif. em relação à verba" value={t.realizedVarianceToBbCents}
+                icon={<CheckCircle2 size={21}/>} isBalance/>
             </div>
-          </div>
-          <div className="finance-store-detail__kpi-group finance-store-detail__kpi-group--cash">
-            <span className="finance-store-detail__kpi-group-title">Financeiro</span>
-            <div>
-              <article><WalletCards size={20}/><span>Pago</span>
-                <strong title={formatBRL(t.paidCents)}>{formatBRL(t.paidCents)}</strong></article>
-              <article><WalletCards size={20}/><span>A pagar</span>
-                <strong title={formatBRL(t.payableCents)}>{formatBRL(t.payableCents)}</strong></article>
+          </section>
+          <section className="financial-composition__overview-section financial-composition__overview-section--financial"
+            aria-labelledby="financial-composition-financial">
+            <header className="financial-composition__overview-heading">
+              <WalletCards size={19} aria-hidden="true"/>
+              <h3 id="financial-composition-financial">Financeiro</h3>
+            </header>
+            <div className="financial-composition__overview-metrics">
+              <OverviewMetric label="Pago" value={t.paidCents} icon={<WalletCards size={21}/>}/>
+              <OverviewMetric label="A pagar" value={t.payableCents} icon={<WalletCards size={21}/>}/>
             </div>
-          </div>
+          </section>
         </section>
         <section className="finance-store-detail__group-summary">
           <header>
