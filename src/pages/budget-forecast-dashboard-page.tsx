@@ -117,6 +117,8 @@ export function BudgetForecastDashboardPage() {
   const eligibleStores = useMemo(() =>
     (dataset?.stores || []).filter((store) => !filters.state || store.state === filters.state),
     [dataset, filters.state]);
+  const closureUnavailable = Boolean(dataset?.stores.some((store) =>
+    store.financialClosure?.state === 'unavailable'));
   const forecast = useMemo(() =>
     dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters, {
       storePurchases: dataset.storePurchases, works: dataset.works,
@@ -207,6 +209,8 @@ export function BudgetForecastDashboardPage() {
           <option value="inactive">Inativas</option>
         </select></label>
         <label>Situação da Implantação<select value={filters.implantation}
+          disabled={closureUnavailable}
+          title={closureUnavailable ? 'Requer o esquema de fechamento financeiro em banco DEV para identificar lojas finalizadas.' : undefined}
           onChange={(e)=>updateFilter('implantation',e.target.value as ForecastFilters['implantation'])}>
           <option value="all">Todas</option><option value="open">Em andamento</option>
           <option value="closed">Finalizadas</option>
@@ -216,6 +220,13 @@ export function BudgetForecastDashboardPage() {
         <button type="button" className="button button--primary" onClick={exportCsv}
           disabled={!forecast || !can('dashboard.view')}><ArrowDownToLine size={16}/> Exportar CSV</button>
       </section>
+      {!loading && !error && closureUnavailable && (
+        <div className="forecast-closure-notice" role="status">
+          A situação de finalização ainda não está disponível neste ambiente. O filtro
+          “Situação da Implantação” permanecerá desabilitado até a migração de segurança
+          ser validada e aplicada no banco DEV. Os valores financeiros continuam disponíveis.
+        </div>
+      )}
       {loading ? <InlineLoading label="Atualizando previsão orçamentária..." /> : error
         ? <ErrorState message={error} onRetry={() => void load()} /> : forecast && indicators && <>
           <ForecastSection color="bb" title="Verba BB Reembolsável" icon={<Landmark size={23}/>}>
