@@ -10,6 +10,7 @@ import { FinancialCompositionPage } from '../pages/financial-composition-page';
 import { FinancePage } from '../pages/finance-page';
 import { FinancePaymentsPage } from '../pages/finance-payments-page';
 import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
+import { ManagerialReimbursementPage } from '../pages/managerial-reimbursement-page';
 import { FinanceStoreDetailPage } from '../pages/finance-store-detail-page';
 import { WorksPage } from '../pages/works-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
@@ -135,6 +136,16 @@ export function App() {
                 <RequireCapability capability="dashboard.view">
                   <RequireCapability capability="finance.overview_view">
                     <FinancialCompositionPage />
+                  </RequireCapability>
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/reembolso"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <RequireCapability capability="finance.overview_view">
+                    <ManagerialReimbursementPage />
                   </RequireCapability>
                 </RequireCapability>
               }
