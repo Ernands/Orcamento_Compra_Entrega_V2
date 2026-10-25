@@ -278,7 +278,7 @@ export function FinancialCompositionPage() {
           {Object.entries(report.reconciliation).some(([,ok])=>!ok) && (
             <p className="financial-composition__reconcile-note" role="status">
               {Object.entries(report.reconciliation).filter(([,ok])=>!ok).map(([key])=>
-                ({budget:'Orçado',realized:'Realizado',paid:'Pago',payable:'A pagar'}[key])).join(', ')}:
+                ({budget:'Orçado',realized:'Realizado',paid:'Pago',payable:'A pagar'} as Record<string,string>)[key]).join(', ')}:
               existem diferenças entre a soma dos grupos e o total consolidado original.
               Os valores foram preservados para conferência; nenhum ajuste automático foi aplicado.
             </p>
