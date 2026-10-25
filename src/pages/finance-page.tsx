@@ -519,7 +519,10 @@ export function FinancePage() {
   const canManage = can('finance.manage');
   const canOverview = can('finance.overview_view');
   const canStoresUfs = can('finance.stores_ufs_view');
-  const canReimbursements = can('finance.reimbursements_view');
+  // Legacy purchase-by-purchase reimbursement UI is intentionally retired.
+  // Keep historical data loaded for established finance calculations, but
+  // hide the old tab and creation/edit actions. See Dashboard > Reembolso.
+  const canReimbursements = false;
   const canStoreDetail = can('finance.store_detail_view');
   const canDetailDocuments = can('finance.store_detail_documents_view');
   const canBudgetEdit = can('finance.budget_edit');
