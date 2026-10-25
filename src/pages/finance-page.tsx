@@ -68,6 +68,7 @@ import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import type { Store } from '../domain/types';
 import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
 import './finance-page.css';
+import '../styles/finance-kpi-unified.css';
 
 type FinanceTab = 'overview' | 'stores' | 'reimbursements';
 
