@@ -171,7 +171,7 @@ export function AppShell() {
       <nav className="sidebar__nav" aria-label="Navegacao principal">
         {can('dashboard.view') && can('finance.overview_view') && (
           <>
-            {!compact && <span className="nav-section">Dashboard</span>}
+            {!compact && <span className="nav-section">Dashboard | Gerencial</span>}
             <NavLink to="/dashboard/previsao-orcamentaria" onClick={() => setMobileOpen(false)}>
               <LayoutDashboard size={19} />
               Previsão Orçamentária
