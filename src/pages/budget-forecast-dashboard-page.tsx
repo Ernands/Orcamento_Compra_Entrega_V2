@@ -247,26 +247,25 @@ export function BudgetForecastDashboardPage() {
               <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}</div>
           </ForecastSection>
           <ForecastSection color="blue" title="Contratações" icon={<FileText size={18}/>}>
-            <div className="forecast-card-grid forecast-card-grid--three">
+            <div className="forecast-card-grid">
               {(['contracted','contractBalance'] as const).map((key)=>
                 <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}
-
             </div>
             <div className="forecast-progress">
-                <div className="forecast-progress__label">
+              <div className="forecast-progress__label">
                   <TrendingUp size={18} aria-hidden="true" />
                   <span>Execução Orçamentária (%)</span>
                   <Info size={13} aria-hidden="true"/>
                 </div>
-                <strong>{forecast.executionPercent === null ? 'Não aplicável'
+              <strong>{forecast.executionPercent === null ? 'Não aplicável'
                   : `${forecast.executionPercent.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%`}</strong>
-                <div className={`forecast-progress__track ${forecast.executionPercent !== null && forecast.executionPercent > 100 ? 'forecast-progress__track--over' : ''}`}
+              <div className={`forecast-progress__track ${forecast.executionPercent !== null && forecast.executionPercent > 100 ? 'forecast-progress__track--over' : ''}`}
                   role="progressbar" aria-label="Percentual de execução" aria-valuemin={0}
                   aria-valuemax={100} aria-valuenow={Math.min(100,Math.max(0,forecast.executionPercent||0))}>
                   <span style={{width:`${Math.min(100,Math.max(0,forecast.executionPercent||0))}%`}} />
                 </div>
-                {forecast.executionPercent !== null && forecast.executionPercent > 100 && <small>Orçamento previsto ultrapassado.</small>}
-              </div>
+              {forecast.executionPercent !== null && forecast.executionPercent > 100 && <small>Orçamento previsto ultrapassado.</small>}
+            </div>
           </ForecastSection>
           <ForecastSection color="green" title="Execução Financeira" icon={<WalletCards size={18}/>}>
             <div className="forecast-card-grid">{(['paid','payable'] as const).map((key)=>
