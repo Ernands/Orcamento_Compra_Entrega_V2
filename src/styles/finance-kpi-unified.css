@@ -140,6 +140,17 @@
 .finance-kpis--grouped .finance-kpi-group .finance-kpi--negative > .finance-amount,
 .finance-store-detail__kpis--grouped .finance-store-detail__kpi-group .is-negative > .finance-amount {color:#9c4141}
 .finance-store-detail__kpis--grouped .finance-store-detail__kpi-group .is-positive > .finance-amount {color:#27664b}
+/* Legacy filled-card styles gave nested spans white/pastel text. Force the
+   currency and digits to inherit the dark/semantic value of their parent. */
+.finance-kpis--grouped .finance-kpi-group > div > article > .finance-amount > .finance-amount__currency,
+.finance-kpis--grouped .finance-kpi-group > div > article > .finance-amount > .finance-amount__digits,
+.finance-store-detail__kpis--grouped .finance-store-detail__kpi-group > div > article > .finance-amount > .finance-amount__currency,
+.finance-store-detail__kpis--grouped .finance-store-detail__kpi-group > div > article > .finance-amount > .finance-amount__digits {
+  color:inherit;
+  font-weight:inherit;
+  letter-spacing:inherit;
+  opacity:1;
+}
 .finance-kpis--grouped .finance-kpi-group .finance-bb-available,
 .finance-store-detail__kpis--grouped .finance-store-detail__kpi-group .finance-store-bb-available {
   grid-column:1/-1;
