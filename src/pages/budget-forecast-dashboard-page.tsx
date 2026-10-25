@@ -1,5 +1,5 @@
 import {
-  ArrowDownToLine, Banknote, Building2, ClipboardList,
+  ArrowDownToLine, Banknote, Building2, ChevronRight, ClipboardList,
   Coins, FileCheck2, FileText, Handshake, Info, Landmark,
   RefreshCcw, TrendingUp, WalletCards,
 } from 'lucide-react';
@@ -59,12 +59,16 @@ function ForecastCard({
       onClick={() => onClick(metric.key)}
       title={`${metric.description} Clique para ver a composição.`}
       aria-label={`Detalhar ${metric.label}: ${valueText(metric.value, metric.isCount)}`}>
-      <span className="forecast-card__icon">{metric.icon}</span>
       <span className="forecast-card__content">
-        <span className="forecast-card__label">{metric.label} <Info size={14} aria-hidden="true" /></span>
-        <strong>{valueText(metric.value, metric.isCount)}</strong>
-        {metric.note && <small>{metric.note}</small>}
+        <span className="forecast-card__label">
+          <span className="forecast-card__icon">{metric.icon}</span>
+          <span>{metric.label}</span>
+          <Info className="forecast-card__info" size={13} aria-hidden="true" />
+        </span>
+        <strong className="forecast-card__value">{valueText(metric.value, metric.isCount)}</strong>
+        {metric.note && <small className="forecast-card__note">{metric.note}</small>}
       </span>
+      <ChevronRight className="forecast-card__more" size={16} aria-hidden="true" />
     </button>
   );
 }
@@ -73,7 +77,10 @@ function ForecastSection({
 }: { color: string; title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <section className={`forecast-section forecast-section--${color}`}>
-      <header className="forecast-section__heading"><span>{icon}</span><h3>{title}</h3></header>
+      <header className="forecast-section__heading">
+        <span className="forecast-section__icon">{icon}</span>
+        <h3>{title}</h3>
+      </header>
       {children}
     </section>
   );
@@ -132,31 +139,33 @@ export function BudgetForecastDashboardPage() {
   };
   const indicators = useMemo((): Record<ForecastIndicator, MetricCardConfig> | null =>
     !forecast ? null : ({
-      bb: { key: 'bb', label: 'Verba BB Reembolsável', icon: <Coins size={31} />,
-        value: forecast.bbCents, description: 'Total de verba BB atribuído às lojas selecionadas.' },
-      activeStores: { key: 'activeStores', label: 'Lojas Ativas com Verba', icon: <Building2 size={29} />,
+      bb: { key: 'bb', label: 'Verba BB Reembolsável', icon: <Coins size={18} />,
+        value: forecast.bbCents, note: 'Total da verba BB atribuída às lojas.',
+        description: 'Total de verba BB atribuído às lojas selecionadas.' },
+      activeStores: { key: 'activeStores', label: 'Lojas Ativas com Verba', icon: <Building2 size={18} />,
         isCount: true, value: forecast.activeStores,
         description: 'Quantidade única de lojas operacionais ativas com verba BB, inclusive lojas finalizadas.' },
-      planned: { key: 'planned', label: 'Orçamento Previsto', icon: <ClipboardList size={29}/>,
-        value: forecast.plannedCents, description: 'Orçamento previsto de itens e obras, conforme Financeiro → Visão Geral.' },
+      planned: { key: 'planned', label: 'Orçamento Previsto', icon: <ClipboardList size={18}/>,
+        value: forecast.plannedCents, note: 'Total planejado para implantação.',
+        description: 'Orçamento previsto de itens e obras, conforme Financeiro → Visão Geral.' },
       forecastBalance: { key: 'forecastBalance', label: 'Saldo da Previsão',
-        icon: <TrendingUp size={29}/>, value: forecast.forecastBalanceCents, isBalance: true,
+        icon: <TrendingUp size={18}/>, value: forecast.forecastBalanceCents, isBalance: true,
         note: 'Verba BB Reembolsável − Orçamento Previsto',
         description: 'Diferença entre a verba disponível e o orçamento total previsto.' },
       contracted: { key: 'contracted', label: 'Orçamentos Contratados',
-        icon: <FileCheck2 size={28}/>, value: forecast.contractedCents,
+        icon: <FileCheck2 size={18}/>, value: forecast.contractedCents,
         description: 'Total realizado em compras, obras e serviços, conforme Financeiro → Visão Geral.' },
       contractBalance: { key: 'contractBalance', label: 'Saldo a Contratar',
-        icon: <Handshake size={29}/>, value: forecast.contractBalanceCents, isBalance: true,
+        icon: <Handshake size={18}/>, value: forecast.contractBalanceCents, isBalance: true,
         note: 'Orçamento Previsto − Orçamentos Contratados',
         description: 'Diferença entre o orçamento planejado e os compromissos realizados.' },
-      paid: { key: 'paid', label: 'Pago', icon: <Banknote size={29}/>,
+      paid: { key: 'paid', label: 'Pago', icon: <Banknote size={18}/>,
         value: forecast.paidCents, description: 'Pagamentos quitados contabilizados em Financeiro → Pagamentos.' },
-      payable: { key: 'payable', label: 'A Pagar', icon: <WalletCards size={29}/>,
+      payable: { key: 'payable', label: 'A Pagar', icon: <WalletCards size={18}/>,
         value: forecast.payableCents, note: 'Programado + Não programado',
         description: 'Lançamentos programados e não programados do Financeiro → Pagamentos.' },
       bbBalance: { key: 'bbBalance', label: 'Saldo da Verba',
-        icon: <TrendingUp size={29}/>, isBalance: true, value: forecast.bbBalanceCents,
+        icon: <TrendingUp size={18}/>, isBalance: true, value: forecast.bbBalanceCents,
         note: 'Verba BB Reembolsável − Orçamentos Contratados',
         description: 'Saldo da verba BB após os compromissos realizados.' },
     }), [forecast]);
@@ -229,34 +238,40 @@ export function BudgetForecastDashboardPage() {
       )}
       {loading ? <InlineLoading label="Atualizando previsão orçamentária..." /> : error
         ? <ErrorState message={error} onRetry={() => void load()} /> : forecast && indicators && <>
-          <ForecastSection color="bb" title="Verba BB Reembolsável" icon={<Landmark size={23}/>}>
+          <ForecastSection color="bb" title="Verba BB Reembolsável" icon={<Landmark size={18}/>}>
             <div className="forecast-card-grid">{(['bb','activeStores'] as const).map((key)=>
               <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}</div>
           </ForecastSection>
-          <ForecastSection color="purple" title="Planejamento Orçamentário" icon={<ClipboardList size={23}/>}>
+          <ForecastSection color="purple" title="Planejamento Orçamentário" icon={<ClipboardList size={18}/>}>
             <div className="forecast-card-grid">{(['planned','forecastBalance'] as const).map((key)=>
               <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}</div>
           </ForecastSection>
-          <ForecastSection color="blue" title="Contratações" icon={<FileText size={23}/>}>
-            <div className="forecast-card-grid">{(['contracted','contractBalance'] as const).map((key)=>
-              <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}</div>
-            <div className="forecast-progress">
-              <div><span>Execução orçamentária</span>
+          <ForecastSection color="blue" title="Contratações" icon={<FileText size={18}/>}>
+            <div className="forecast-card-grid forecast-card-grid--three">
+              {(['contracted','contractBalance'] as const).map((key)=>
+                <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}
+              <div className="forecast-progress">
+                <div className="forecast-progress__label">
+                  <TrendingUp size={18} aria-hidden="true" />
+                  <span>Execução Orçamentária (%)</span>
+                  <Info size={13} aria-hidden="true"/>
+                </div>
                 <strong>{forecast.executionPercent === null ? 'Não aplicável'
-                  : `${forecast.executionPercent.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%`}</strong></div>
-              <div className={`forecast-progress__track ${forecast.executionPercent !== null && forecast.executionPercent > 100 ? 'forecast-progress__track--over' : ''}`}
-                role="progressbar" aria-label="Percentual de execução" aria-valuemin={0}
-                aria-valuemax={100} aria-valuenow={Math.min(100,Math.max(0,forecast.executionPercent||0))}>
-                <span style={{width:`${Math.min(100,Math.max(0,forecast.executionPercent||0))}%`}} />
+                  : `${forecast.executionPercent.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%`}</strong>
+                <div className={`forecast-progress__track ${forecast.executionPercent !== null && forecast.executionPercent > 100 ? 'forecast-progress__track--over' : ''}`}
+                  role="progressbar" aria-label="Percentual de execução" aria-valuemin={0}
+                  aria-valuemax={100} aria-valuenow={Math.min(100,Math.max(0,forecast.executionPercent||0))}>
+                  <span style={{width:`${Math.min(100,Math.max(0,forecast.executionPercent||0))}%`}} />
+                </div>
+                {forecast.executionPercent !== null && forecast.executionPercent > 100 && <small>Orçamento previsto ultrapassado.</small>}
               </div>
-              {forecast.executionPercent !== null && forecast.executionPercent > 100 && <small>Orçamento previsto ultrapassado.</small>}
             </div>
           </ForecastSection>
-          <ForecastSection color="green" title="Execução Financeira" icon={<WalletCards size={23}/>}>
+          <ForecastSection color="green" title="Execução Financeira" icon={<WalletCards size={18}/>}>
             <div className="forecast-card-grid">{(['paid','payable'] as const).map((key)=>
               <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}</div>
           </ForecastSection>
-          <ForecastSection color="orange" title="Comparativo Final da Verba" icon={<Coins size={23}/>}>
+          <ForecastSection color="orange" title="Comparativo Final da Verba" icon={<Coins size={18}/>}>
             <div className="forecast-card-grid forecast-card-grid--three">
               {(['bb','contracted','bbBalance'] as const).map((key)=>
                 <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}
