@@ -7,6 +7,8 @@ import detailPage from '../pages/finance-store-detail-page.tsx?raw';
 import accountPage from '../pages/finance-account-reconciliation-page.tsx?raw';
 import amountCss from '../components/finance-amount.css?raw';
 import unifiedCss from '../styles/finance-kpi-unified.css?raw';
+import financeCss from '../pages/finance-page.css?raw';
+import storeCss from '../pages/finance-store-detail-page.css?raw';
 
 describe('Resumo financeiro: moeda e layout executivo', () => {
   it('exibe valores milionários sem separar R$ dos algarismos nem perder centavos', () => {
@@ -39,6 +41,16 @@ describe('Resumo financeiro: moeda e layout executivo', () => {
     expect(accountPage).toContain('Conferência diária');
     expect(accountPage).toContain('Situação da conta');
   });
+  it('alinha Orçado roxo, Realizado azul e Financeiro verde nas tabelas', () => {
+    expect(financeCss).toContain('.finance-overview-groups th:nth-child(2) {\n  color: #624693;');
+    expect(financeCss).toContain('.finance-overview-groups th:nth-child(3) {\n  color: #255f8d;');
+    expect(financeCss).toContain('.finance-overview-groups th:nth-child(4) {\n  color: #256b4b;');
+    expect(financeCss).toContain('.finance-overview-table tbody td:nth-child(n + 13):nth-child(-n + 14) strong');
+    expect(storeCss).toContain('.finance-store-detail__composition-table th:nth-child(2) {\n  color: #624693;');
+    expect(storeCss).toContain('.finance-store-detail__composition-table th:nth-child(3),');
+    expect(storeCss).toContain('  background: #e9f3fd;');
+    expect(storeCss).toContain('  background: #e8f5ed;');
+  });
   it('usa largura total, evita quebra monetária e preserva responsividade', () => {
     expect(amountCss).toContain('white-space: nowrap');
     expect(amountCss).toContain('font-variant-numeric: tabular-nums');
@@ -50,5 +62,7 @@ describe('Resumo financeiro: moeda e layout executivo', () => {
     expect(unifiedCss).toContain('--finance-accent:#91eda7');
     expect(unifiedCss).toContain('@media(max-width:680px)');
     expect(unifiedCss).toContain('.finance-account-kpis .finance-account-kpi');
+    expect(unifiedCss).toContain('> .finance-amount > .finance-amount__digits');
+    expect(unifiedCss).toContain('color:inherit;');
   });
 });
