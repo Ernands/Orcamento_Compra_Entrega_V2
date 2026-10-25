@@ -284,15 +284,15 @@
 }
 
 .finance-overview-table tbody td:nth-child(n + 2):nth-child(-n + 7) {
-  background: #f7fbff;
+  background: #faf8ff;
 }
 
 .finance-overview-table tbody td:nth-child(n + 8):nth-child(-n + 12) {
-  background: #f6fcf9;
+  background: #f6faff;
 }
 
 .finance-overview-table tbody td:nth-child(n + 13):nth-child(-n + 14) {
-  background: #fffaf4;
+  background: #f5faf7;
 }
 
 .finance-overview-table tbody td:nth-child(15) {
@@ -304,15 +304,15 @@
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 2):nth-child(-n + 7) {
-  background: #edf5fc;
+  background: #f1ecfc;
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 8):nth-child(-n + 12) {
-  background: #edf8f2;
+  background: #e9f3fd;
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 13):nth-child(-n + 14) {
-  background: #fff3e5;
+  background: #e8f5ed;
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(15) {
@@ -321,6 +321,18 @@
 
 .finance-overview-table tbody tr:hover td {
   filter: none;
+}
+
+/* Financial phase values follow the same executive palette.
+   Variances keep their independent green/red meaning. */
+.finance-overview-table tbody td:nth-child(n + 2):nth-child(-n + 6) strong {
+  color:#624693;
+}
+.finance-overview-table tbody td:nth-child(n + 8):nth-child(-n + 11) strong {
+  color:#255f8d;
+}
+.finance-overview-table tbody td:nth-child(n + 13):nth-child(-n + 14) strong {
+  color:#256b4b;
 }
 
 .finance-overview-table th:first-child,
@@ -342,21 +354,21 @@
 }
 
 .finance-overview-groups th:nth-child(2) {
-  color: #1e5a8a;
-  background: #ddebfa;
-  border-right-color: #9ec2e6;
+  color: #624693;
+  background: #e9dff9;
+  border-right-color: #cdb8ef;
 }
 
 .finance-overview-groups th:nth-child(3) {
-  color: #177354;
-  background: #ddf3e7;
-  border-right-color: #98d5b6;
+  color: #255f8d;
+  background: #deedfc;
+  border-right-color: #9ec8eb;
 }
 
 .finance-overview-groups th:nth-child(4) {
-  color: #9a5a0a;
-  background: #fdeacf;
-  border-right-color: #e8c38b;
+  color: #256b4b;
+  background: #e0f3e7;
+  border-right-color: #a7d7ba;
 }
 
 .finance-overview-groups th:nth-child(5) {
@@ -381,18 +393,18 @@
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(-n + 6) {
-  color: #275f8b;
-  background: #eaf4fd;
+  color: #624693;
+  background: #f0eafc;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(n + 7):nth-child(-n + 11) {
-  color: #1d6c51;
-  background: #eaf7f0;
+  color: #255f8d;
+  background: #e9f3fd;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(n + 12):nth-child(-n + 13) {
-  color: #8a570e;
-  background: #fff2df;
+  color: #256b4b;
+  background: #e8f5ed;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(14) {
