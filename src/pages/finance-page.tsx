@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
 import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
@@ -867,7 +868,7 @@ export function FinancePage() {
               <article>
                 <Landmark size={21} />
                 <span>Verba BB</span>
-                <strong>{formatBRL(overviewKpis.budgetBbCents)}</strong>
+                <FinanceAmount cents={overviewKpis.budgetBbCents} />
                 <small
                   className={`finance-bb-available ${
                     availableBbCents < 0n ? 'is-negative' : 'is-positive'
@@ -881,7 +882,7 @@ export function FinancePage() {
               <article>
                 <ReceiptText size={21} />
                 <span>Orçado total</span>
-                <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
+                <FinanceAmount cents={overviewKpis.budgetTotalCents} />
               </article>
             </div>
           </div>
@@ -891,12 +892,12 @@ export function FinancePage() {
               <article className="finance-kpi finance-kpi--primary">
                 <Building2 size={21} />
                 <span>Realizado total</span>
-                <strong>{formatBRL(overviewKpis.realizedCents)}</strong>
+                <FinanceAmount cents={overviewKpis.realizedCents} />
               </article>
               <article className={overviewKpis.differenceCents < 0n ? 'finance-kpi--negative' : ''}>
                 <CheckCircle2 size={21} />
                 <span>Dif. em relação à verba</span>
-                <strong>{formatBRL(overviewKpis.differenceCents)}</strong>
+                <FinanceAmount cents={overviewKpis.differenceCents} />
               </article>
             </div>
           </div>
@@ -906,12 +907,12 @@ export function FinancePage() {
               <article>
                 <WalletCards size={21} />
                 <span>Pago</span>
-                <strong>{formatBRL(overviewKpis.paidCents)}</strong>
+                <FinanceAmount cents={overviewKpis.paidCents} />
               </article>
               <article>
                 <CalendarDays size={21} />
                 <span>Saldo a pagar</span>
-                <strong>{formatBRL(overviewKpis.payableCents)}</strong>
+                <FinanceAmount cents={overviewKpis.payableCents} />
               </article>
             </div>
           </div>
