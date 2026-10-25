@@ -117,9 +117,20 @@ describe('Dashboard / Composição Financeira',()=>{
   expect(compositionCss).toContain('--composition-accent:#bea5ff');
   expect(compositionCss).toContain('--composition-accent:#96c9ff');
   expect(compositionCss).toContain('--composition-accent:#91eda7');
-  expect(compositionCss).toContain('min-height:2.35rem');
+  expect(compositionCss).toContain('grid-template-rows:minmax(38px,auto) auto');
   expect(compositionCss).toContain('font-variant-numeric:tabular-nums');
   expect(compositionCss).toContain('@media(max-width:550px)');
+ });
+ it('mantém R$ e milhões na mesma linha e dá toda a largura do cartão ao valor',()=>{
+  expect(page).toContain('financial-composition__overview-metric-money');
+  expect(page).toContain('<small>R$</small>');
+  expect(page).toContain("formatBRL(value).replace(/^R\\$\\s*/, '')");
+  expect(compositionCss).toContain('.financial-composition__overview-metric-money {');
+  expect(compositionCss).toContain('grid-column:1/-1');
+  expect(compositionCss).toContain('justify-content:center');
+  expect(compositionCss).toContain('white-space:nowrap');
+  expect(compositionCss).toContain('word-break:keep-all');
+  expect(compositionCss).not.toContain('overflow-wrap:anywhere');
  });
  it('registra rota, permissões e menu na ordem solicitada',()=>{
   expect(app).toContain('path="dashboard/composicao-financeira"');
