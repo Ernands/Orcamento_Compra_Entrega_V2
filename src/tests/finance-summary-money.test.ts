@@ -9,6 +9,7 @@ import amountCss from '../components/finance-amount.css?raw';
 import unifiedCss from '../styles/finance-kpi-unified.css?raw';
 import financeCss from '../pages/finance-page.css?raw';
 import storeCss from '../pages/finance-store-detail-page.css?raw';
+import appShell from '../app/app-shell.tsx?raw';
 
 describe('Resumo financeiro: moeda e layout executivo', () => {
   it('exibe valores milionários sem separar R$ dos algarismos nem perder centavos', () => {
@@ -50,6 +51,16 @@ describe('Resumo financeiro: moeda e layout executivo', () => {
     expect(storeCss).toContain('.finance-store-detail__composition-table th:nth-child(3),');
     expect(storeCss).toContain('  background: #e9f3fd;');
     expect(storeCss).toContain('  background: #e8f5ed;');
+  });
+  it('identifica o Dashboard Gerencial e usa verde financeiro no botão de documentos', () => {
+    expect(appShell).toContain('Dashboard | Gerencial');
+    expect(appShell).not.toContain('>Dashboard</span>');
+    expect(overviewPage).toContain('Ver Financeiro e Documentos');
+    expect(overviewPage).toContain('Ocultar Financeiro e Documentos');
+    expect(financeCss).toContain('.finance-overview-toggle,');
+    expect(financeCss).toContain('color: #256b4b !important;');
+    expect(financeCss).toContain('background: #e8f5ed !important;');
+    expect(financeCss).toContain('border-color: #a7d7ba !important;');
   });
   it('usa largura total, evita quebra monetária e preserva responsividade', () => {
     expect(amountCss).toContain('white-space: nowrap');
