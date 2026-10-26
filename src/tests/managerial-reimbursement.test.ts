@@ -137,6 +137,9 @@ describe('Dashboard gerencial de reembolso',()=>{
         {kind:'pending',label:'Pendente',amountCents:400000n}]);
     expect(reimbursementBalanceLines({absorbedCents:0n,pendingCents:0n}))
       .toEqual([{kind:'settled',label:'Sem saldo',amountCents:0n}]);
+    expect(reimbursementBalanceLines({absorbedCents:500000n,pendingCents:0n,extraCents:1500000n}))
+      .toEqual([{kind:'loss',label:'Perda absorvida',amountCents:500000n},
+        {kind:'extra',label:'Gasto extra',amountCents:1500000n}]);
     expect(reimbursementWorkflowStatus({reimbursementStatus:'finalized'})).toBe('Finalizado');
     expect(reimbursementWorkflowStatus({reimbursementStatus:'partial'})).toBe('Aberto');
     expect(reimbursementWorkflowStatus({reimbursementStatus:'received'})).toBe('Aberto');
@@ -178,6 +181,8 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(pageCss).toContain('@media(max-width:1250px)');
     expect(pageCss).toContain('overflow-x:visible');
     expect(pageCss).toContain('table-layout:fixed');
+    expect(pageCss).toContain('.managerial-refunds__balance-line--extra');
+    expect(page).toContain("selected.absorbedCents!==selected.recordedLossCents");
     expect(page).toContain('reimbursementBalanceLines(r).map');
     expect(page).toContain('reimbursementWorkflowStatus(r)');
     expect(page).toContain("numeric(r.bbCents)");
