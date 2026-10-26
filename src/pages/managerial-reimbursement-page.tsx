@@ -26,7 +26,8 @@ const today=()=>new Date().toLocaleDateString('en-CA');
 
 export function ManagerialReimbursementPage() {
   const {can}=useSession();
-  const canEdit=can('finance.manage') && can('dashboard.view');
+  const canEdit=can('dashboard.reimbursement_view') && can('dashboard.reimbursement_manage')
+    && can('dashboard.view') && can('finance.overview_view');
   const canFinalize=canEdit && can('stores.finalize_reopen');
   const [data,setData]=useState<Dataset|null>(null);
   const [loading,setLoading]=useState(true);
