@@ -1,4 +1,4 @@
-import { ArrowDownToLine, HandCoins, Plus, RefreshCcw, RotateCcw } from 'lucide-react';
+import { ArrowDownToLine, Plus, RefreshCcw, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ErrorState, InlineLoading, Modal } from '../components/ui';
 import { useSession } from '../app/session-provider';
