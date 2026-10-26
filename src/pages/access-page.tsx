@@ -58,6 +58,12 @@ const financeOverviewOnlyHiddenKeys = new Set<AccessPermission['key']>([
 
 function permissionLabel(permission: AccessPermission): string {
   if (permission.key === 'finance.view') return 'Exibir o menu Financeiro';
+  if (permission.key === 'finance.reimbursements_view') {
+    return 'Financeiro — Reembolsos antigos (aba desativada; não controla Reembolso gerencial)';
+  }
+  if (permission.key === 'finance.manage') {
+    return 'Financeiro — gerenciar operações financeiras (não concede edição do Reembolso gerencial)';
+  }
   if (permission.key === 'stores.finalize_reopen') {
     return 'Finalizar/Reabrir Loja — bloquear movimentações financeiras (inclusive no Reembolso)';
   }
