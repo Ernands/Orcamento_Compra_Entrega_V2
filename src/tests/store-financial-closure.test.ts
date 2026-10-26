@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import migration from '../../supabase/migrations/20261022180600_store_financial_closure.sql?raw';
+import migration from '../../supabase/migrations/20261026033932_store_financial_closure.sql?raw';
 import page from '../pages/store-detail-page.tsx?raw';
 import storesPage from '../pages/stores-page.tsx?raw';
 import finance from '../pages/finance-page.tsx?raw';
