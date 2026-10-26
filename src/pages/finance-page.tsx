@@ -1248,11 +1248,6 @@ export function FinancePage() {
                             <strong>{formatBRL(store.paidCents)}</strong>
                             <small>{formatBRL(store.plannedCents)} previsto</small>
                           </div>
-                          <div>
-                            <span>Disponivel p/ solicitar</span>
-                            <strong>{formatBRL(store.availableCents)}</strong>
-                            <small>{formatBRL(store.receivedCents)} recebido</small>
-                          </div>
                           <ChevronDown size={18} />
                         </summary>
                         <div className="finance-store-purchases">
@@ -1278,11 +1273,6 @@ export function FinancePage() {
                                   {formatBRL(purchase.paidCents)} pago ·{' '}
                                   {formatBRL(purchase.plannedCents)} previsto
                                 </small>
-                              </div>
-                              <div>
-                                <span>Reembolso</span>
-                                <strong>{formatBRL(purchase.requestedCents)} solicitado</strong>
-                                <small>{formatBRL(purchase.receivedCents)} recebido</small>
                               </div>
                               {canDetailDocuments ? (
                                 <DocumentLinks
