@@ -9,7 +9,8 @@ import { listPlannedBudget } from '../data/planned-budget/planned-budget-reposit
 import { listFinanceReimbursements } from '../data/finance/finance-repository';
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import { buildFinanceOverviewRows } from '../domain/finance-overview';
-import { addManagerialReimbursement, listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
+import { addManagerialReimbursement, finalizeReimbursementAndCloseStore,
+  listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
 import { buildManagerialReimbursements, managerialTotals, reimbursementStatusLabels,
   reimbursementBalanceLines, reimbursementWorkflowStatus,
   type ManagerialReimbursementEntry, type ManagerialReimbursementRow, type ManagerialReimbursementMovementType,
@@ -26,6 +27,7 @@ const today=()=>new Date().toLocaleDateString('en-CA');
 export function ManagerialReimbursementPage() {
   const {can}=useSession();
   const canEdit=can('finance.manage') && can('dashboard.view');
+  const canFinalize=canEdit && can('stores.finalize_reopen');
   const [data,setData]=useState<Dataset|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
@@ -40,6 +42,9 @@ export function ManagerialReimbursementPage() {
   const [notes,setNotes]=useState('');
   const [saving,setSaving]=useState(false);
   const [formError,setFormError]=useState('');
+  const [confirmingClosure,setConfirmingClosure]=useState(false);
+  const [closureAcknowledged,setClosureAcknowledged]=useState(false);
+  const [closureConfirmation,setClosureConfirmation]=useState('');
   const load=useCallback(async()=>{
     setLoading(true);setError(null);
     try {
@@ -65,6 +70,7 @@ export function ManagerialReimbursementPage() {
   const open=(row:ManagerialReimbursementRow)=>{
     setSelected(row);setKind('requested');setAmount('');setEntryDate(today());
     setProtocol('');setNotes('');setFormError('');
+    setConfirmingClosure(false);setClosureAcknowledged(false);setClosureConfirmation('');
   };
   const submit=async(e:FormEvent)=>{
     e.preventDefault();if(!selected||saving)return;
@@ -80,25 +86,23 @@ export function ManagerialReimbursementPage() {
     finally{setSaving(false);}
   };
   const finalize=async()=>{
-    if(!selected||saving||selected.reimbursementStatus==='finalized'
+    if(!selected||saving||!canFinalize||!confirmingClosure
+      || !closureAcknowledged || closureConfirmation!=='FINALIZAR'
+      || selected.reimbursementStatus==='finalized'
       || selected.requestedCents<=0n || selected.pendingCents<0n)return;
-    // A perda corresponde apenas ao realizado elegível dentro da verba BB.
-    // Valores acima da verba são Gasto Extra e nunca integram esta finalização.
+    // Nunca incluir o gasto extra acima da verba BB na perda absorvida.
     const eligibleRemaining=selected.eligibleCents-selected.receivedCents-selected.recordedLossCents;
     const loss=eligibleRemaining>0n?eligibleRemaining:0n;
-    if(!window.confirm(
-      'Finalizar o reembolso desta loja? '+formatBRL(loss)+
-      ' será reconhecido como perda absorvida dentro da Verba BB. O gasto excedente à verba ('+
-      formatBRL(selected.extraCents)+') não entra na perda. Esta ação é irreversível.'
-    ))return;
     setSaving(true);setFormError('');
     try {
-      await addManagerialReimbursement({
-        storeId:selected.storeId,type:'finalized',amountCents:loss,
-        date:today(),protocol:'',notes:'Finalização; perda somente sobre despesas elegíveis até o limite da Verba BB.',
+      // Single DB transaction: either the reimbursement closes AND the existing
+      // financial store lock is applied, or neither operation is committed.
+      await finalizeReimbursementAndCloseStore({
+        storeId:selected.storeId,lossCents:loss,date:today(),
+        confirmation:closureConfirmation,
       });
-      await load();setSelected(null);
-    }catch(e){setFormError(e instanceof Error?e.message:'Não foi possível finalizar o reembolso.');}
+      await load();setConfirmingClosure(false);setSelected(null);
+    }catch(e){setFormError(e instanceof Error?e.message:'Não foi possível finalizar o reembolso e bloquear a loja.');}
     finally{setSaving(false);}
   };
   const reverse=async(entry:ManagerialReimbursementEntry)=>{
@@ -209,10 +213,62 @@ export function ManagerialReimbursementPage() {
       </div>
       <p className="managerial-refunds__footnote">Gasto extra Verba BB = Realizado acima da Verba BB. Perda absorvida = parcela do realizado elegível não reembolsada quando o processo é finalizado. Valores acima da Verba BB não integram a perda nem a dedução na Previsão Orçamentária.</p>
     </>}
-    <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
-      title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
-      description="Lançamentos auditáveis, sem sobrescrever o histórico.">
-      {selected&&<div className="managerial-refunds__modal">
+    <Modal open={Boolean(selected)} onClose={()=>{
+      if(!saving){setConfirmingClosure(false);setSelected(null);}
+    }}
+      title={confirmingClosure?'Finalizar reembolso e bloquear loja?'
+        :selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
+      description={confirmingClosure
+        ? 'Confirmação de ciência: a loja será finalizada financeiramente pelo mesmo bloqueio do cadastro de Lojas.'
+        : 'Lançamentos auditáveis, sem sobrescrever o histórico.'}>
+      {selected&&(confirmingClosure
+        ? <div className="managerial-refunds__closure-confirm">
+          <div className="managerial-refunds__closure-alert">
+            <strong>Atenção: duas ações vinculadas e definitivas até reabertura autorizada</strong>
+            <p>Ao confirmar a finalização de {selected.code} · {selected.city}/{selected.state}, o sistema:</p>
+            <ul>
+              <li>Finaliza o reembolso e reconhece somente a perda elegível dentro da Verba BB;</li>
+              <li>Marca a loja como <strong>Finalizada</strong> financeiramente em Lojas;</li>
+              <li>Bloqueia novas compras, Obras e Serviços, pagamentos e alterações financeiras vinculadas à loja.</li>
+            </ul>
+            <p>A reabertura financeira exige usuário autorizado e justificativa, no cadastro da loja.
+              Documentos fiscais adicionais continuam sujeitos às regras de auditoria.</p>
+          </div>
+          <div className="managerial-refunds__closure-figures">
+            <span><small>Perda a reconhecer</small><strong>{formatBRL(
+              selected.eligibleCents-selected.receivedCents-selected.recordedLossCents>0n
+              ?selected.eligibleCents-selected.receivedCents-selected.recordedLossCents:0n
+            )}</strong></span>
+            <span><small>Gasto extra Verba BB (fora da perda)</small>
+              <strong>{formatBRL(selected.extraCents)}</strong></span>
+          </div>
+          {selected.storeStatus==='Finalizada'&&<p className="managerial-refunds__closure-existing">
+            A loja já está finalizada financeiramente. O bloqueio será preservado,
+            e somente a finalização do reembolso será registrada.
+          </p>}
+          <label className="managerial-refunds__closure-ack">
+            <input type="checkbox" checked={closureAcknowledged}
+              onChange={e=>setClosureAcknowledged(e.target.checked)}/>
+            <span>Declaro ciência de que esta confirmação bloqueará novas movimentações
+              financeiras da loja e registrará a finalização do reembolso.</span>
+          </label>
+          <label className="managerial-refunds__closure-typed">
+            Digite <strong>FINALIZAR</strong> para confirmar
+            <input value={closureConfirmation} onChange={e=>setClosureConfirmation(e.target.value)}
+              placeholder="FINALIZAR" autoComplete="off" disabled={saving}/>
+          </label>
+          {formError&&<p role="alert" className="managerial-refunds__closure-error">{formError}</p>}
+          <div className="modal-actions">
+            <button type="button" className="button button--secondary" disabled={saving}
+              onClick={()=>{setConfirmingClosure(false);setFormError('');}}>Voltar</button>
+            <button type="button" className="button button--primary"
+              disabled={saving||!closureAcknowledged||closureConfirmation!=='FINALIZAR'}
+              onClick={()=>void finalize()}>
+              {saving?'Finalizando...':'Confirmar finalização e bloqueio'}
+            </button>
+          </div>
+        </div>
+        : <div className="managerial-refunds__modal">
         <div className="managerial-refunds__modal-summary">
           <span>Solicitado: {formatBRL(selected.requestedCents)}</span>
           <span>Recebido: {formatBRL(selected.receivedCents)}</span>
@@ -244,8 +300,16 @@ export function ManagerialReimbursementPage() {
                 {formatBRL(selected.eligibleCents)} menos {formatBRL(selected.receivedCents)} recebidos.
                 Gasto extra Verba BB de {formatBRL(selected.extraCents)} é separado.</small>
             </div>
-            <button type="button" className="button button--secondary" disabled={saving}
-              onClick={()=>void finalize()}>Marcar como finalizado</button>
+            <button type="button" className="button button--secondary"
+              disabled={saving||!canFinalize}
+              title={!canFinalize?'Requer permissão Finalizar/Reabrir Loja':undefined}
+              onClick={()=>{
+                setConfirmingClosure(true);setClosureAcknowledged(false);
+                setClosureConfirmation('');setFormError('');
+              }}>Marcar como finalizado</button>
+            {!canFinalize&&<small className="managerial-refunds__permission-hint">
+              Necessária a permissão Finalizar/Reabrir Loja para concluir e bloquear a loja.
+            </small>}
           </div>}
         <h3>Histórico de movimentações</h3>
         <div className="managerial-refunds__history">
@@ -263,7 +327,7 @@ export function ManagerialReimbursementPage() {
           </div>):<p>Nenhuma movimentação registrada.</p>}
         </div>
         {formError&&<p role="alert" className="value-negative">{formError}</p>}
-      </div>}
+      </div>)}
     </Modal>
   </section>;
 }
