@@ -133,7 +133,9 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(shell).not.toContain('<NavLink to="/dashboard/implantacao"');
   expect(shell).not.toContain('<NavLink to="/dashboard/suprimentos"');
   expect(page).not.toContain('Prospector');
-  expect(page.match(/<ForecastSection color=/g)).toHaveLength(5);
+  // Five original sections remain; the sixth only renders when reimbursement comparison is enabled.
+  expect(page.match(/<ForecastSection color=/g)).toHaveLength(6);
+  expect(page).toContain('considerReimbursements && filteredManagerialTotals');
   for(const color of ['bb','purple','blue','green','orange'])expect(style).toContain(`forecast-section--${color}`);
   expect(page).toContain('Situação da Implantação');
   expect(page).toContain('Limpar filtros');
