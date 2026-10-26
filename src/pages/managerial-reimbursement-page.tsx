@@ -225,6 +225,12 @@ export function ManagerialReimbursementPage() {
           <span>Pendente: {formatBRL(selected.pendingCents)}</span>
           <strong>{reimbursementStatusLabels[selected.reimbursementStatus]}</strong>
         </div>
+        {selected.absorbedCents!==selected.recordedLossCents && <p className="managerial-refunds__reconciliation-note">
+          Perda gerencial reconciliada pelo Realizado Total elegível e valores recebidos:
+          {formatBRL(selected.absorbedCents)}. O histórico registra
+          {formatBRL(selected.recordedLossCents)} em finalizações anteriores.
+          Nenhum lançamento histórico foi modificado.
+        </p>}
         {canEdit&&<form onSubmit={e=>void submit(e)} className="managerial-refunds__form">
           <label>Movimentação<select value={kind} onChange={e=>setKind(e.target.value as ManagerialReimbursementMovementType)}>
             <option value="requested">Solicitação</option><option value="received">Recebimento</option></select></label>
