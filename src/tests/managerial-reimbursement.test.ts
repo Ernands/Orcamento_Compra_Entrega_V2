@@ -178,7 +178,8 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain("label:'Gasto extra',value:totals.extraCents,group:'extra'");
     expect(page).toContain('data-label="Verba BB"');
     expect(page).toContain("numeric(r.extraCents)");
-    expect(pageCss).toContain('@media(max-width:1250px)');
+    expect(pageCss).toContain('@container (max-width:1250px)');
+    expect(pageCss).toContain('container-type:inline-size');
     expect(pageCss).toContain('overflow-x:visible');
     expect(pageCss).toContain('table-layout:fixed');
     expect(pageCss).toContain('.managerial-refunds__balance-line--extra');
