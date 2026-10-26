@@ -170,20 +170,30 @@ export function AppShell() {
       </div>
       <nav className="sidebar__nav" aria-label="Navegacao principal">
         {can('dashboard.view') && can('finance.overview_view') && (
+          can('dashboard.budget_forecast_view') ||
+          can('dashboard.financial_composition_view') ||
+          can('dashboard.reimbursement_view')
+        ) && (
           <>
             {!compact && <span className="nav-section">Dashboard | Gerencial</span>}
-            <NavLink to="/dashboard/previsao-orcamentaria" onClick={() => setMobileOpen(false)}>
-              <LayoutDashboard size={19} />
-              Previsão Orçamentária
-            </NavLink>
-            <NavLink to="/dashboard/composicao-financeira" onClick={() => setMobileOpen(false)}>
-              <Calculator size={19} />
-              Composição Financeira
-            </NavLink>
-            <NavLink to="/dashboard/reembolso" onClick={() => setMobileOpen(false)}>
-              <WalletCards size={19} />
-              Reembolso
-            </NavLink>
+            {can('dashboard.budget_forecast_view') && (
+              <NavLink to="/dashboard/previsao-orcamentaria" onClick={() => setMobileOpen(false)}>
+                <LayoutDashboard size={19} />
+                Previsão Orçamentária
+              </NavLink>
+            )}
+            {can('dashboard.financial_composition_view') && (
+              <NavLink to="/dashboard/composicao-financeira" onClick={() => setMobileOpen(false)}>
+                <Calculator size={19} />
+                Composição Financeira
+              </NavLink>
+            )}
+            {can('dashboard.reimbursement_view') && (
+              <NavLink to="/dashboard/reembolso" onClick={() => setMobileOpen(false)}>
+                <WalletCards size={19} />
+                Reembolso
+              </NavLink>
+            )}
           </>
         )}
 
