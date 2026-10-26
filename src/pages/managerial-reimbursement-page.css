@@ -14,7 +14,7 @@
 .managerial-refunds__table th,.managerial-refunds__table td{text-align:left;padding:12px 10px;border-bottom:1px solid #e1e8ed;font-size:.79rem}
 .managerial-refunds__table th{color:#415b67;background:#f2f6f8;font-weight:750}
 .managerial-refunds__table th:nth-child(2){background:#e9f3fd;color:#255f8d}
-.managerial-refunds__table th:nth-child(3){background:#f0eafc;color:#624693}
+.managerial-refunds__table th:nth-child(3){background:#e9f3fd;color:#255f8d}
 .managerial-refunds__table th:nth-child(4),.managerial-refunds__table th:nth-child(5){background:#e8f5ed;color:#256b4b}
 .managerial-refunds__table td small{display:block;color:#687b89;margin-top:5px}
 .managerial-refunds__table td .finance-amount{font-size:.81rem}
