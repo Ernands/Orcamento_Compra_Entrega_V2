@@ -14,6 +14,8 @@ import migration from '../../supabase/migrations/20261025235317_finance_manageri
 import closureMigration from '../../supabase/migrations/20261026013456_finance_managerial_reimbursement_finalization.sql?raw';
 import bbLimitMigration from '../../supabase/migrations/20261026025214_finance_managerial_finalization_bb_limit.sql?raw';
 import pageCss from '../pages/managerial-reimbursement-page.css?raw';
+import managerRepository from '../data/finance/managerial-reimbursements-repository.ts?raw';
+import atomicMigration from '../../supabase/migrations/20261026034137_managerial_reimbursement_store_close_atomic.sql?raw';
 
 const store={id:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
   status:'active',financialClosure:{state:'closed'}} as unknown as Store;
@@ -205,7 +207,7 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('Gasto extra Verba BB = Realizado acima da Verba BB.');
     expect(page).toContain("label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'execution'");
   });
-  it('mantém lançamentos em tabela isolada RLS e limita correções ao estorno',()=>{
+  it('mantém lançamentos em tabela isolada RLS e finalização atômica auditável',()=>{
     expect(migration).toContain('finance_managerial_reimbursement_entries');
     expect(migration).toContain('enable row level security');
     expect(migration).toContain('app.can_store');
@@ -215,7 +217,27 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(forecast).toContain('managerialSettlementsByStore(dataset.managerialEntries,dataset.overview)');
     expect(forecast).toContain('Perda absorvida: ');
     expect(page).toContain('Marcar como finalizado');
-    expect(page).toContain("type:'finalized',amountCents:loss");
+    expect(page).toContain('finalizeReimbursementAndCloseStore({');
+    expect(page).toContain('setConfirmingClosure(true)');
+    expect(page).toContain('confirmation:closureConfirmation');
+    expect(page).toContain("can('stores.finalize_reopen')");
+    expect(page).toContain("closureConfirmation!=='FINALIZAR'");
+    expect(page).toContain("checked={closureAcknowledged}");
+    expect(page).toContain('Confirmar finalização e bloqueio');
+    expect(page).toContain('Bloqueia novas compras, Obras e Serviços, pagamentos');
+    expect(page).not.toContain("type:'finalized',amountCents:loss");
+    expect(pageCss).toContain('.managerial-refunds__closure-confirm');
+    expect(managerRepository).toContain("supabase.rpc('finalize_managerial_reimbursement_and_close_store'");
+    expect(atomicMigration).toContain("security invoker");
+    expect(atomicMigration).toContain("app.can('stores','finalize_reopen')");
+    expect(atomicMigration).toContain("app.can_store('finance','manage',p_store_id)");
+    expect(atomicMigration).toContain("p_confirm_text is distinct from 'FINALIZAR'");
+    expect(atomicMigration).toContain("insert into public.finance_managerial_reimbursement_entries");
+    expect(atomicMigration).toContain("public.change_store_financial_closure(");
+    expect(atomicMigration.indexOf('insert into public.finance_managerial_reimbursement_entries'))
+      .toBeLessThan(atomicMigration.indexOf("perform public.change_store_financial_closure("));
+    expect(atomicMigration).toContain('revoke all on function public.finalize_managerial_reimbursement_and_close_store');
+    expect(atomicMigration).toContain('to authenticated;');
     expect(closureMigration).toContain("entry_type in ('requested','received','finalized')");
     expect(closureMigration).toContain('new.amount_cents <> open_balance');
     expect(closureMigration).toContain('Reimbursement already finalized');
