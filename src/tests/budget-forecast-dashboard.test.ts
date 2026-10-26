@@ -159,6 +159,25 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(page).toContain('Programado + Não programado');
   expect(page).toContain('Orçamento previsto ultrapassado.');
  });
+ it('adapta todos os popups de composição e mantém loja, referência e valores sem quebra',()=>{
+  // Every ForecastIndicator reuses a single modal and the same responsive table.
+  expect(page).toContain('className="forecast-detail-modal"');
+  expect(page).toContain('entries: forecast.details[openIndicator]');
+  expect(page).toContain('className="forecast-detail__store-code"');
+  expect(page).toContain('className="forecast-detail__store-name"');
+  expect(page).toContain('data-label="Referência" title={entry.reference}');
+  expect(page).toContain('data-label="Categoria / Status"');
+  expect(page).toContain('data-label="Valor"');
+  expect(style).toContain('.modal.forecast-detail-modal');
+  expect(style).toContain('width: min(calc(100vw - 36px), 1220px)');
+  expect(style).toContain('.forecast-detail td { white-space: nowrap; }');
+  expect(style).toContain('@media (max-width: 960px)');
+  expect(style).toContain('grid-template-areas:');
+  expect(style).toContain('"store store"');
+  expect(style).toContain('overflow-x: hidden; overflow-y: auto;');
+  expect(style).toContain('@media (max-width: 420px)');
+  expect(style).toContain('.forecast-detail__store-separator { display: none; }');
+ });
  it('oculta abas antigas, mantém código legado e cria cinco quadros sem prospector',()=>{
   expect(app).toContain('path="dashboard/previsao-orcamentaria"');
   expect(legacy).toContain('temporariamente ocultas');
