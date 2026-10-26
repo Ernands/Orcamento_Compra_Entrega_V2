@@ -138,3 +138,23 @@
 
 /* Match the app's sidebar background, which is sourced from --brand (#465eff). */
 .managerial-refunds__table .managerial-refunds__store-name{color:var(--brand);font-weight:700}
+
+/* Explicit, auditable acknowledgement before store-level financial closure. */
+.managerial-refunds__closure-confirm{display:grid;gap:15px}
+.managerial-refunds__closure-alert{border:1px solid #e4c69a;background:#fffbf3;color:#574a3a;padding:15px;border-radius:7px;font-size:.81rem;line-height:1.55}
+.managerial-refunds__closure-alert>strong{display:block;color:#7c5327;font-size:.88rem}
+.managerial-refunds__closure-alert p{margin:8px 0 0}
+.managerial-refunds__closure-alert ul{padding-left:20px;margin:10px 0;display:grid;gap:5px}
+.managerial-refunds__closure-figures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.managerial-refunds__closure-figures span{display:grid;gap:5px;border:1px solid #dce5eb;border-radius:5px;background:#f7fafb;padding:12px}
+.managerial-refunds__closure-figures small{font-size:.72rem;color:#596c7c}
+.managerial-refunds__closure-figures strong{color:#172b46;font-size:.94rem}
+.managerial-refunds__closure-ack{display:flex;align-items:flex-start;gap:11px;background:#f5f7f9;border:1px solid #dce5eb;border-radius:6px;padding:13px;font-size:.8rem;line-height:1.5;font-weight:550}
+.managerial-refunds__closure-ack input{flex:none;width:17px;height:17px;margin-top:2px;accent-color:var(--brand)}
+.managerial-refunds__closure-typed{display:grid;gap:7px;color:#40566c;font-size:.8rem;font-weight:600}
+.managerial-refunds__closure-typed input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #b9c8d2;border-radius:6px;font:inherit}
+.managerial-refunds__closure-typed input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.managerial-refunds__closure-existing{margin:0;padding:10px;border-left:3px solid #91eda7;color:#3a6e52;background:#f0f7f3;font-size:.78rem}
+.managerial-refunds__closure-error{margin:0;color:#9a3029;font-size:.79rem;font-weight:650}
+.managerial-refunds__permission-hint{color:#836242;font-size:.72rem}
+@media(max-width:550px){.managerial-refunds__closure-figures{grid-template-columns:1fr}}
