@@ -365,20 +365,20 @@
 }
 
 .finance-store-detail__composition-table th:nth-child(2) {
-  color: #1e5a8a;
-  background: #ddebfa;
+  color: #624693;
+  background: #f0eafc;
 }
 
 .finance-store-detail__composition-table th:nth-child(3),
 .finance-store-detail__composition-table th:nth-child(4) {
-  color: #177354;
-  background: #ddf3e7;
+  color: #255f8d;
+  background: #e9f3fd;
 }
 
 .finance-store-detail__composition-table th:nth-child(5),
 .finance-store-detail__composition-table th:nth-child(6) {
-  color: #9a5a0a;
-  background: #fdeacf;
+  color: #256b4b;
+  background: #e8f5ed;
 }
 
 .finance-store-detail__composition-table th:first-child,
@@ -389,6 +389,18 @@
 
 .finance-store-detail__composition-table td {
   font-size: 0.76rem;
+}
+
+/* Preserve variance semantics while matching the new financial phase colors. */
+.finance-store-detail__composition-table tbody tr:not(.finance-store-detail__composition-total) td:nth-child(2) {
+  color:#624693;
+}
+.finance-store-detail__composition-table tbody tr:not(.finance-store-detail__composition-total) td:nth-child(3) {
+  color:#255f8d;
+}
+.finance-store-detail__composition-table tbody tr:not(.finance-store-detail__composition-total) td:nth-child(5),
+.finance-store-detail__composition-table tbody tr:not(.finance-store-detail__composition-total) td:nth-child(6) {
+  color:#256b4b;
 }
 
 .finance-store-detail__composition-table td:first-child {

@@ -91,12 +91,33 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Fornecedores' })).not.toBeInTheDocument();
   });
 
-  it('mostra as tres visoes do dashboard com acesso a suprimentos', () => {
-    renderShell(['dashboard.view', 'items.view']);
-    expect(screen.getAllByRole('link', { name: 'Visao Geral' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Implantacao' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Suprimentos' }).length).toBeGreaterThan(0);
+  it('mostra apenas a Previsão Orçamentária e oculta as visões antigas', () => {
+    renderShell(['dashboard.view', 'finance.overview_view', 'dashboard.budget_forecast_view', 'items.view']);
+    const links = screen.getAllByRole('link', { name: 'Previsão Orçamentária' });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute('href', '/dashboard/previsao-orcamentaria');
+    expect(screen.queryByRole('link', { name: 'Visao Geral' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Implantacao' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Suprimentos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Lojas' })).not.toBeInTheDocument();
+  });
+
+  it('exibe apenas a aba gerencial especificamente liberada', () => {
+    renderShell(['dashboard.view','finance.overview_view','dashboard.reimbursement_view']);
+    expect(screen.getByRole('link',{name:'Reembolso'})).toHaveAttribute('href','/dashboard/reembolso');
+    expect(screen.queryByRole('link',{name:'Previsão Orçamentária'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'Composição Financeira'})).not.toBeInTheDocument();
+  });
+
+  it('remove o cabeçalho global duplicado sem perder o acesso ao menu móvel', async () => {
+    const user = userEvent.setup();
+    renderShell(['stores.view']);
+    expect(document.querySelector('.topbar')).not.toBeInTheDocument();
+    expect(screen.getByText('Conteudo lojas')).toBeInTheDocument();
+    const openMobile = screen.getByRole('button', { name: 'Abrir menu' });
+    expect(openMobile).toHaveClass('app-mobile-menu');
+    await user.click(openMobile);
+    expect(screen.getByRole('button', { name: 'Fechar menu' })).toBeInTheDocument();
   });
 
   it('recolhe a barra lateral e persiste a preferencia no navegador', async () => {

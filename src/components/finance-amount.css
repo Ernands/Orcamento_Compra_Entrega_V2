@@ -1,0 +1,27 @@
+/* Shared by the three financial summaries; keep currency and digits together. */
+.finance-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .25em;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+.finance-amount .finance-amount__currency,
+.finance-amount .finance-amount__digits {
+  display: inline;
+  flex: none;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-transform: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.finance-amount .finance-amount__currency {font-size:.73em}

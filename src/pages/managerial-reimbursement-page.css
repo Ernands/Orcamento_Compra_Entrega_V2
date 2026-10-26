@@ -1,0 +1,157 @@
+.managerial-refunds{container-type:inline-size}
+.managerial-refunds{width:min(100%,1550px);gap:20px}
+.managerial-refunds__summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.managerial-refunds__metric{--edge:#bea5ff;display:grid;align-content:center;gap:10px;padding:16px;background:#fff;border:1px solid #dce3e9;border-top:7px solid var(--edge);border-radius:7px;min-width:0}
+.managerial-refunds__metric--execution{--edge:#96c9ff}
+.managerial-refunds__metric--finance{--edge:#91eda7}
+.managerial-refunds__metric--tracking{--edge:#ffc28c}
+.managerial-refunds__metric--loss{--edge:#d9aa81}
+.managerial-refunds__metric--loss .finance-amount{color:#8b543d}
+.managerial-refunds__metric small{color:#53647a;font-weight:650;font-size:.78rem}
+.managerial-refunds__metric strong{font-weight:700;color:#172b46;font-size:clamp(1.05rem,1.3vw,1.35rem)}
+.managerial-refunds__filters{display:flex;align-items:end;flex-wrap:wrap;gap:10px}
+.managerial-refunds__filters label{display:grid;gap:5px;min-width:145px;flex:1;color:#54657a;font-size:.73rem;font-weight:700}
+.managerial-refunds__filters select{height:40px;width:100%;padding:8px;border:1px solid #cfdbe2;border-radius:6px;background:#fff}
+.managerial-refunds__table-scroll{overflow-x:auto;background:#fff;border:1px solid #dde5eb;border-radius:8px}
+.managerial-refunds__table{min-width:1480px;width:100%;border-collapse:collapse}
+.managerial-refunds__table th,.managerial-refunds__table td{text-align:left;padding:12px 10px;border-bottom:1px solid #e1e8ed;font-size:.79rem}
+.managerial-refunds__table th{color:#415b67;background:#f2f6f8;font-weight:750}
+.managerial-refunds__table th:nth-child(2){background:#fdf4d8;color:#85661b}
+.managerial-refunds__table th:nth-child(3),.managerial-refunds__table th:nth-child(4){background:#e9f3fd;color:#255f8d}
+.managerial-refunds__table th:nth-child(5),.managerial-refunds__table th:nth-child(6){background:#e8f5ed;color:#256b4b}
+.managerial-refunds__table th:nth-child(7){background:#fdf0e3;color:#8b5a30}
+.managerial-refunds__table td small{display:block;color:#687b89;margin-top:5px}
+.managerial-refunds__table td .finance-amount{font-size:.81rem}
+.managerial-refunds__footnote{font-size:.77rem;color:#64758b}
+.managerial-refunds__modal{display:grid;gap:15px;max-height:73vh;overflow-y:auto}
+.managerial-refunds__modal-summary{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#f5f8f9;padding:12px;border-radius:7px;font-size:.76rem}
+.managerial-refunds__form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.managerial-refunds__form label{display:grid;gap:5px;font-size:.78rem;font-weight:600}
+.managerial-refunds__form input,.managerial-refunds__form select,.managerial-refunds__form textarea{width:100%;padding:9px;border:1px solid #d0d9df;border-radius:5px;font:inherit}
+.managerial-refunds__wide{grid-column:1/-1}
+.managerial-refunds__history{display:grid;gap:8px}
+.managerial-refunds__history > div{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid #e2e9ed;border-radius:6px}
+.managerial-refunds__history small{color:#64758b;font-size:.71rem}
+.managerial-refunds__history p{font-size:.74rem;margin:5px 0 0}
+.managerial-refunds__modal h3{font-size:.9rem}
+@media(max-width:900px){.managerial-refunds__summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.managerial-refunds__summary,.managerial-refunds__form{grid-template-columns:1fr}}
+
+.managerial-refunds__finalize{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border:1px solid #dbc79b;background:#fffbf2;border-radius:7px;padding:12px}
+.managerial-refunds__finalize>div{display:grid;gap:4px;flex:1;min-width:200px}
+.managerial-refunds__finalize strong{font-size:.84rem;color:#6d5529}
+.managerial-refunds__finalize small{font-size:.74rem;color:#736b60;line-height:1.4}
+
+/* Preserve the original requested/received amounts while separately identifying
+ * unsettled balances, finalized write-offs and receipts above request. */
+.managerial-refunds__balance{display:grid;gap:5px;min-width:138px}
+.managerial-refunds__balance-line{display:grid;gap:3px;min-width:0}
+.managerial-refunds__balance-line small{font-size:.68rem;margin:0;font-weight:650}
+.managerial-refunds__balance-line .finance-amount{white-space:nowrap;font-weight:700}
+.managerial-refunds__balance-line--loss{color:#9a513b}
+.managerial-refunds__balance-line--pending{color:#87612c}
+.managerial-refunds__balance-line--excess{color:#9a513b}
+.managerial-refunds__balance-line--settled{color:#587967}
+.managerial-refunds__balance-line .finance-amount,
+.managerial-refunds__balance-line .finance-amount__currency,
+.managerial-refunds__balance-line .finance-amount__digits{color:inherit;opacity:1}
+.managerial-refunds__workflow{display:inline-block;padding:5px 9px;border-radius:4px;font-size:.74rem;font-weight:700;white-space:nowrap}
+.managerial-refunds__workflow--closed{background:#e8f5ed;color:#256b4b;border:1px solid #b7d9c5}
+.managerial-refunds__workflow--open{background:#eef3f6;color:#506275;border:1px solid #d7e2e8}
+.managerial-refunds__table td .finance-amount{white-space:nowrap}
+@media(max-width:1200px){.managerial-refunds__summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.managerial-refunds__summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.managerial-refunds__summary{grid-template-columns:1fr}}
+
+/* Fluid executive report: no hard-coded 1480px table or forced horizontal bar. */
+.managerial-refunds__metric--extra{--edge:#e9a95c}
+.managerial-refunds__metric--extra .finance-amount{color:#94571a}
+.managerial-refunds__table-scroll{max-width:100%;overflow-x:visible}
+.managerial-refunds__table{width:100%;min-width:0;table-layout:fixed}
+.managerial-refunds__table th,.managerial-refunds__table td{
+  padding:11px 5px;min-width:0;overflow-wrap:break-word;vertical-align:middle
+}
+.managerial-refunds__table th{font-size:.7rem;line-height:1.35;white-space:normal;hyphens:auto}
+.managerial-refunds__table td{font-size:.72rem;line-height:1.4}
+.managerial-refunds__table td .finance-amount{font-size:clamp(.66rem,.77vw,.76rem);letter-spacing:-.015em}
+.managerial-refunds__table th:nth-child(1),.managerial-refunds__table td:nth-child(1){width:17%}
+.managerial-refunds__table th:nth-child(2),.managerial-refunds__table td:nth-child(2){width:9%}
+.managerial-refunds__table th:nth-child(3),.managerial-refunds__table td:nth-child(3){width:10%}
+.managerial-refunds__table th:nth-child(4),.managerial-refunds__table td:nth-child(4){width:10%}
+.managerial-refunds__table th:nth-child(5),.managerial-refunds__table td:nth-child(5){width:10%}
+.managerial-refunds__table th:nth-child(6),.managerial-refunds__table td:nth-child(6){width:10%}
+.managerial-refunds__table th:nth-child(7),.managerial-refunds__table td:nth-child(7){width:12%}
+.managerial-refunds__table th:nth-child(8),.managerial-refunds__table td:nth-child(8){width:7%}
+.managerial-refunds__table th:nth-child(9),.managerial-refunds__table td:nth-child(9){width:8%}
+.managerial-refunds__table th:nth-child(10),.managerial-refunds__table td:nth-child(10){width:7%}
+.managerial-refunds__table td:nth-child(10) .button{
+  max-width:100%;width:100%;padding:7px 4px;white-space:normal;font-size:.7rem
+}
+.managerial-refunds__table td:nth-child(1) strong{font-weight:650}
+.managerial-refunds__balance{min-width:0}
+.managerial-refunds__workflow{font-size:.69rem;padding:4px 5px;max-width:100%;white-space:normal}
+@container (max-width:1250px){
+  .managerial-refunds__table-scroll{background:transparent;border:0;border-radius:0}
+  .managerial-refunds__table,.managerial-refunds__table tbody{display:block}
+  .managerial-refunds__table thead{display:none}
+  .managerial-refunds__table tbody{display:grid;gap:12px}
+  .managerial-refunds__table tbody tr{
+    display:grid;grid-template-columns:1.55fr repeat(4,minmax(0,1fr));
+    border:1px solid #dae3e9;border-radius:7px;background:#fff;overflow:hidden
+  }
+  .managerial-refunds__table tbody td{
+    display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+    width:auto!important;min-height:62px;border:0;
+    padding:10px 12px;border-right:1px solid #edf1f4;border-bottom:1px solid #edf1f4;
+    font-size:.78rem;overflow-wrap:anywhere
+  }
+  .managerial-refunds__table tbody td::before{
+    content:attr(data-label);color:#687788;font-size:.67rem;font-weight:650;
+    line-height:1.25;text-transform:none
+  }
+  .managerial-refunds__table td .finance-amount{font-size:.82rem}
+  .managerial-refunds__table td:nth-child(10) .button{width:auto;padding:7px 12px}
+  .managerial-refunds__table tbody tr:has(td[colspan]){display:block}
+  .managerial-refunds__table tbody td[colspan]{min-height:65px}
+  .managerial-refunds__table tbody td[colspan]::before{content:none}
+}
+@container (max-width:950px){
+  .managerial-refunds__table tbody tr{
+    grid-template-columns:repeat(3,minmax(0,1fr))
+  }
+  .managerial-refunds__table tbody td:first-child{grid-column:1/-1}
+}
+@container (max-width:620px){
+  .managerial-refunds__table tbody tr{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .managerial-refunds__table tbody td{padding:10px 9px}
+  .managerial-refunds__table td .finance-amount{font-size:.77rem}
+}
+
+.managerial-refunds__balance-line--extra{color:#925b21}
+.managerial-refunds__reconciliation-note{
+  border-left:3px solid #d9aa81;background:#fbf7f0;padding:10px 12px;
+  margin:0;font-size:.73rem;line-height:1.5;color:#715c42
+}
+
+@container (max-width:1050px){.managerial-refunds__summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container (max-width:610px){.managerial-refunds__summary{grid-template-columns:1fr}}
+
+/* Match the app's sidebar background, which is sourced from --brand (#465eff). */
+.managerial-refunds__table .managerial-refunds__store-name{color:var(--brand);font-weight:700}
+
+/* Explicit, auditable acknowledgement before store-level financial closure. */
+.managerial-refunds__closure-confirm{display:grid;gap:15px}
+.managerial-refunds__closure-alert{border:1px solid #e4c69a;background:#fffbf3;color:#574a3a;padding:15px;border-radius:7px;font-size:.81rem;line-height:1.55}
+.managerial-refunds__closure-alert>strong{display:block;color:#7c5327;font-size:.88rem}
+.managerial-refunds__closure-alert p{margin:8px 0 0}
+.managerial-refunds__closure-alert ul{padding-left:20px;margin:10px 0;display:grid;gap:5px}
+.managerial-refunds__closure-figures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.managerial-refunds__closure-figures span{display:grid;gap:5px;border:1px solid #dce5eb;border-radius:5px;background:#f7fafb;padding:12px}
+.managerial-refunds__closure-figures small{font-size:.72rem;color:#596c7c}
+.managerial-refunds__closure-figures strong{color:#172b46;font-size:.94rem}
+.managerial-refunds__closure-ack{display:flex;align-items:flex-start;gap:11px;background:#f5f7f9;border:1px solid #dce5eb;border-radius:6px;padding:13px;font-size:.8rem;line-height:1.5;font-weight:550}
+.managerial-refunds__closure-ack input{flex:none;width:17px;height:17px;margin-top:2px;accent-color:var(--brand)}
+.managerial-refunds__closure-existing{margin:0;padding:10px;border-left:3px solid #91eda7;color:#3a6e52;background:#f0f7f3;font-size:.78rem}
+.managerial-refunds__closure-error{margin:0;color:#9a3029;font-size:.79rem;font-weight:650}
+.managerial-refunds__permission-hint{color:#836242;font-size:.72rem}
+@media(max-width:550px){.managerial-refunds__closure-figures{grid-template-columns:1fr}}

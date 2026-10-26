@@ -5,9 +5,12 @@ import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
 import { DashboardPage } from '../pages/dashboard-page';
+import { BudgetForecastDashboardPage } from '../pages/budget-forecast-dashboard-page';
+import { FinancialCompositionPage } from '../pages/financial-composition-page';
 import { FinancePage } from '../pages/finance-page';
 import { FinancePaymentsPage } from '../pages/finance-payments-page';
 import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
+import { ManagerialReimbursementPage } from '../pages/managerial-reimbursement-page';
 import { FinanceStoreDetailPage } from '../pages/finance-store-detail-page';
 import { WorksPage } from '../pages/works-page';
 import { PendingItemsPage } from '../pages/pending-items-page';
@@ -113,7 +116,43 @@ export function App() {
               path="dashboard"
               element={
                 <RequireCapability capability="dashboard.view">
-                  <DashboardPage view="overview" />
+                  <Navigate to="/dashboard/previsao-orcamentaria" replace />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/previsao-orcamentaria"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <RequireCapability capability="finance.overview_view">
+                    <RequireCapability capability="dashboard.budget_forecast_view">
+                      <BudgetForecastDashboardPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/composicao-financeira"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <RequireCapability capability="finance.overview_view">
+                    <RequireCapability capability="dashboard.financial_composition_view">
+                      <FinancialCompositionPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="dashboard/reembolso"
+              element={
+                <RequireCapability capability="dashboard.view">
+                  <RequireCapability capability="finance.overview_view">
+                    <RequireCapability capability="dashboard.reimbursement_view">
+                      <ManagerialReimbursementPage />
+                    </RequireCapability>
+                  </RequireCapability>
                 </RequireCapability>
               }
             />

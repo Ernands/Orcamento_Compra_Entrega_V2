@@ -451,7 +451,7 @@ export function DashboardPage({ view }: { view: DashboardView }) {
           <p>Indicadores executivos calculados a partir do seu escopo de acesso.</p>
         </div>
       </header>
-      <nav className="dashboard-tabs" aria-label="Visoes do dashboard">
+      <nav className="dashboard-tabs" aria-label="Visões antigas do dashboard (temporariamente ocultas)" hidden style={{ display: 'none' }}>
         <Link className={view === 'overview' ? 'active' : ''} to="/dashboard">
           <Building2 size={17} />
           Visao Geral

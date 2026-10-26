@@ -1,0 +1,330 @@
+import { ArrowDownToLine, Plus, RefreshCcw, RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { ErrorState, InlineLoading, Modal } from '../components/ui';
+import { useSession } from '../app/session-provider';
+import { listStores } from '../data/stores/stores-repository';
+import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
+import { listWorkServices, listFinanceStoreBudgets } from '../data/works/works-repository';
+import { listPlannedBudget } from '../data/planned-budget/planned-budget-repository';
+import { listFinanceReimbursements } from '../data/finance/finance-repository';
+import { buildFinanceStoreRows } from '../domain/finance-calculations';
+import { buildFinanceOverviewRows } from '../domain/finance-overview';
+import { addManagerialReimbursement, finalizeReimbursementAndCloseStore,
+  listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
+import { buildManagerialReimbursements, managerialTotals, reimbursementStatusLabels,
+  reimbursementBalanceLines, reimbursementWorkflowStatus,
+  type ManagerialReimbursementEntry, type ManagerialReimbursementRow, type ManagerialReimbursementMovementType,
+  type ReimbursementStatus } from '../domain/managerial-reimbursements';
+import { formatBRL, moneyToCents } from '../domain/supply-calculations';
+import { FinanceAmount } from '../components/finance-amount';
+import type { Store } from '../domain/types';
+import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
+import './managerial-reimbursement-page.css';
+
+type Dataset={stores:Store[]; overview:FinanceOverviewStoreRow[]; entries:ManagerialReimbursementEntry[]};
+const today=()=>new Date().toLocaleDateString('en-CA');
+
+export function ManagerialReimbursementPage() {
+  const {can}=useSession();
+  const canEdit=can('dashboard.reimbursement_view') && can('dashboard.reimbursement_manage')
+    && can('dashboard.view') && can('finance.overview_view');
+  const canFinalize=canEdit && can('stores.finalize_reopen');
+  const [data,setData]=useState<Dataset|null>(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState<string|null>(null);
+  const [uf,setUf]=useState('');
+  const [storeId,setStoreId]=useState('');
+  const [status,setStatus]=useState<ReimbursementStatus|'all'>('all');
+  const [selected,setSelected]=useState<ManagerialReimbursementRow|null>(null);
+  const [kind,setKind]=useState<ManagerialReimbursementMovementType>('requested');
+  const [amount,setAmount]=useState('');
+  const [entryDate,setEntryDate]=useState(today());
+  const [protocol,setProtocol]=useState('');
+  const [notes,setNotes]=useState('');
+  const [saving,setSaving]=useState(false);
+  const [formError,setFormError]=useState('');
+  const [confirmingClosure,setConfirmingClosure]=useState(false);
+  const [closureAcknowledged,setClosureAcknowledged]=useState(false);
+  const load=useCallback(async()=>{
+    setLoading(true);setError(null);
+    try {
+      // Legacy purchase reimbursements are consumed only to preserve Financeiro
+      // source totals. Their requested/received amounts NEVER enter this ledger.
+      const [stores,purchases,works,budgets,planned,legacy,entries]=await Promise.all([
+        listStores(),listSupplyPurchasesV2(),listWorkServices(),listFinanceStoreBudgets(),
+        listPlannedBudget(),listFinanceReimbursements(),listManagerialReimbursements(),
+      ]);
+      const purchaseStoreRows=buildFinanceStoreRows(purchases,legacy);
+      setData({stores,entries,overview:buildFinanceOverviewRows({
+        stores,purchases,works,budgets,purchaseStoreRows,plannedBudgetItems:planned.items,
+      })});
+    }catch(e){setError(e instanceof Error?e.message:'Erro ao carregar reembolsos.');}
+    finally{setLoading(false);}
+  },[]);
+  useEffect(()=>{void load();},[load]);
+  const allRows=useMemo(()=>data?buildManagerialReimbursements(data.stores,data.overview,data.entries):[],[data]);
+  const states=useMemo(()=>[...new Set(allRows.map(r=>r.state))].sort(),[allRows]);
+  const shown=useMemo(()=>allRows.filter(r=>(!uf||r.state===uf)&&(!storeId||r.storeId===storeId)
+    &&(status==='all'||r.reimbursementStatus===status)),[allRows,uf,storeId,status]);
+  const totals=useMemo(()=>managerialTotals(shown),[shown]);
+  const open=(row:ManagerialReimbursementRow)=>{
+    setSelected(row);setKind('requested');setAmount('');setEntryDate(today());
+    setProtocol('');setNotes('');setFormError('');
+    setConfirmingClosure(false);setClosureAcknowledged(false);
+  };
+  const submit=async(e:FormEvent)=>{
+    e.preventDefault();if(!selected||saving)return;
+    let cents:bigint;
+    try {cents=moneyToCents(amount);if(cents<=0n)throw Error('Informe um valor maior que zero.');
+      if(!entryDate)throw Error('Informe a data.');
+    }catch(e){setFormError(e instanceof Error?e.message:'Valor inválido.');return;}
+    setSaving(true);setFormError('');
+    try{await addManagerialReimbursement({
+      storeId:selected.storeId,type:kind,amountCents:cents,date:entryDate,protocol,notes,
+    });await load();setSelected(null);}
+    catch(e){setFormError(e instanceof Error?e.message:'Não foi possível salvar.');}
+    finally{setSaving(false);}
+  };
+  const finalize=async()=>{
+    if(!selected||saving||!canFinalize||!confirmingClosure
+      || !closureAcknowledged
+      || selected.reimbursementStatus==='finalized'
+      || selected.requestedCents<=0n || selected.pendingCents<0n)return;
+    // Nunca incluir o gasto extra acima da verba BB na perda absorvida.
+    const eligibleRemaining=selected.eligibleCents-selected.receivedCents-selected.recordedLossCents;
+    const loss=eligibleRemaining>0n?eligibleRemaining:0n;
+    setSaving(true);setFormError('');
+    try {
+      // Single DB transaction: either the reimbursement closes AND the existing
+      // financial store lock is applied, or neither operation is committed.
+      await finalizeReimbursementAndCloseStore({
+        storeId:selected.storeId,lossCents:loss,date:today(),
+        // A ciência é dada pelo checkbox e pelo clique de confirmação.
+        // O protocolo interno ainda exige o marcador literal no RPC.
+        confirmation:'FINALIZAR',
+      });
+      await load();setConfirmingClosure(false);setSelected(null);
+    }catch(e){setFormError(e instanceof Error?e.message:'Não foi possível finalizar o reembolso e bloquear a loja.');}
+    finally{setSaving(false);}
+  };
+  const reverse=async(entry:ManagerialReimbursementEntry)=>{
+    if(!selected||saving||entry.type==='finalized'||entry.reversalOf
+      ||selected.events.some(e=>e.reversalOf===entry.id
+        ||(e.type==='finalized' && e.createdAt>=entry.createdAt)))return;
+    if(!window.confirm('Estornar este lançamento? A movimentação original ficará preservada no histórico.'))return;
+    setSaving(true);setFormError('');
+    try{await addManagerialReimbursement({
+      storeId:selected.storeId,type:entry.type,amountCents:-entry.amountCents,
+      date:today(),protocol:entry.protocol,notes:'Estorno do lançamento de '+entry.date,
+      reversalOf:entry.id,
+    });await load();setSelected(null);}
+    catch(e){setFormError(e instanceof Error?e.message:'Não foi possível estornar.');}
+    finally{setSaving(false);}
+  };
+  const csv=()=>{
+    const esc=(v:string)=>'"'+v.replace(/"/g,'""')+'"';
+    const numeric=(v:bigint)=>String(v<0n?'-':'')+String((v<0n?-v:v)/100n)+','+
+      String((v<0n?-v:v)%100n).padStart(2,'0');
+    const lines=[
+      ['Loja','UF','Verba BB','Realizado total','Dif. em relação à verba','Valor solicitado',
+       'Valor reembolsado','Pendente','Perda absorvida','Gasto extra Verba BB','Acima do solicitado',
+       'Situação da loja','Status do reembolso'],
+      ...shown.map(r=>[r.code+' · '+r.name,r.state,numeric(r.bbCents),
+        numeric(r.realizedTotalCents),numeric(r.varianceToBbCents),
+        numeric(r.requestedCents),numeric(r.receivedCents),
+        numeric(r.pendingCents>0n?r.pendingCents:0n),
+        numeric(r.absorbedCents),numeric(r.extraCents),
+        numeric(r.pendingCents<0n?-r.pendingCents:0n),
+        r.storeStatus,reimbursementWorkflowStatus(r)]),
+    ];
+    const blob=new Blob(['\uFEFF'+lines.map(line=>line.map(esc).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;
+    a.download='Reembolso_Gerencial_Implanta27.csv';a.click();URL.revokeObjectURL(url);
+  };
+  const summary=[
+    {label:'Realizado total',value:totals.realizedTotalCents,group:'execution'},
+    {label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'execution'},
+    {label:'Total solicitado',value:totals.requestedCents,group:'finance'},
+    {label:'Total reembolsado',value:totals.receivedCents,group:'finance'},
+    {label:'Perdas absorvidas',value:totals.absorbedCents,group:'loss'},
+    {label:'Gasto extra Verba BB',value:totals.extraCents,group:'extra'},
+    {label:'Pendente de reembolso',value:totals.pendingCents,group:'tracking'},
+  ];
+  return <section className="page-stack managerial-refunds">
+    <header className="page-heading">
+      <div><p className="eyebrow">Dashboard | Gerencial</p><h2>Reembolso</h2>
+        <p>Controle gerencial de solicitações e recebimentos por loja, independente dos pedidos de compra.</p></div>
+      <button className="button button--secondary" onClick={()=>void load()} disabled={loading}>
+        <RefreshCcw size={16}/> Atualizar</button>
+    </header>
+    {loading?<InlineLoading label="Consultando reembolsos"/>:error?<ErrorState message={error} onRetry={()=>void load()}/>:<>
+      <div className="managerial-refunds__summary">
+        {summary.map(x=><article key={x.label} className={'managerial-refunds__metric managerial-refunds__metric--'+x.group}>
+          <small>{x.label}</small><FinanceAmount cents={x.value}/></article>)}
+        <article className="managerial-refunds__metric managerial-refunds__metric--tracking">
+          <small>Lojas com pendências</small><strong>{totals.pendingStores}</strong></article>
+      </div>
+      <div className="managerial-refunds__filters">
+        <label>UF <select value={uf} onChange={e=>{setUf(e.target.value);setStoreId('');}}>
+          <option value="">Todas</option>{states.map(s=><option key={s}>{s}</option>)}</select></label>
+        <label>Loja <select value={storeId} onChange={e=>setStoreId(e.target.value)}>
+          <option value="">Todas</option>{allRows.filter(r=>!uf||r.state===uf).map(r=>
+            <option key={r.storeId} value={r.storeId}>{r.code} · {r.city}/{r.state}</option>)}</select></label>
+        <label>Situação do reembolso <select value={status} onChange={e=>setStatus(e.target.value as typeof status)}>
+          <option value="all">Todas</option>{Object.entries(reimbursementStatusLabels).map(([key,label])=>
+            <option key={key} value={key}>{label}</option>)}</select></label>
+        <button className="button button--secondary" onClick={()=>{
+          setUf('');setStoreId('');setStatus('all');}}>Limpar</button>
+        <button className="button button--secondary" onClick={csv} disabled={!shown.length}>
+          <ArrowDownToLine size={16}/> Exportar Excel (CSV)</button>
+      </div>
+      <div className="managerial-refunds__table-scroll">
+        <table className="managerial-refunds__table"><thead><tr>
+          <th>Loja · Cidade/UF</th><th>Verba BB</th><th>Realizado total</th>
+          <th>Dif. em relação à verba</th><th>Valor solicitado</th><th>Valor reembolsado</th>
+          <th>Saldo / Perda / Excedente</th><th>Situação da loja</th>
+          <th>Status do reembolso</th><th>Ações</th>
+        </tr></thead><tbody>
+          {shown.map(r=><tr key={r.storeId}>
+            <td data-label="Loja"><strong className="managerial-refunds__store-name">{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
+            <td data-label="Verba BB"><FinanceAmount cents={r.bbCents}/></td>
+            <td data-label="Realizado"><FinanceAmount cents={r.realizedTotalCents}/></td>
+            <td data-label="Dif. Verba" className={r.varianceToBbCents<0n?'value-negative':'value-positive'}>
+              <FinanceAmount cents={r.varianceToBbCents}/></td>
+            <td data-label="Solicitado"><FinanceAmount cents={r.requestedCents}/></td>
+            <td data-label="Reembolsado"><FinanceAmount cents={r.receivedCents}/></td>
+            <td data-label="Saldo">
+              <div className="managerial-refunds__balance">
+                {reimbursementBalanceLines(r).map(line=>
+                  <span key={line.kind} className={'managerial-refunds__balance-line managerial-refunds__balance-line--'+line.kind}>
+                    <small>{line.label}</small><FinanceAmount cents={line.amountCents}/>
+                  </span>)}
+              </div>
+            </td>
+            <td data-label="Situação da Loja">{r.storeStatus}</td>
+            <td data-label="Status Reembolso"><span className={'managerial-refunds__workflow managerial-refunds__workflow--'+
+              (reimbursementWorkflowStatus(r)==='Finalizado'?'closed':'open')}>
+              {reimbursementWorkflowStatus(r)}</span>
+              {r.reimbursementStatus==='not_requested'&&<small>Sem solicitação</small>}
+            </td>
+            <td data-label="Ações"><button className="button button--secondary button--small" onClick={()=>open(r)}>
+              {canEdit?'Gerenciar':'Histórico'}</button></td>
+          </tr>)}
+          {!shown.length&&<tr><td colSpan={10}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
+        </tbody></table>
+      </div>
+      <p className="managerial-refunds__footnote">Gasto extra Verba BB = Realizado acima da Verba BB. Perda absorvida = parcela do realizado elegível não reembolsada quando o processo é finalizado. Valores acima da Verba BB não integram a perda nem a dedução na Previsão Orçamentária.</p>
+    </>}
+    <Modal open={Boolean(selected)} onClose={()=>{
+      if(!saving){setConfirmingClosure(false);setSelected(null);}
+    }}
+      title={confirmingClosure?'Finalizar reembolso e bloquear loja?'
+        :selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
+      description={confirmingClosure
+        ? 'Confirmação de ciência: a loja será finalizada financeiramente pelo mesmo bloqueio do cadastro de Lojas.'
+        : 'Lançamentos auditáveis, sem sobrescrever o histórico.'}>
+      {selected&&(confirmingClosure
+        ? <div className="managerial-refunds__closure-confirm">
+          <div className="managerial-refunds__closure-alert">
+            <strong>Atenção: duas ações vinculadas e definitivas até reabertura autorizada</strong>
+            <p>Ao confirmar a finalização de {selected.code} · {selected.city}/{selected.state}, o sistema:</p>
+            <ul>
+              <li>Finaliza o reembolso e reconhece somente a perda elegível dentro da Verba BB;</li>
+              <li>Marca a loja como <strong>Finalizada</strong> financeiramente em Lojas;</li>
+              <li>Bloqueia novas compras, Obras e Serviços, pagamentos e alterações financeiras vinculadas à loja.</li>
+            </ul>
+            <p>A reabertura financeira exige usuário autorizado e justificativa, no cadastro da loja.
+              Documentos fiscais adicionais continuam sujeitos às regras de auditoria.</p>
+          </div>
+          <div className="managerial-refunds__closure-figures">
+            <span><small>Perda a reconhecer</small><strong>{formatBRL(
+              selected.eligibleCents-selected.receivedCents-selected.recordedLossCents>0n
+              ?selected.eligibleCents-selected.receivedCents-selected.recordedLossCents:0n
+            )}</strong></span>
+            <span><small>Gasto extra Verba BB (fora da perda)</small>
+              <strong>{formatBRL(selected.extraCents)}</strong></span>
+          </div>
+          {selected.storeStatus==='Finalizada'&&<p className="managerial-refunds__closure-existing">
+            A loja já está finalizada financeiramente. O bloqueio será preservado,
+            e somente a finalização do reembolso será registrada.
+          </p>}
+          <label className="managerial-refunds__closure-ack">
+            <input type="checkbox" checked={closureAcknowledged}
+              onChange={e=>setClosureAcknowledged(e.target.checked)}/>
+            <span>Declaro ciência de que esta confirmação bloqueará novas movimentações
+              financeiras da loja e registrará a finalização do reembolso.</span>
+          </label>
+          {formError&&<p role="alert" className="managerial-refunds__closure-error">{formError}</p>}
+          <div className="modal-actions">
+            <button type="button" className="button button--secondary" disabled={saving}
+              onClick={()=>{setConfirmingClosure(false);setFormError('');}}>Voltar</button>
+            <button type="button" className="button button--primary"
+              disabled={saving||!closureAcknowledged}
+              onClick={()=>void finalize()}>
+              {saving?'Finalizando...':'Confirmar finalização e bloqueio'}
+            </button>
+          </div>
+        </div>
+        : <div className="managerial-refunds__modal">
+        <div className="managerial-refunds__modal-summary">
+          <span>Solicitado: {formatBRL(selected.requestedCents)}</span>
+          <span>Recebido: {formatBRL(selected.receivedCents)}</span>
+          <span>Perda absorvida: {formatBRL(selected.absorbedCents)}</span>
+          <span>Gasto extra Verba BB: {formatBRL(selected.extraCents)}</span>
+          <span>Pendente: {formatBRL(selected.pendingCents)}</span>
+          <strong>{reimbursementStatusLabels[selected.reimbursementStatus]}</strong>
+        </div>
+        {selected.absorbedCents!==selected.recordedLossCents && <p className="managerial-refunds__reconciliation-note">
+          Perda gerencial reconciliada pelo Realizado Total elegível e valores recebidos:
+          {formatBRL(selected.absorbedCents)}. O histórico registra
+          {formatBRL(selected.recordedLossCents)} em finalizações anteriores.
+          Nenhum lançamento histórico foi modificado.
+        </p>}
+        {canEdit&&<form onSubmit={e=>void submit(e)} className="managerial-refunds__form">
+          <label>Movimentação<select value={kind} onChange={e=>setKind(e.target.value as ManagerialReimbursementMovementType)}>
+            <option value="requested">Solicitação</option><option value="received">Recebimento</option></select></label>
+          <label>Valor (R$)<input required value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0,00"/></label>
+          <label>Data<input required type="date" value={entryDate} onChange={e=>setEntryDate(e.target.value)}/></label>
+          <label>Protocolo / referência<input value={protocol} onChange={e=>setProtocol(e.target.value)} maxLength={180}/></label>
+          <label className="managerial-refunds__wide">Observações<textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}/></label>
+          {formError&&<p role="alert" className="value-negative">{formError}</p>}
+          <button disabled={saving} type="submit" className="button button--primary"><Plus size={16}/> Registrar movimentação</button>
+        </form>}
+        {canEdit && selected.reimbursementStatus!=='finalized' &&
+          selected.requestedCents>0n && selected.pendingCents>=0n && <div className="managerial-refunds__finalize">
+            <div><strong>Finalizar reembolso</strong>
+              <small>Ao finalizar, a perda considera somente o realizado elegível até a Verba BB:
+                {formatBRL(selected.eligibleCents)} menos {formatBRL(selected.receivedCents)} recebidos.
+                Gasto extra Verba BB de {formatBRL(selected.extraCents)} é separado.</small>
+            </div>
+            <button type="button" className="button button--secondary"
+              disabled={saving||!canFinalize}
+              title={!canFinalize?'Requer permissão Finalizar/Reabrir Loja':undefined}
+              onClick={()=>{
+                setConfirmingClosure(true);setClosureAcknowledged(false);
+                setFormError('');
+              }}>Marcar como finalizado</button>
+            {!canFinalize&&<small className="managerial-refunds__permission-hint">
+              Necessária a permissão Finalizar/Reabrir Loja para concluir e bloquear a loja.
+            </small>}
+          </div>}
+        <h3>Histórico de movimentações</h3>
+        <div className="managerial-refunds__history">
+          {selected.events.length?selected.events.map(entry=><div key={entry.id}>
+            <div><strong>{entry.type==='requested'?'Solicitação':entry.type==='received'?'Recebimento':'Finalização / Perda absorvida'}</strong>
+              {entry.reversalOf&&<small> · Estorno</small>}
+              <small> · {entry.date} · {entry.protocol||'Sem protocolo'}</small>
+              <small> · Autor: {entry.createdBy}</small>
+              {entry.notes&&<p>{entry.notes}</p>}
+            </div>
+            <FinanceAmount cents={entry.amountCents}/>
+            {canEdit&&entry.type!=='finalized'&&!entry.reversalOf&&!selected.events.some(e=>e.reversalOf===entry.id||(e.type==='finalized'&&e.createdAt>=entry.createdAt))&&
+              <button type="button" disabled={saving} className="button button--secondary button--small"
+                onClick={()=>void reverse(entry)}><RotateCcw size={14}/> Estornar</button>}
+          </div>):<p>Nenhuma movimentação registrada.</p>}
+        </div>
+        {formError&&<p role="alert" className="value-negative">{formError}</p>}
+      </div>)}
+    </Modal>
+  </section>;
+}

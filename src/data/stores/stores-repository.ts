@@ -1,5 +1,6 @@
 import type { ResponsibleUser, Store, StoreFormValues } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { listStoreFinancialClosures } from './store-financial-closure-repository';
 
 interface StoreRow {
   id: string;
@@ -59,12 +60,11 @@ export async function listStores(): Promise<Store[]> {
   const ids = [...new Set(data.flatMap((store) => store.responsavel_usuario_id || []))];
   const names = await responsibleNames(ids);
 
-  return data.map((store) =>
-    mapStore(
-      store,
-      store.responsavel_usuario_id ? names.get(store.responsavel_usuario_id) || null : null,
-    ),
-  );
+  const financialClosures = await listStoreFinancialClosures(data.map((row) => row.id));
+  return data.map((store) => ({
+    ...mapStore(store, store.responsavel_usuario_id ? names.get(store.responsavel_usuario_id) || null : null),
+    financialClosure: financialClosures.get(store.id),
+  }));
 }
 
 export async function getStore(id: string): Promise<Store> {
@@ -83,10 +83,11 @@ export async function getStore(id: string): Promise<Store> {
   const names = await responsibleNames(
     data.responsavel_usuario_id ? [data.responsavel_usuario_id] : [],
   );
-  return mapStore(
-    data,
-    data.responsavel_usuario_id ? names.get(data.responsavel_usuario_id) || null : null,
-  );
+  const financialClosures = await listStoreFinancialClosures([data.id]);
+  return {
+    ...mapStore(data, data.responsavel_usuario_id ? names.get(data.responsavel_usuario_id) || null : null),
+    financialClosure: financialClosures.get(data.id),
+  };
 }
 
 export async function listResponsibleUsers(): Promise<ResponsibleUser[]> {

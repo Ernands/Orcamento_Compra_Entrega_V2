@@ -17,6 +17,8 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
+import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import { listStores } from '../data/stores/stores-repository';
 import {
@@ -1312,7 +1314,8 @@ export function WorksPage() {
   };
 
   const removeDocument = async (document: WorkServiceDocument) => {
-    if (!canManage) return;
+    if (!canManage || stores.some((item) =>
+      item.id === document.storeId && item.financialClosure?.state === 'closed')) return;
     const label = `${DOCUMENT_LABELS[document.documentType]}${document.documentNumber ? ` · ${document.documentNumber}` : ''}`;
     if (!window.confirm(`Excluir ${label}? O registro e o arquivo anexado serão removidos.`)) return;
 
@@ -1354,19 +1357,19 @@ export function WorksPage() {
         </div>
       </header>
 
-      <section className="works-kpis works-kpis--grouped">
+      <section className="works-kpis works-kpis--grouped" aria-label="Resumo de Obras e Serviços">
         <div className="works-kpi-group works-kpi-group--budget">
           <span className="works-kpi-group__title">Planejamento</span>
           <div>
             <article>
               <HardHat size={21} />
               <span>Orçado em obras</span>
-              <strong>{formatBRL(totals.budgetCents)}</strong>
+              <FinanceAmount cents={totals.budgetCents} />
             </article>
             <article>
               <Building2 size={21} />
               <span>Contratado</span>
-              <strong>{formatBRL(totals.contractedCents)}</strong>
+              <FinanceAmount cents={totals.contractedCents} />
             </article>
           </div>
         </div>
@@ -1376,12 +1379,12 @@ export function WorksPage() {
             <article className="works-kpi--paid">
               <WalletCards size={21} />
               <span>Pago</span>
-              <strong>{formatBRL(totals.paidCents)}</strong>
+              <FinanceAmount cents={totals.paidCents} />
             </article>
             <article>
               <CalendarDays size={21} />
               <span>A pagar</span>
-              <strong>{formatBRL(totals.payableCents)}</strong>
+              <FinanceAmount cents={totals.payableCents} />
             </article>
           </div>
         </div>
@@ -1391,7 +1394,7 @@ export function WorksPage() {
             <article className={totals.missingDocumentsCents > 0n ? 'works-kpi--warning' : 'works-kpi--ok'}>
               <ReceiptText size={21} />
               <span>Falta documentar</span>
-              <strong>{formatBRL(totals.missingDocumentsCents)}</strong>
+              <FinanceAmount cents={totals.missingDocumentsCents} />
             </article>
           </div>
         </div>
@@ -1478,6 +1481,8 @@ export function WorksPage() {
           </header>
           {filtered.map((service) => {
             const current = serviceTotals(service);
+            const isClosed = stores.some((item) => item.id === service.storeId &&
+              item.financialClosure?.state === 'closed');
             return (
               <details
                 className={`works-card works-card--${service.status}`}
@@ -1500,6 +1505,7 @@ export function WorksPage() {
                     <small>
                       {service.storeCode} · {service.storeName} · {service.storeCity}/{service.storeState}
                     </small>
+                    {isClosed && <span className="store-close-badge store-close-badge--closed">🔒 Loja Finalizada</span>}
                   </div>
                   <div>
                     <span>Contratado / orçado</span>
@@ -1548,7 +1554,7 @@ export function WorksPage() {
                         {formatDate(service.plannedStartDate)} → {formatDate(service.plannedEndDate)}
                       </strong>
                     </div>
-                    {canManage && (
+                    {canManage && !isClosed && (
                       <button
                         type="button"
                         className="button button--secondary button--small"
@@ -1588,7 +1594,7 @@ export function WorksPage() {
                         <strong>Pagamentos</strong>
                         <span>Cada parcela possui situação própria.</span>
                       </div>
-                      {canManage && (
+                      {canManage && !isClosed && (
                         <button
                           className="button button--secondary button--small"
                           onClick={() => setPaymentEditor({ service, payment: null })}
@@ -1600,7 +1606,7 @@ export function WorksPage() {
                     </header>
                     {service.payments.length ? (
                       <div
-                        className={`works-mini-table${canManage ? ' works-mini-table--editable' : ''}`}
+                        className={`works-mini-table${canManage && !isClosed ? ' works-mini-table--editable' : ''}`}
                       >
                         <div className="works-mini-table__header">
                           <span>Parcela</span>
@@ -1608,7 +1614,7 @@ export function WorksPage() {
                           <span>Valor</span>
                           <span>Forma</span>
                           <span>Situação</span>
-                          {canManage && <span>Ações</span>}
+                          {canManage && !isClosed && <span>Ações</span>}
                         </div>
                         {service.payments.map((payment) => (
                           <div key={payment.id}>
@@ -1619,7 +1625,7 @@ export function WorksPage() {
                             <span className={`works-payment works-payment--${payment.status}`}>
                               {PAYMENT_STATUS_LABELS[payment.status]}
                             </span>
-                            {canManage && (
+                            {canManage && !isClosed && (
                               <button
                                 type="button"
                                 className="button button--secondary button--small"
@@ -1699,7 +1705,7 @@ export function WorksPage() {
                                 ) : (
                                   <span className="works-document-no-file">Sem arquivo</span>
                                 )}
-                                {canManage && (
+                                {canManage && !isClosed && (
                                   <>
                                     <button
                                       type="button"
@@ -1740,7 +1746,7 @@ export function WorksPage() {
         <WorkServiceModal
           key={serviceModal === 'new' ? 'new' : serviceModal.id}
           service={serviceModal === 'new' ? null : serviceModal}
-          stores={stores}
+          stores={stores.filter((item) => item.financialClosure?.state !== 'closed')}
           onClose={() => setServiceModal(null)}
           onSaved={load}
         />

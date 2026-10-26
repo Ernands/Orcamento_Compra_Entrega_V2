@@ -17,6 +17,9 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
+.finance-kpis:not(.finance-kpis--grouped) {
+  grid-template-columns: repeat(3,minmax(0,1fr));
+}
 
 .finance-kpi-group {
   min-width: 0;
@@ -284,15 +287,15 @@
 }
 
 .finance-overview-table tbody td:nth-child(n + 2):nth-child(-n + 7) {
-  background: #f7fbff;
+  background: #faf8ff;
 }
 
 .finance-overview-table tbody td:nth-child(n + 8):nth-child(-n + 12) {
-  background: #f6fcf9;
+  background: #f6faff;
 }
 
 .finance-overview-table tbody td:nth-child(n + 13):nth-child(-n + 14) {
-  background: #fffaf4;
+  background: #f5faf7;
 }
 
 .finance-overview-table tbody td:nth-child(15) {
@@ -304,15 +307,15 @@
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 2):nth-child(-n + 7) {
-  background: #edf5fc;
+  background: #f1ecfc;
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 8):nth-child(-n + 12) {
-  background: #edf8f2;
+  background: #e9f3fd;
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(n + 13):nth-child(-n + 14) {
-  background: #fff3e5;
+  background: #e8f5ed;
 }
 
 .finance-overview-table tbody tr:nth-child(even) td:nth-child(15) {
@@ -321,6 +324,18 @@
 
 .finance-overview-table tbody tr:hover td {
   filter: none;
+}
+
+/* Financial phase values follow the same executive palette.
+   Variances keep their independent green/red meaning. */
+.finance-overview-table tbody td:nth-child(n + 2):nth-child(-n + 6) strong {
+  color:#624693;
+}
+.finance-overview-table tbody td:nth-child(n + 8):nth-child(-n + 11) strong {
+  color:#255f8d;
+}
+.finance-overview-table tbody td:nth-child(n + 13):nth-child(-n + 14) strong {
+  color:#256b4b;
 }
 
 .finance-overview-table th:first-child,
@@ -342,21 +357,21 @@
 }
 
 .finance-overview-groups th:nth-child(2) {
-  color: #1e5a8a;
-  background: #ddebfa;
-  border-right-color: #9ec2e6;
+  color: #624693;
+  background: #e9dff9;
+  border-right-color: #cdb8ef;
 }
 
 .finance-overview-groups th:nth-child(3) {
-  color: #177354;
-  background: #ddf3e7;
-  border-right-color: #98d5b6;
+  color: #255f8d;
+  background: #deedfc;
+  border-right-color: #9ec8eb;
 }
 
 .finance-overview-groups th:nth-child(4) {
-  color: #9a5a0a;
-  background: #fdeacf;
-  border-right-color: #e8c38b;
+  color: #256b4b;
+  background: #e0f3e7;
+  border-right-color: #a7d7ba;
 }
 
 .finance-overview-groups th:nth-child(5) {
@@ -367,32 +382,37 @@
 .finance-overview-toggle,
 .finance-overview-toggle.button {
   min-height: 34px;
-  color: #7a4200 !important;
-  background: #ffead0 !important;
-  border-color: #e7ad60 !important;
+  color: #256b4b !important;
+  background: #e8f5ed !important;
+  border-color: #a7d7ba !important;
   font-weight: 850;
 }
 
 .finance-overview-toggle:hover,
 .finance-overview-toggle.button:hover {
-  color: #5f3300 !important;
-  background: #ffddb1 !important;
-  border-color: #d9953e !important;
+  color: #19583b !important;
+  background: #d5ecde !important;
+  border-color: #77bb95 !important;
+}
+.finance-overview-toggle:focus-visible,
+.finance-overview-toggle.button:focus-visible {
+  outline: 2px solid #256b4b;
+  outline-offset: 2px;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(-n + 6) {
-  color: #275f8b;
-  background: #eaf4fd;
+  color: #624693;
+  background: #f0eafc;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(n + 7):nth-child(-n + 11) {
-  color: #1d6c51;
-  background: #eaf7f0;
+  color: #255f8d;
+  background: #e9f3fd;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(n + 12):nth-child(-n + 13) {
-  color: #8a570e;
-  background: #fff2df;
+  color: #256b4b;
+  background: #e8f5ed;
 }
 
 .finance-overview-table thead tr:nth-child(2) th:nth-child(14) {
@@ -720,7 +740,7 @@
 .finance-store-card > summary {
   min-height: 76px;
   display: grid;
-  grid-template-columns: minmax(190px, 1.25fr) repeat(3, minmax(155px, 0.8fr)) 24px;
+  grid-template-columns: minmax(190px, 1.25fr) repeat(2, minmax(155px, 0.8fr)) 24px;
   align-items: center;
   gap: 15px;
   padding: 12px 17px;
@@ -777,7 +797,7 @@
 .finance-store-purchases > article {
   display: grid;
   grid-template-columns:
-    minmax(175px, 1fr) minmax(210px, 1.35fr) minmax(155px, 0.8fr) minmax(145px, 0.75fr)
+    minmax(175px, 1fr) minmax(210px, 1.35fr) minmax(155px, 0.8fr)
     minmax(115px, 0.75fr) auto;
   align-items: center;
   gap: 12px;

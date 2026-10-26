@@ -15,6 +15,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
+import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceStoreDetailExcel,
@@ -49,6 +51,7 @@ import {
   listWorkServices,
 } from '../data/works/works-repository';
 import './finance-store-detail-page.css';
+import '../styles/finance-kpi-unified.css';
 
 const WORK_STATUS_LABELS: Record<WorkService['status'], string> = {
   budget: 'Orçamento',
@@ -425,6 +428,9 @@ export function FinanceStoreDetailPage() {
   }
 
   const availableBbCents = overview.budgetBbCents - overview.budgetTotalCents;
+  // Total da loja: diferença de execução contra o orçamento, não contra a verba BB.
+  // Positivo significa realizado acima do orçado.
+  const executionDifferenceCents = overview.realizedTotalCents - overview.budgetTotalCents;
 
   return (
     <div className="page-stack finance-store-detail">
@@ -436,6 +442,9 @@ export function FinanceStoreDetailPage() {
           </Link>
           <span className="eyebrow">Financeiro · Detalhe da loja</span>
           <h2>{store.code} · {store.name}</h2>
+           <span className={`store-close-badge ${store.financialClosure?.state === 'closed' ? 'store-close-badge--closed' : ''}`}>
+             {store.financialClosure?.state === 'closed' ? '🔒 Finalizada' : 'Em andamento'}
+           </span>
           <p>{store.city}/{store.state}</p>
         </div>
         <div className="finance-store-detail__actions">
@@ -467,7 +476,7 @@ export function FinanceStoreDetailPage() {
             <article>
               <Landmark size={20} />
               <span>Verba BB</span>
-              <strong>{formatBRL(overview.budgetBbCents)}</strong>
+              <FinanceAmount cents={overview.budgetBbCents} />
               <small
                 className={`finance-store-bb-available ${
                   availableBbCents < 0n ? 'is-negative' : 'is-positive'
@@ -479,7 +488,7 @@ export function FinanceStoreDetailPage() {
             <article>
               <ReceiptText size={20} />
               <span>Orçado total</span>
-              <strong>{formatBRL(overview.budgetTotalCents)}</strong>
+              <FinanceAmount cents={overview.budgetTotalCents} />
             </article>
           </div>
         </div>
@@ -489,12 +498,12 @@ export function FinanceStoreDetailPage() {
             <article className="is-primary">
               <Building2 size={20} />
               <span>Realizado</span>
-              <strong>{formatBRL(overview.realizedTotalCents)}</strong>
+              <FinanceAmount cents={overview.realizedTotalCents} />
             </article>
             <article className={overview.realizedVarianceToBbCents < 0n ? 'is-negative' : 'is-positive'}>
               <CheckCircle2 size={20} />
               <span>Dif. em relação à verba</span>
-              <strong>{formatBRL(overview.realizedVarianceToBbCents)}</strong>
+              <FinanceAmount cents={overview.realizedVarianceToBbCents} />
             </article>
           </div>
         </div>
@@ -504,12 +513,12 @@ export function FinanceStoreDetailPage() {
             <article>
               <WalletCards size={20} />
               <span>Pago</span>
-              <strong>{formatBRL(overview.paidCents)}</strong>
+              <FinanceAmount cents={overview.paidCents} />
             </article>
             <article>
               <WalletCards size={20} />
               <span>A pagar</span>
-              <strong>{formatBRL(overview.payableCents)}</strong>
+              <FinanceAmount cents={overview.payableCents} />
             </article>
           </div>
         </div>
@@ -560,9 +569,9 @@ export function FinanceStoreDetailPage() {
                 <td><strong>Total da loja</strong></td>
                 <td><strong>{formatBRL(overview.budgetTotalCents)}</strong></td>
                 <td><strong>{formatBRL(overview.realizedTotalCents)}</strong></td>
-                <td>
-                  <strong className={overview.realizedVarianceToBbCents < 0n ? 'value-negative' : 'value-positive'}>
-                    {formatBRL(overview.realizedVarianceToBbCents)}
+                <td title="Total realizado menos total orçado">
+                  <strong className={executionDifferenceCents > 0n ? 'value-negative' : 'value-positive'}>
+                    {formatBRL(executionDifferenceCents)}
                   </strong>
                 </td>
                 <td><strong>{formatBRL(overview.paidCents)}</strong></td>

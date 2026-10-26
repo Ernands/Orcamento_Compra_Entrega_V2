@@ -1,5 +1,4 @@
 import {
-  BanknoteArrowDown,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -21,6 +20,8 @@ import {
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { FinanceAmount } from '../components/finance-amount';
+import '../styles/store-financial-close.css';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   downloadFinanceOverviewExcel,
@@ -66,6 +67,7 @@ import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import type { Store } from '../domain/types';
 import type { FinanceStoreBudget, WorkService } from '../domain/works-types';
 import './finance-page.css';
+import '../styles/finance-kpi-unified.css';
 
 type FinanceTab = 'overview' | 'stores' | 'reimbursements';
 
@@ -516,7 +518,10 @@ export function FinancePage() {
   const canManage = can('finance.manage');
   const canOverview = can('finance.overview_view');
   const canStoresUfs = can('finance.stores_ufs_view');
-  const canReimbursements = can('finance.reimbursements_view');
+  // Legacy purchase-by-purchase reimbursement UI is intentionally retired.
+  // Keep historical data loaded for established finance calculations, but
+  // hide the old tab and creation/edit actions. See Dashboard > Reembolso.
+  const canReimbursements = false;
   const canStoreDetail = can('finance.store_detail_view');
   const canDetailDocuments = can('finance.store_detail_documents_view');
   const canBudgetEdit = can('finance.budget_edit');
@@ -533,6 +538,7 @@ export function FinancePage() {
   const [plannedBudgetItems, setPlannedBudgetItems] = useState<PlannedBudgetItem[]>([]);
   const [reimbursements, setReimbursements] = useState<FinanceReimbursement[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const closureByStoreId = useMemo(() => new Map(stores.map((store) => [store.id, store.financialClosure?.state])), [stores]);
   const [works, setWorks] = useState<WorkService[]>([]);
   const [budgets, setBudgets] = useState<FinanceStoreBudget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -541,6 +547,7 @@ export function FinancePage() {
   const [month] = useState(currentMonth);
   const [stateFilter, setStateFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
+  const [closureFilter, setClosureFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [query, setQuery] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [overviewExporting, setOverviewExporting] = useState<'pdf' | 'excel' | null>(null);
@@ -639,9 +646,10 @@ export function FinancePage() {
         visibleStores
           .filter((store) => !stateFilter || store.state === stateFilter)
           .filter((store) => !storeFilter || store.id === storeFilter)
+          .filter((store) => closureFilter === 'all' || store.financialClosure?.state === closureFilter)
           .map((store) => store.id),
       ),
-    [stateFilter, storeFilter, visibleStores],
+    [closureFilter, stateFilter, storeFilter, visibleStores],
   );
 
   const filteredOverview = useMemo(
@@ -863,7 +871,7 @@ export function FinancePage() {
               <article>
                 <Landmark size={21} />
                 <span>Verba BB</span>
-                <strong>{formatBRL(overviewKpis.budgetBbCents)}</strong>
+                <FinanceAmount cents={overviewKpis.budgetBbCents} />
                 <small
                   className={`finance-bb-available ${
                     availableBbCents < 0n ? 'is-negative' : 'is-positive'
@@ -877,7 +885,7 @@ export function FinancePage() {
               <article>
                 <ReceiptText size={21} />
                 <span>Orçado total</span>
-                <strong>{formatBRL(overviewKpis.budgetTotalCents)}</strong>
+                <FinanceAmount cents={overviewKpis.budgetTotalCents} />
               </article>
             </div>
           </div>
@@ -887,12 +895,12 @@ export function FinancePage() {
               <article className="finance-kpi finance-kpi--primary">
                 <Building2 size={21} />
                 <span>Realizado total</span>
-                <strong>{formatBRL(overviewKpis.realizedCents)}</strong>
+                <FinanceAmount cents={overviewKpis.realizedCents} />
               </article>
               <article className={overviewKpis.differenceCents < 0n ? 'finance-kpi--negative' : ''}>
                 <CheckCircle2 size={21} />
                 <span>Dif. em relação à verba</span>
-                <strong>{formatBRL(overviewKpis.differenceCents)}</strong>
+                <FinanceAmount cents={overviewKpis.differenceCents} />
               </article>
             </div>
           </div>
@@ -902,12 +910,12 @@ export function FinancePage() {
               <article>
                 <WalletCards size={21} />
                 <span>Pago</span>
-                <strong>{formatBRL(overviewKpis.paidCents)}</strong>
+                <FinanceAmount cents={overviewKpis.paidCents} />
               </article>
               <article>
                 <CalendarDays size={21} />
                 <span>Saldo a pagar</span>
-                <strong>{formatBRL(overviewKpis.payableCents)}</strong>
+                <FinanceAmount cents={overviewKpis.payableCents} />
               </article>
             </div>
           </div>
@@ -928,21 +936,6 @@ export function FinancePage() {
             <WalletCards size={21} />
             <span>Custo realizado</span>
             <strong>{formatBRL(kpis.realizedCents)}</strong>
-          </article>
-          <article>
-            <Landmark size={21} />
-            <span>Disponivel para solicitar</span>
-            <strong>{formatBRL(kpis.availableCents)}</strong>
-          </article>
-          <article>
-            <ReceiptText size={21} />
-            <span>Reembolso solicitado</span>
-            <strong>{formatBRL(kpis.requestedCents)}</strong>
-          </article>
-          <article>
-            <BanknoteArrowDown size={21} />
-            <span>Reembolso recebido</span>
-            <strong>{formatBRL(kpis.receivedCents)}</strong>
           </article>
         </section>
       )}
@@ -987,6 +980,15 @@ export function FinancePage() {
                   {store.code} · {store.name}
                 </option>
               ))}
+          </select>
+        </label>
+        <label className="finance-store-close-filter">
+          Status da loja
+          <select aria-label="Status da loja" value={closureFilter}
+            onChange={(e) => setClosureFilter(e.target.value as 'all' | 'open' | 'closed')}>
+            <option value="all">Todas</option>
+            <option value="open">Em andamento</option>
+            <option value="closed">Finalizadas</option>
           </select>
         </label>
       </section>
@@ -1107,6 +1109,9 @@ export function FinancePage() {
                             <strong>{row.code}</strong>
                             <span>{row.name}</span>
                             <small>{row.city}/{row.state}</small>
+                             {closureByStoreId.get(row.storeId) === 'closed' && (
+                               <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>
+                             )}
                             {canStoreDetail && (
                               <Link
                                 to={`/financeiro/lojas/${row.storeId}`}
@@ -1227,6 +1232,9 @@ export function FinancePage() {
                           <div className="finance-store-identity">
                             <span>{store.code}</span>
                             <strong>{store.name}</strong>
+                             {closureByStoreId.get(store.storeId) === 'closed' && (
+                               <span className="store-close-badge store-close-badge--closed">🔒 Finalizada</span>
+                             )}
                             <small>
                               {store.city}/{store.state}
                             </small>
@@ -1239,11 +1247,6 @@ export function FinancePage() {
                             <span>Pago / previsto</span>
                             <strong>{formatBRL(store.paidCents)}</strong>
                             <small>{formatBRL(store.plannedCents)} previsto</small>
-                          </div>
-                          <div>
-                            <span>Disponivel p/ solicitar</span>
-                            <strong>{formatBRL(store.availableCents)}</strong>
-                            <small>{formatBRL(store.receivedCents)} recebido</small>
                           </div>
                           <ChevronDown size={18} />
                         </summary>
@@ -1270,11 +1273,6 @@ export function FinancePage() {
                                   {formatBRL(purchase.paidCents)} pago ·{' '}
                                   {formatBRL(purchase.plannedCents)} previsto
                                 </small>
-                              </div>
-                              <div>
-                                <span>Reembolso</span>
-                                <strong>{formatBRL(purchase.requestedCents)} solicitado</strong>
-                                <small>{formatBRL(purchase.receivedCents)} recebido</small>
                               </div>
                               {canDetailDocuments ? (
                                 <DocumentLinks

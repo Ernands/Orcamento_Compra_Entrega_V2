@@ -6,7 +6,11 @@ import { useSession } from './session-provider';
 
 export function authorizedHomePath(capabilities: Capability[]): string {
   const has = (capability: Capability) => capabilities.includes(capability);
-  if (has('dashboard.view')) return '/dashboard';
+  if (has('dashboard.view') && has('finance.overview_view')) {
+    if (has('dashboard.budget_forecast_view')) return '/dashboard/previsao-orcamentaria';
+    if (has('dashboard.financial_composition_view')) return '/dashboard/composicao-financeira';
+    if (has('dashboard.reimbursement_view')) return '/dashboard/reembolso';
+  }
   if (has('stores.view')) return '/lojas';
   if (has('implementation.view')) return '/implantacao/pendencias';
   if (has('items.view')) return '/suprimentos/itens';
@@ -18,6 +22,9 @@ export function authorizedHomePath(capabilities: Capability[]): string {
   if (has('works.view')) return '/obras';
   if (has('finance.view')) return '/financeiro';
   if (has('access.view')) return '/acessos';
+  // Preserve the authorized legacy dashboard as a fallback for dashboard-only
+  // roles. It remains accessible by route even though its tab is hidden.
+  if (has('dashboard.view')) return '/dashboard/implantacao';
   return '/alterar-senha';
 }
 
