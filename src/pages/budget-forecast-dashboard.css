@@ -331,9 +331,8 @@
   color:#7b8795;
 }
 
-/* All Previsão Orçamentária composition dialogs share this responsive layout.
- * Use available viewport width rather than the application's default 620px modal.
- */
+/* The same popup serves every indicator. Keep one store per line and all
+ * monetary values in one piece, without changing the financial calculations. */
 .modal.forecast-detail-modal {
   box-sizing: border-box;
   width: min(calc(100vw - 36px), 1220px);
@@ -345,17 +344,37 @@
 .forecast-detail__total { min-width: 0; }
 .forecast-detail__total strong,
 .forecast-detail__total small { white-space: nowrap; }
-.forecast-detail__scroll { min-width: 0; max-height: min(65dvh, 600px); }
-.forecast-detail table { width: 100%; table-layout: auto; }
+.forecast-detail__warning {
+  padding: 11px 13px;
+  border: 1px solid #e2c29d;
+  border-radius: 5px;
+  background: #fff8ed;
+  color: #815228;
+  font-size: .81rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.forecast-detail__scroll {
+  min-width: 0;
+  max-height: min(65dvh, 600px);
+  overflow: auto;
+}
+.forecast-detail table { width: 100%; table-layout: fixed; }
 .forecast-detail th,
 .forecast-detail td { white-space: nowrap; }
+.forecast-detail th:nth-child(1),
+.forecast-detail td:nth-child(1) { width: 54%; }
+.forecast-detail th:nth-child(2),
+.forecast-detail td:nth-child(2) { width: 9%; }
+.forecast-detail th:nth-child(3),
+.forecast-detail td:nth-child(3) { width: 17%; text-align: center; }
+.forecast-detail th:nth-child(4),
+.forecast-detail td:nth-child(4) { width: 20%; text-align: right; }
 .forecast-detail__store { white-space: nowrap; }
 .forecast-detail__store-name { white-space: nowrap; }
-.forecast-detail td small { white-space: nowrap; }
 
-/* On smaller displays the full-width table becomes readable per-store records.
- * Values and identifiers remain whole; there is no sideways table dragging.
- */
+/* Below desktop width, present one card per store instead of compressing
+ * identifiers or introducing a sideways drag bar. */
 @media (max-width: 960px) {
   .modal.forecast-detail-modal {
     width: calc(100vw - 24px);
@@ -377,12 +396,11 @@
   .forecast-detail tbody { display: grid; gap: 9px; padding: 9px; }
   .forecast-detail tbody tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0,1fr) auto;
     grid-template-areas:
       "store store"
-      "reference reference"
-      "category category"
-      "uf value";
+      "state sources"
+      "value value";
     align-items: start;
     gap: 10px 14px;
     padding: 12px;
@@ -393,6 +411,7 @@
   .forecast-detail tbody td {
     display: block;
     min-width: 0;
+    width: auto !important;
     padding: 0;
     border: 0;
     text-align: left;
@@ -407,14 +426,12 @@
     font-weight: 600;
   }
   .forecast-detail tbody td:nth-child(1) { grid-area: store; }
-  .forecast-detail tbody td:nth-child(2) { grid-area: uf; }
-  .forecast-detail tbody td:nth-child(3) { grid-area: reference; }
-  .forecast-detail tbody td:nth-child(4) { grid-area: category; }
-  .forecast-detail tbody td:nth-child(5) { grid-area: value; text-align: right; }
-  .forecast-detail tbody td:nth-child(5)::before { text-align: right; }
-  .forecast-detail tbody td:nth-child(1),
-  .forecast-detail tbody td:nth-child(3),
-  .forecast-detail tbody td:nth-child(4) { overflow-x: auto; }
+  .forecast-detail tbody td:nth-child(2) { grid-area: state; }
+  .forecast-detail tbody td:nth-child(3) { grid-area: sources; text-align: right; }
+  .forecast-detail tbody td:nth-child(4) { grid-area: value; text-align: left; font-weight: 650; }
+  .forecast-detail tbody td:nth-child(3)::before { text-align: right; }
+  .forecast-detail tbody td:nth-child(4)::before { text-align: left; }
+  .forecast-detail tbody td:first-child { overflow-x: auto; }
   .forecast-detail tfoot tr {
     display: flex;
     justify-content: space-between;
@@ -423,7 +440,7 @@
     padding: 12px;
     background: #f4f7f6;
   }
-  .forecast-detail tfoot th { display: block; padding: 0; border: 0; }
+  .forecast-detail tfoot th { display: block; width: auto !important; padding: 0; border: 0; }
   .forecast-detail tfoot th:last-child { text-align: right; }
 }
 @media (max-width: 420px) {
