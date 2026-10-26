@@ -164,17 +164,19 @@ export function managerialSettlementsByStore(
  * A negative difference is a BB receipt above the net requested amount.
  * A finalized loss is preserved even if a later reimbursement cycle opens.
  */
-export type ManagerialBalanceKind = 'pending' | 'loss' | 'excess' | 'settled';
+export type ManagerialBalanceKind = 'pending' | 'loss' | 'extra' | 'excess' | 'settled';
 export interface ManagerialBalanceLine {
   kind: ManagerialBalanceKind;
   label: string;
   amountCents: bigint;
 }
 export function reimbursementBalanceLines(
-  row: Pick<ManagerialReimbursementRow, 'pendingCents' | 'absorbedCents'>,
+  row: Pick<ManagerialReimbursementRow, 'pendingCents' | 'absorbedCents'> &
+    Partial<Pick<ManagerialReimbursementRow,'extraCents'>>,
 ): ManagerialBalanceLine[] {
   const lines: ManagerialBalanceLine[] = [];
   if(row.absorbedCents>0n) lines.push({kind:'loss',label:'Perda absorvida',amountCents:row.absorbedCents});
+  if((row.extraCents||0n)>0n) lines.push({kind:'extra',label:'Gasto extra',amountCents:row.extraCents||0n});
   if(row.pendingCents>0n) lines.push({kind:'pending',label:'Pendente',amountCents:row.pendingCents});
   else if(row.pendingCents<0n) lines.push({kind:'excess',label:'Acima do solicitado',amountCents:-row.pendingCents});
   if(!lines.length) lines.push({kind:'settled',label:'Sem saldo',amountCents:0n});
