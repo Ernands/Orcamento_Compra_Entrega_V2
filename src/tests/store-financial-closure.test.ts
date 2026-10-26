@@ -16,7 +16,8 @@ describe('fechamento financeiro por loja (migração isolada em DEV)', () => {
   });
   it('usa RPC com permissao verificavel e confirmacao de duas etapas', () => {
     expect(migration).toContain("'stores','finalize_reopen'");
-    expect(migration).toContain("'FINALIZAR' ELSE 'REABRIR'");
+    expect(migration).toContain("p_confirm_text IS DISTINCT FROM 'FINALIZAR'");
+    expect(migration).toContain("p_confirm_text IS DISTINCT FROM 'REABRIR'");
     expect(migration).toContain('auth.uid() IS NULL');
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.change_store_financial_closure');
     expect(page).toContain('confirmation !== expected');
