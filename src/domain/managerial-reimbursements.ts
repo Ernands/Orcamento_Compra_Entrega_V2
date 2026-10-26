@@ -19,6 +19,7 @@ export type ReimbursementStatus = 'not_requested' | 'requested' | 'partial' | 'r
 export interface ManagerialReimbursementRow {
   storeId: string; code: string; name: string; city: string; state: string;
   storeStatus: 'Ativa' | 'Finalizada';
+  bbCents: bigint;
   realizedTotalCents: bigint;
   varianceToBbCents: bigint;
   requestedCents: bigint; receivedCents: bigint; absorbedCents: bigint; pendingCents: bigint;
@@ -61,7 +62,8 @@ export function buildManagerialReimbursements(
     return [{
       storeId:row.storeId,code:row.code,name:row.name,city:row.city,state:row.state,
       storeStatus:store.financialClosure?.state==='closed'?'Finalizada' as const:'Ativa' as const,
-      realizedTotalCents:row.realizedTotalCents,varianceToBbCents:row.realizedVarianceToBbCents,
+      bbCents:row.budgetBbCents,realizedTotalCents:row.realizedTotalCents,
+      varianceToBbCents:row.realizedVarianceToBbCents,
       requestedCents,receivedCents,absorbedCents,pendingCents,
       disbursementCents:row.paidCents-receivedCents,
       reimbursementStatus:status,
@@ -70,10 +72,11 @@ export function buildManagerialReimbursements(
   }).sort((a,b)=>a.state.localeCompare(b.state)||a.city.localeCompare(b.city));
 }
 export function managerialTotals(rows: ManagerialReimbursementRow[]) {
-  const sum=(key:keyof Pick<ManagerialReimbursementRow,'realizedTotalCents'|'varianceToBbCents'|'requestedCents'|'receivedCents'|'absorbedCents'|'pendingCents'|'disbursementCents'>) =>
+  const sum=(key:keyof Pick<ManagerialReimbursementRow,'bbCents'|'realizedTotalCents'|'varianceToBbCents'|'requestedCents'|'receivedCents'|'absorbedCents'|'pendingCents'|'disbursementCents'>) =>
     rows.reduce((v,r)=>v+r[key],0n);
   return {
-    realizedTotalCents:sum('realizedTotalCents'),varianceToBbCents:sum('varianceToBbCents'),
+    bbCents:sum('bbCents'),realizedTotalCents:sum('realizedTotalCents'),
+    varianceToBbCents:sum('varianceToBbCents'),
     requestedCents:sum('requestedCents'),receivedCents:sum('receivedCents'),absorbedCents:sum('absorbedCents'),
     pendingCents:sum('pendingCents'), disbursementCents:sum('disbursementCents'),
     pendingStores: rows.filter(r=>r.reimbursementStatus==='requested'||r.reimbursementStatus==='partial'||r.reimbursementStatus==='divergent').length,
@@ -94,4 +97,29 @@ export function managerialSettlementsByStore(
     settlements.set(entry.storeId,current);
   }
   return settlements;
+}
+
+/** A positive difference remains pending until an explicit finalization.
+ * A negative difference is a BB receipt above the net requested amount.
+ * A finalized loss is preserved even if a later reimbursement cycle opens.
+ */
+export type ManagerialBalanceKind = 'pending' | 'loss' | 'excess' | 'settled';
+export interface ManagerialBalanceLine {
+  kind: ManagerialBalanceKind;
+  label: string;
+  amountCents: bigint;
+}
+export function reimbursementBalanceLines(
+  row: Pick<ManagerialReimbursementRow, 'pendingCents' | 'absorbedCents'>,
+): ManagerialBalanceLine[] {
+  const lines: ManagerialBalanceLine[] = [];
+  if(row.absorbedCents>0n) lines.push({kind:'loss',label:'Perda absorvida',amountCents:row.absorbedCents});
+  if(row.pendingCents>0n) lines.push({kind:'pending',label:'Pendente',amountCents:row.pendingCents});
+  else if(row.pendingCents<0n) lines.push({kind:'excess',label:'Acima do solicitado',amountCents:-row.pendingCents});
+  if(!lines.length) lines.push({kind:'settled',label:'Sem saldo',amountCents:0n});
+  return lines;
+}
+export function reimbursementWorkflowStatus(row:Pick<ManagerialReimbursementRow,'reimbursementStatus'>):
+  'Aberto'|'Finalizado' {
+  return row.reimbursementStatus==='finalized'?'Finalizado':'Aberto';
 }
