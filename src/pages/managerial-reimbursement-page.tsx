@@ -109,7 +109,7 @@ export function ManagerialReimbursementPage() {
   };
   const summary=[
     {label:'Realizado total',value:totals.realizedTotalCents,group:'execution'},
-    {label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'planning'},
+    {label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'execution'},
     {label:'Total solicitado',value:totals.requestedCents,group:'finance'},
     {label:'Total reembolsado',value:totals.receivedCents,group:'finance'},
     {label:'Pendente de reembolso',value:totals.pendingCents,group:'tracking'},
@@ -163,7 +163,7 @@ export function ManagerialReimbursementPage() {
           {!shown.length&&<tr><td colSpan={7}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
         </tbody></table>
       </div>
-      <p className="managerial-refunds__footnote">Pendente = solicitado − recebido. Realizado total e diferença em relação à verba provêm do Financeiro; valores gerenciais não alteram custos nem pagamentos.</p>
+      <p className="managerial-refunds__footnote">Dif. em relação à verba = Verba BB − Realizado total. Pendente = solicitado − recebido. Valores gerenciais não alteram custos nem pagamentos.</p>
     </>}
     <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
       title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
