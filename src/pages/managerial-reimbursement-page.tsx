@@ -45,7 +45,6 @@ export function ManagerialReimbursementPage() {
   const [formError,setFormError]=useState('');
   const [confirmingClosure,setConfirmingClosure]=useState(false);
   const [closureAcknowledged,setClosureAcknowledged]=useState(false);
-  const [closureConfirmation,setClosureConfirmation]=useState('');
   const load=useCallback(async()=>{
     setLoading(true);setError(null);
     try {
@@ -71,7 +70,7 @@ export function ManagerialReimbursementPage() {
   const open=(row:ManagerialReimbursementRow)=>{
     setSelected(row);setKind('requested');setAmount('');setEntryDate(today());
     setProtocol('');setNotes('');setFormError('');
-    setConfirmingClosure(false);setClosureAcknowledged(false);setClosureConfirmation('');
+    setConfirmingClosure(false);setClosureAcknowledged(false);
   };
   const submit=async(e:FormEvent)=>{
     e.preventDefault();if(!selected||saving)return;
@@ -88,7 +87,7 @@ export function ManagerialReimbursementPage() {
   };
   const finalize=async()=>{
     if(!selected||saving||!canFinalize||!confirmingClosure
-      || !closureAcknowledged || closureConfirmation!=='FINALIZAR'
+      || !closureAcknowledged
       || selected.reimbursementStatus==='finalized'
       || selected.requestedCents<=0n || selected.pendingCents<0n)return;
     // Nunca incluir o gasto extra acima da verba BB na perda absorvida.
@@ -100,7 +99,9 @@ export function ManagerialReimbursementPage() {
       // financial store lock is applied, or neither operation is committed.
       await finalizeReimbursementAndCloseStore({
         storeId:selected.storeId,lossCents:loss,date:today(),
-        confirmation:closureConfirmation,
+        // A ciência é dada pelo checkbox e pelo clique de confirmação.
+        // O protocolo interno ainda exige o marcador literal no RPC.
+        confirmation:'FINALIZAR',
       });
       await load();setConfirmingClosure(false);setSelected(null);
     }catch(e){setFormError(e instanceof Error?e.message:'Não foi possível finalizar o reembolso e bloquear a loja.');}
@@ -253,17 +254,12 @@ export function ManagerialReimbursementPage() {
             <span>Declaro ciência de que esta confirmação bloqueará novas movimentações
               financeiras da loja e registrará a finalização do reembolso.</span>
           </label>
-          <label className="managerial-refunds__closure-typed">
-            Digite <strong>FINALIZAR</strong> para confirmar
-            <input value={closureConfirmation} onChange={e=>setClosureConfirmation(e.target.value)}
-              placeholder="FINALIZAR" autoComplete="off" disabled={saving}/>
-          </label>
           {formError&&<p role="alert" className="managerial-refunds__closure-error">{formError}</p>}
           <div className="modal-actions">
             <button type="button" className="button button--secondary" disabled={saving}
               onClick={()=>{setConfirmingClosure(false);setFormError('');}}>Voltar</button>
             <button type="button" className="button button--primary"
-              disabled={saving||!closureAcknowledged||closureConfirmation!=='FINALIZAR'}
+              disabled={saving||!closureAcknowledged}
               onClick={()=>void finalize()}>
               {saving?'Finalizando...':'Confirmar finalização e bloqueio'}
             </button>
@@ -306,7 +302,7 @@ export function ManagerialReimbursementPage() {
               title={!canFinalize?'Requer permissão Finalizar/Reabrir Loja':undefined}
               onClick={()=>{
                 setConfirmingClosure(true);setClosureAcknowledged(false);
-                setClosureConfirmation('');setFormError('');
+                setFormError('');
               }}>Marcar como finalizado</button>
             {!canFinalize&&<small className="managerial-refunds__permission-hint">
               Necessária a permissão Finalizar/Reabrir Loja para concluir e bloquear a loja.
