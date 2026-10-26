@@ -125,3 +125,9 @@
   .managerial-refunds__table tbody td{padding:10px 9px}
   .managerial-refunds__table td .finance-amount{font-size:.77rem}
 }
+
+.managerial-refunds__balance-line--extra{color:#925b21}
+.managerial-refunds__reconciliation-note{
+  border-left:3px solid #d9aa81;background:#fbf7f0;padding:10px 12px;
+  margin:0;font-size:.73rem;line-height:1.5;color:#715c42
+}
