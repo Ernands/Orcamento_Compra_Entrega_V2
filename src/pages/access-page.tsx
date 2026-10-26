@@ -58,6 +58,12 @@ const financeOverviewOnlyHiddenKeys = new Set<AccessPermission['key']>([
 
 function permissionLabel(permission: AccessPermission): string {
   if (permission.key === 'finance.view') return 'Exibir o menu Financeiro';
+  if (permission.key === 'stores.finalize_reopen') {
+    return 'Finalizar/Reabrir Loja — bloquear movimentações financeiras (inclusive no Reembolso)';
+  }
+  if (permission.key === 'finance.overview_view') {
+    return 'Financeiro — Visão Geral (base dos dashboards gerenciais)';
+  }
   if (permission.key === 'finance.account_reconciliation_view') {
     return 'Conciliação Conta — visualizar aba';
   }
@@ -610,6 +616,16 @@ export function AccessPage() {
                     </button>
                   )}
                 </header>
+                {group.moduleKey === 'dashboard' && (
+                  <div className="access-permissions-group__hint">
+                    As abas Previsão Orçamentária, Composição Financeira e Reembolso
+                    têm permissões de visualização independentes. Para acessá-las,
+                    também são necessárias Dashboard — Visualizar e Financeiro — Visão Geral.
+                    Para registrar reembolsos, permita também Reembolso — Registrar/editar.
+                    Para finalizar o reembolso e bloquear a loja, habilite
+                    <strong> Finalizar/Reabrir Loja</strong> no grupo Lojas.
+                  </div>
+                )}
                 {group.moduleKey === 'finance' && (
                   <div className="access-permissions-group__hint">
                     Mantenha <strong>Exibir o menu Financeiro</strong> permitido. As permissoes de
