@@ -151,9 +151,6 @@
 .managerial-refunds__closure-figures strong{color:#172b46;font-size:.94rem}
 .managerial-refunds__closure-ack{display:flex;align-items:flex-start;gap:11px;background:#f5f7f9;border:1px solid #dce5eb;border-radius:6px;padding:13px;font-size:.8rem;line-height:1.5;font-weight:550}
 .managerial-refunds__closure-ack input{flex:none;width:17px;height:17px;margin-top:2px;accent-color:var(--brand)}
-.managerial-refunds__closure-typed{display:grid;gap:7px;color:#40566c;font-size:.8rem;font-weight:600}
-.managerial-refunds__closure-typed input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #b9c8d2;border-radius:6px;font:inherit}
-.managerial-refunds__closure-typed input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .managerial-refunds__closure-existing{margin:0;padding:10px;border-left:3px solid #91eda7;color:#3a6e52;background:#f0f7f3;font-size:.78rem}
 .managerial-refunds__closure-error{margin:0;color:#9a3029;font-size:.79rem;font-weight:650}
 .managerial-refunds__permission-hint{color:#836242;font-size:.72rem}
