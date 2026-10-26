@@ -125,7 +125,9 @@ export function App() {
               element={
                 <RequireCapability capability="dashboard.view">
                   <RequireCapability capability="finance.overview_view">
-                    <BudgetForecastDashboardPage />
+                    <RequireCapability capability="dashboard.budget_forecast_view">
+                      <BudgetForecastDashboardPage />
+                    </RequireCapability>
                   </RequireCapability>
                 </RequireCapability>
               }
@@ -135,7 +137,9 @@ export function App() {
               element={
                 <RequireCapability capability="dashboard.view">
                   <RequireCapability capability="finance.overview_view">
-                    <FinancialCompositionPage />
+                    <RequireCapability capability="dashboard.financial_composition_view">
+                      <FinancialCompositionPage />
+                    </RequireCapability>
                   </RequireCapability>
                 </RequireCapability>
               }
@@ -145,7 +149,9 @@ export function App() {
               element={
                 <RequireCapability capability="dashboard.view">
                   <RequireCapability capability="finance.overview_view">
-                    <ManagerialReimbursementPage />
+                    <RequireCapability capability="dashboard.reimbursement_view">
+                      <ManagerialReimbursementPage />
+                    </RequireCapability>
                   </RequireCapability>
                 </RequireCapability>
               }
