@@ -318,6 +318,7 @@ export function BudgetForecastDashboardPage() {
           </ForecastSection>
         </>}
       <Modal open={Boolean(modalData)} onClose={()=>setOpenIndicator(null)}
+        className="forecast-detail-modal"
         title={modalData ? `Composição — ${modalData.indicator.label}` : 'Composição'}
         description="Consulta somente leitura, com os filtros ativos aplicados.">
         {modalData && <div className="forecast-detail">
@@ -328,9 +329,17 @@ export function BudgetForecastDashboardPage() {
           {modalData.entries.length ? <div className="forecast-detail__scroll"><table>
             <thead><tr><th>Loja</th><th>UF</th><th>Referência</th><th>Categoria / Status</th><th>Valor</th></tr></thead>
             <tbody>{modalData.entries.map((entry)=><tr key={entry.id}>
-              <td>{entry.storeCode} · {entry.storeName}</td><td>{entry.state}</td>
-              <td>{entry.reference}</td><td>{entry.category}<small>{entry.status}</small></td>
-              <td>{modalData.indicator.isCount ? '1' : formatBRL(entry.amountCents)}</td>
+              <td data-label="Loja" title={`${entry.storeCode} · ${entry.storeName}`}>
+                <span className="forecast-detail__store">
+                  <span className="forecast-detail__store-code">{entry.storeCode}</span>
+                  <span className="forecast-detail__store-separator"> · </span>
+                  <span className="forecast-detail__store-name">{entry.storeName}</span>
+                </span>
+              </td>
+              <td data-label="UF">{entry.state}</td>
+              <td data-label="Referência" title={entry.reference}>{entry.reference}</td>
+              <td data-label="Categoria / Status">{entry.category}<small>{entry.status}</small></td>
+              <td data-label="Valor">{modalData.indicator.isCount ? '1' : formatBRL(entry.amountCents)}</td>
             </tr>)}</tbody>
             <tfoot><tr><th colSpan={4}>Total detalhado</th>
               <th>{valueText(modalData.indicator.isCount
