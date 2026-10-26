@@ -139,7 +139,7 @@ describe('Dashboard gerencial de reembolso',()=>{
       .toEqual([{kind:'settled',label:'Sem saldo',amountCents:0n}]);
     expect(reimbursementBalanceLines({absorbedCents:500000n,pendingCents:0n,extraCents:1500000n}))
       .toEqual([{kind:'loss',label:'Perda absorvida',amountCents:500000n},
-        {kind:'extra',label:'Gasto extra',amountCents:1500000n}]);
+        {kind:'extra',label:'Gasto extra Verba BB',amountCents:1500000n}]);
     expect(reimbursementWorkflowStatus({reimbursementStatus:'finalized'})).toBe('Finalizado');
     expect(reimbursementWorkflowStatus({reimbursementStatus:'partial'})).toBe('Aberto');
     expect(reimbursementWorkflowStatus({reimbursementStatus:'received'})).toBe('Aberto');
@@ -175,8 +175,16 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('<th>Saldo / Perda / Excedente</th>');
     expect(page).toContain('<th>Status do reembolso</th>');
     expect(page).toContain("label:'Perdas absorvidas',value:totals.absorbedCents,group:'loss'");
-    expect(page).toContain("label:'Gasto extra',value:totals.extraCents,group:'extra'");
+    expect(page).toContain("label:'Gasto extra Verba BB',value:totals.extraCents,group:'extra'");
     expect(page).toContain('data-label="Verba BB"');
+    expect(page).toContain('className="managerial-refunds__store-name"');
+    expect(pageCss).toContain('.managerial-refunds__table .managerial-refunds__store-name{color:var(--brand)');
+    expect(page).not.toContain('Situação da implantação');
+    expect(page).not.toContain("setImplantation");
+    expect(page).not.toContain("implantation==='all'");
+    expect(page).toContain("setUf('');setStoreId('');setStatus('all');");
+    expect(page).toContain("'Perda absorvida','Gasto extra Verba BB','Acima do solicitado'");
+
     expect(page).toContain("numeric(r.extraCents)");
     expect(pageCss).toContain('@container (max-width:1250px)');
     expect(pageCss).toContain('container-type:inline-size');
