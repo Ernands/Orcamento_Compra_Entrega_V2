@@ -61,3 +61,67 @@
 @media(max-width:1200px){.managerial-refunds__summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:900px){.managerial-refunds__summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.managerial-refunds__summary{grid-template-columns:1fr}}
+
+/* Fluid executive report: no hard-coded 1480px table or forced horizontal bar. */
+.managerial-refunds__metric--extra{--edge:#e9a95c}
+.managerial-refunds__metric--extra .finance-amount{color:#94571a}
+.managerial-refunds__table-scroll{max-width:100%;overflow-x:visible}
+.managerial-refunds__table{width:100%;min-width:0;table-layout:fixed}
+.managerial-refunds__table th,.managerial-refunds__table td{
+  padding:11px 5px;min-width:0;overflow-wrap:break-word;vertical-align:middle
+}
+.managerial-refunds__table th{font-size:.7rem;line-height:1.35;white-space:normal;hyphens:auto}
+.managerial-refunds__table td{font-size:.72rem;line-height:1.4}
+.managerial-refunds__table td .finance-amount{font-size:clamp(.66rem,.77vw,.76rem);letter-spacing:-.015em}
+.managerial-refunds__table th:nth-child(1),.managerial-refunds__table td:nth-child(1){width:17%}
+.managerial-refunds__table th:nth-child(2),.managerial-refunds__table td:nth-child(2){width:9%}
+.managerial-refunds__table th:nth-child(3),.managerial-refunds__table td:nth-child(3){width:10%}
+.managerial-refunds__table th:nth-child(4),.managerial-refunds__table td:nth-child(4){width:10%}
+.managerial-refunds__table th:nth-child(5),.managerial-refunds__table td:nth-child(5){width:10%}
+.managerial-refunds__table th:nth-child(6),.managerial-refunds__table td:nth-child(6){width:10%}
+.managerial-refunds__table th:nth-child(7),.managerial-refunds__table td:nth-child(7){width:12%}
+.managerial-refunds__table th:nth-child(8),.managerial-refunds__table td:nth-child(8){width:7%}
+.managerial-refunds__table th:nth-child(9),.managerial-refunds__table td:nth-child(9){width:8%}
+.managerial-refunds__table th:nth-child(10),.managerial-refunds__table td:nth-child(10){width:7%}
+.managerial-refunds__table td:nth-child(10) .button{
+  max-width:100%;width:100%;padding:7px 4px;white-space:normal;font-size:.7rem
+}
+.managerial-refunds__table td:nth-child(1) strong{font-weight:650}
+.managerial-refunds__balance{min-width:0}
+.managerial-refunds__workflow{font-size:.69rem;padding:4px 5px;max-width:100%;white-space:normal}
+@media(max-width:1250px){
+  .managerial-refunds__table-scroll{background:transparent;border:0;border-radius:0}
+  .managerial-refunds__table,.managerial-refunds__table tbody{display:block}
+  .managerial-refunds__table thead{display:none}
+  .managerial-refunds__table tbody{display:grid;gap:12px}
+  .managerial-refunds__table tbody tr{
+    display:grid;grid-template-columns:1.55fr repeat(4,minmax(0,1fr));
+    border:1px solid #dae3e9;border-radius:7px;background:#fff;overflow:hidden
+  }
+  .managerial-refunds__table tbody td{
+    display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+    width:auto!important;min-height:62px;border:0;
+    padding:10px 12px;border-right:1px solid #edf1f4;border-bottom:1px solid #edf1f4;
+    font-size:.78rem;overflow-wrap:anywhere
+  }
+  .managerial-refunds__table tbody td::before{
+    content:attr(data-label);color:#687788;font-size:.67rem;font-weight:650;
+    line-height:1.25;text-transform:none
+  }
+  .managerial-refunds__table td .finance-amount{font-size:.82rem}
+  .managerial-refunds__table td:nth-child(10) .button{width:auto;padding:7px 12px}
+  .managerial-refunds__table tbody tr:has(td[colspan]){display:block}
+  .managerial-refunds__table tbody td[colspan]{min-height:65px}
+  .managerial-refunds__table tbody td[colspan]::before{content:none}
+}
+@media(max-width:950px){
+  .managerial-refunds__table tbody tr{
+    grid-template-columns:repeat(3,minmax(0,1fr))
+  }
+  .managerial-refunds__table tbody td:first-child{grid-column:1/-1}
+}
+@media(max-width:620px){
+  .managerial-refunds__table tbody tr{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .managerial-refunds__table tbody td{padding:10px 9px}
+  .managerial-refunds__table td .finance-amount{font-size:.77rem}
+}
