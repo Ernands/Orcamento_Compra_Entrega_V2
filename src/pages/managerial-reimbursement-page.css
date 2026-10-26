@@ -32,3 +32,8 @@
 .managerial-refunds__modal h3{font-size:.9rem}
 @media(max-width:900px){.managerial-refunds__summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.managerial-refunds__summary,.managerial-refunds__form{grid-template-columns:1fr}}
+
+.managerial-refunds__finalize{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border:1px solid #dbc79b;background:#fffbf2;border-radius:7px;padding:12px}
+.managerial-refunds__finalize>div{display:grid;gap:4px;flex:1;min-width:200px}
+.managerial-refunds__finalize strong{font-size:.84rem;color:#6d5529}
+.managerial-refunds__finalize small{font-size:.74rem;color:#736b60;line-height:1.4}
