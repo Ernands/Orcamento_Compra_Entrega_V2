@@ -97,9 +97,9 @@ export function ManagerialReimbursementPage() {
     const numeric=(v:bigint)=>String(v<0n?'-':'')+String((v<0n?-v:v)/100n)+','+
       String((v<0n?-v:v)%100n).padStart(2,'0');
     const lines=[
-      ['Loja','UF','Situação da loja','Orçado total','Dif. em relação à verba','Solicitado',
+      ['Loja','UF','Situação da loja','Realizado total','Dif. em relação à verba','Solicitado',
        'Reembolsado','Pendente','Situação do reembolso'],
-      ...shown.map(r=>[r.code+' · '+r.name,r.state,r.storeStatus,numeric(r.budgetTotalCents),
+      ...shown.map(r=>[r.code+' · '+r.name,r.state,r.storeStatus,numeric(r.realizedTotalCents),
         numeric(r.varianceToBbCents),numeric(r.requestedCents),numeric(r.receivedCents),
         numeric(r.pendingCents),reimbursementStatusLabels[r.reimbursementStatus]]),
     ];
@@ -108,7 +108,7 @@ export function ManagerialReimbursementPage() {
     a.download='Reembolso_Gerencial_Implanta27.csv';a.click();URL.revokeObjectURL(url);
   };
   const summary=[
-    {label:'Orçado total',value:totals.budgetTotalCents,group:'planning'},
+    {label:'Realizado total',value:totals.realizedTotalCents,group:'execution'},
     {label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'planning'},
     {label:'Total solicitado',value:totals.requestedCents,group:'finance'},
     {label:'Total reembolsado',value:totals.receivedCents,group:'finance'},
@@ -146,12 +146,12 @@ export function ManagerialReimbursementPage() {
       </div>
       <div className="managerial-refunds__table-scroll">
         <table className="managerial-refunds__table"><thead><tr>
-          <th>Loja · Cidade/UF</th><th>Orçado total</th><th>Dif. em relação à verba</th>
+          <th>Loja · Cidade/UF</th><th>Realizado total</th><th>Dif. em relação à verba</th>
           <th>Valor solicitado</th><th>Valor reembolsado</th><th>Situação da loja</th><th>Ações</th>
         </tr></thead><tbody>
           {shown.map(r=><tr key={r.storeId}>
             <td><strong>{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
-            <td><FinanceAmount cents={r.budgetTotalCents}/></td>
+            <td><FinanceAmount cents={r.realizedTotalCents}/></td>
             <td className={r.varianceToBbCents<0n?'value-negative':'value-positive'}>
               <FinanceAmount cents={r.varianceToBbCents}/></td>
             <td><FinanceAmount cents={r.requestedCents}/></td>
@@ -163,7 +163,7 @@ export function ManagerialReimbursementPage() {
           {!shown.length&&<tr><td colSpan={7}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
         </tbody></table>
       </div>
-      <p className="managerial-refunds__footnote">Pendente = solicitado − recebido. Orçado e diferença provêm do Financeiro; valores gerenciais não alteram custos nem pagamentos.</p>
+      <p className="managerial-refunds__footnote">Pendente = solicitado − recebido. Realizado total e diferença em relação à verba provêm do Financeiro; valores gerenciais não alteram custos nem pagamentos.</p>
     </>}
     <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
       title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
