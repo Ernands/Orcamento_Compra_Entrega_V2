@@ -1,5 +1,6 @@
 import { supabase } from '../supabase/client';
 import { fetchAllPages } from '../supabase/pagination';
+import { moneyToSqlNumeric } from '../../domain/supply-calculations';
 import type {
   AllocationSource,
   DistributionStatus,
@@ -402,8 +403,8 @@ export function buildPurchaseOperationRpcPayloadV2(values: RegisterPurchaseOpera
     p_payments: values.payments.map((payment) => ({
       payment_method: payment.paymentMethod,
       source_label: payment.sourceLabel.trim() || null,
-      amount: payment.amount,
-      entry_amount: payment.entryAmount || null,
+      amount: moneyToSqlNumeric(payment.amount),
+      entry_amount: payment.entryAmount?.trim() ? moneyToSqlNumeric(payment.entryAmount) : null,
       installment_count: payment.installmentCount ? Number(payment.installmentCount) : null,
       first_due_date: payment.firstDueDate || null,
       status: payment.status,
@@ -477,8 +478,8 @@ export function buildPurchasePaymentRpcPayloadV2(values: SavePurchasePaymentInpu
     p_purchase_order_id: values.purchaseOrderId,
     p_payment_method: values.paymentMethod,
     p_source_label: values.sourceLabel.trim() || null,
-    p_amount: values.amount,
-    p_entry_amount: values.entryAmount || null,
+    p_amount: moneyToSqlNumeric(values.amount),
+    p_entry_amount: values.entryAmount?.trim() ? moneyToSqlNumeric(values.entryAmount) : null,
     p_installment_count: values.installmentCount ? Number(values.installmentCount) : null,
     p_first_due_date: values.firstDueDate || null,
     p_status: values.status,
@@ -569,7 +570,8 @@ export async function uploadPurchaseAttachmentV3(values: {
     p_document_type: values.documentType,
     p_document_number: values.documentNumber.trim() || null,
     p_document_date: values.documentDate || null,
-    p_document_amount: values.documentAmount.trim() || null,
+    p_document_amount: values.documentAmount.trim()
+      ? moneyToSqlNumeric(values.documentAmount) : null,
     p_store_ids: values.storeIds,
   } as never);
   if (error) {
