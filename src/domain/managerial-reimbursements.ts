@@ -18,7 +18,7 @@ export type ReimbursementStatus = 'not_requested' | 'requested' | 'partial' | 'r
 export interface ManagerialReimbursementRow {
   storeId: string; code: string; name: string; city: string; state: string;
   storeStatus: 'Ativa' | 'Finalizada';
-  budgetTotalCents: bigint;
+  realizedTotalCents: bigint;
   varianceToBbCents: bigint;
   requestedCents: bigint; receivedCents: bigint; pendingCents: bigint;
   disbursementCents: bigint;
@@ -52,7 +52,7 @@ export function buildManagerialReimbursements(
     return [{
       storeId:row.storeId,code:row.code,name:row.name,city:row.city,state:row.state,
       storeStatus:store.financialClosure?.state==='closed'?'Finalizada' as const:'Ativa' as const,
-      budgetTotalCents:row.budgetTotalCents,varianceToBbCents:row.budgetVarianceToBbCents,
+      realizedTotalCents:row.realizedTotalCents,varianceToBbCents:row.budgetVarianceToBbCents,
       requestedCents,receivedCents,pendingCents:requestedCents-receivedCents,
       disbursementCents:row.paidCents-receivedCents,
       reimbursementStatus:reimbursementStatus(requestedCents,receivedCents),
@@ -61,10 +61,10 @@ export function buildManagerialReimbursements(
   }).sort((a,b)=>a.state.localeCompare(b.state)||a.city.localeCompare(b.city));
 }
 export function managerialTotals(rows: ManagerialReimbursementRow[]) {
-  const sum=(key:keyof Pick<ManagerialReimbursementRow,'budgetTotalCents'|'varianceToBbCents'|'requestedCents'|'receivedCents'|'pendingCents'|'disbursementCents'>) =>
+  const sum=(key:keyof Pick<ManagerialReimbursementRow,'realizedTotalCents'|'varianceToBbCents'|'requestedCents'|'receivedCents'|'pendingCents'|'disbursementCents'>) =>
     rows.reduce((v,r)=>v+r[key],0n);
   return {
-    budgetTotalCents:sum('budgetTotalCents'),varianceToBbCents:sum('varianceToBbCents'),
+    realizedTotalCents:sum('realizedTotalCents'),varianceToBbCents:sum('varianceToBbCents'),
     requestedCents:sum('requestedCents'),receivedCents:sum('receivedCents'),
     pendingCents:sum('pendingCents'), disbursementCents:sum('disbursementCents'),
     pendingStores: rows.filter(r=>r.reimbursementStatus==='requested'||r.reimbursementStatus==='partial'||r.reimbursementStatus==='divergent').length,
