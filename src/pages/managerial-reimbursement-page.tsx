@@ -11,7 +11,7 @@ import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import { addManagerialReimbursement, listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
 import { buildManagerialReimbursements, managerialTotals, reimbursementStatusLabels,
-  type ManagerialReimbursementEntry, type ManagerialReimbursementRow, type ManagerialReimbursementType,
+  type ManagerialReimbursementEntry, type ManagerialReimbursementRow, type ManagerialReimbursementMovementType,
   type ReimbursementStatus } from '../domain/managerial-reimbursements';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import { FinanceAmount } from '../components/finance-amount';
@@ -33,7 +33,7 @@ export function ManagerialReimbursementPage() {
   const [implantation,setImplantation]=useState('all');
   const [status,setStatus]=useState<ReimbursementStatus|'all'>('all');
   const [selected,setSelected]=useState<ManagerialReimbursementRow|null>(null);
-  const [kind,setKind]=useState<ManagerialReimbursementType>('requested');
+  const [kind,setKind]=useState<ManagerialReimbursementMovementType>('requested');
   const [amount,setAmount]=useState('');
   const [entryDate,setEntryDate]=useState(today());
   const [protocol,setProtocol]=useState('');
@@ -80,8 +80,28 @@ export function ManagerialReimbursementPage() {
     catch(e){setFormError(e instanceof Error?e.message:'Não foi possível salvar.');}
     finally{setSaving(false);}
   };
+  const finalize=async()=>{
+    if(!selected||saving||selected.reimbursementStatus==='finalized'
+      || selected.requestedCents<=0n || selected.pendingCents<0n)return;
+    const loss=selected.pendingCents;
+    if(!window.confirm(
+      'Finalizar o reembolso desta loja? '+formatBRL(loss)+
+      ' será reconhecido como perda absorvida. Isso não cancela a despesa e não pode ser desfeito.'
+    ))return;
+    setSaving(true);setFormError('');
+    try {
+      await addManagerialReimbursement({
+        storeId:selected.storeId,type:'finalized',amountCents:loss,
+        date:today(),protocol:'',notes:'Reembolso finalizado; saldo não recebido absorvido.',
+      });
+      await load();setSelected(null);
+    }catch(e){setFormError(e instanceof Error?e.message:'Não foi possível finalizar o reembolso.');}
+    finally{setSaving(false);}
+  };
   const reverse=async(entry:ManagerialReimbursementEntry)=>{
-    if(!selected||saving||entry.reversalOf||selected.events.some(e=>e.reversalOf===entry.id))return;
+    if(!selected||saving||entry.type==='finalized'||entry.reversalOf
+      ||selected.events.some(e=>e.reversalOf===entry.id
+        ||(e.type==='finalized' && e.createdAt>=entry.createdAt)))return;
     if(!window.confirm('Estornar este lançamento? A movimentação original ficará preservada no histórico.'))return;
     setSaving(true);setFormError('');
     try{await addManagerialReimbursement({
@@ -98,10 +118,10 @@ export function ManagerialReimbursementPage() {
       String((v<0n?-v:v)%100n).padStart(2,'0');
     const lines=[
       ['Loja','UF','Situação da loja','Realizado total','Dif. em relação à verba','Solicitado',
-       'Reembolsado','Pendente','Situação do reembolso'],
+       'Reembolsado','Perda absorvida','Pendente','Situação do reembolso'],
       ...shown.map(r=>[r.code+' · '+r.name,r.state,r.storeStatus,numeric(r.realizedTotalCents),
         numeric(r.varianceToBbCents),numeric(r.requestedCents),numeric(r.receivedCents),
-        numeric(r.pendingCents),reimbursementStatusLabels[r.reimbursementStatus]]),
+        numeric(r.absorbedCents),numeric(r.pendingCents),reimbursementStatusLabels[r.reimbursementStatus]]),
     ];
     const blob=new Blob(['\uFEFF'+lines.map(line=>line.map(esc).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;
@@ -163,7 +183,7 @@ export function ManagerialReimbursementPage() {
           {!shown.length&&<tr><td colSpan={7}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
         </tbody></table>
       </div>
-      <p className="managerial-refunds__footnote">Dif. em relação à verba = Verba BB − Realizado total. Pendente = solicitado − recebido. Valores gerenciais não alteram custos nem pagamentos.</p>
+      <p className="managerial-refunds__footnote">Dif. em relação à verba = Verba BB − Realizado total. Pendente = solicitado − recebido − perda absorvida. A perda só é reconhecida após finalizar o reembolso.</p>
     </>}
     <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
       title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
@@ -172,11 +192,12 @@ export function ManagerialReimbursementPage() {
         <div className="managerial-refunds__modal-summary">
           <span>Solicitado: {formatBRL(selected.requestedCents)}</span>
           <span>Recebido: {formatBRL(selected.receivedCents)}</span>
+          <span>Perda absorvida: {formatBRL(selected.absorbedCents)}</span>
           <span>Pendente: {formatBRL(selected.pendingCents)}</span>
           <strong>{reimbursementStatusLabels[selected.reimbursementStatus]}</strong>
         </div>
         {canEdit&&<form onSubmit={e=>void submit(e)} className="managerial-refunds__form">
-          <label>Movimentação<select value={kind} onChange={e=>setKind(e.target.value as ManagerialReimbursementType)}>
+          <label>Movimentação<select value={kind} onChange={e=>setKind(e.target.value as ManagerialReimbursementMovementType)}>
             <option value="requested">Solicitação</option><option value="received">Recebimento</option></select></label>
           <label>Valor (R$)<input required value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0,00"/></label>
           <label>Data<input required type="date" value={entryDate} onChange={e=>setEntryDate(e.target.value)}/></label>
@@ -185,17 +206,26 @@ export function ManagerialReimbursementPage() {
           {formError&&<p role="alert" className="value-negative">{formError}</p>}
           <button disabled={saving} type="submit" className="button button--primary"><Plus size={16}/> Registrar movimentação</button>
         </form>}
+        {canEdit && selected.reimbursementStatus!=='finalized' &&
+          selected.requestedCents>0n && selected.pendingCents>=0n && <div className="managerial-refunds__finalize">
+            <div><strong>Finalizar reembolso</strong>
+              <small>Se o BB não pagar mais este processo, o saldo de {formatBRL(selected.pendingCents)}
+                será registrado como perda absorvida. Enquanto estiver em aberto, permanece pendente.</small>
+            </div>
+            <button type="button" className="button button--secondary" disabled={saving}
+              onClick={()=>void finalize()}>Marcar como finalizado</button>
+          </div>}
         <h3>Histórico de movimentações</h3>
         <div className="managerial-refunds__history">
           {selected.events.length?selected.events.map(entry=><div key={entry.id}>
-            <div><strong>{entry.type==='requested'?'Solicitação':'Recebimento'}</strong>
+            <div><strong>{entry.type==='requested'?'Solicitação':entry.type==='received'?'Recebimento':'Finalização / Perda absorvida'}</strong>
               {entry.reversalOf&&<small> · Estorno</small>}
               <small> · {entry.date} · {entry.protocol||'Sem protocolo'}</small>
               <small> · Autor: {entry.createdBy}</small>
               {entry.notes&&<p>{entry.notes}</p>}
             </div>
             <FinanceAmount cents={entry.amountCents}/>
-            {canEdit&&!entry.reversalOf&&!selected.events.some(e=>e.reversalOf===entry.id)&&
+            {canEdit&&entry.type!=='finalized'&&!entry.reversalOf&&!selected.events.some(e=>e.reversalOf===entry.id||(e.type==='finalized'&&e.createdAt>=entry.createdAt))&&
               <button type="button" disabled={saving} className="button button--secondary button--small"
                 onClick={()=>void reverse(entry)}><RotateCcw size={14}/> Estornar</button>}
           </div>):<p>Nenhuma movimentação registrada.</p>}
