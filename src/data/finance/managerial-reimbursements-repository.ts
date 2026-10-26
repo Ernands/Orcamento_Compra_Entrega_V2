@@ -32,3 +32,21 @@ export async function addManagerialReimbursement(values:{
     } as never);
   if(error) throw new Error(error.message);
 }
+
+/** Finalize the reimbursement ledger and engage the Lojas financial lock
+ * atomically. The server checks both permissions and the literal confirmation.
+ * Any failure rolls back both writes; never call separate client mutations here.
+ */
+export async function finalizeReimbursementAndCloseStore(values:{
+  storeId:string;lossCents:bigint;date:string;confirmation:string;
+}):Promise<void> {
+  if(!values.storeId||values.lossCents<0n||!values.date||values.confirmation!=='FINALIZAR')
+    throw new Error('Dados de finalização ou confirmação inválidos.');
+  const {error}=await supabase.rpc('finalize_managerial_reimbursement_and_close_store' as never,{
+    p_store_id:values.storeId,
+    p_loss_cents:values.lossCents.toString(),
+    p_entry_date:values.date,
+    p_confirm_text:values.confirmation,
+  } as never);
+  if(error)throw new Error(error.message);
+}
