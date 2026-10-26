@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildBudgetForecast, type ForecastFilters } from '../domain/budget-forecast';
+import { buildBudgetForecast, type ForecastFilters, type ForecastIndicator, type ForecastDetail } from '../domain/budget-forecast';
+import { aggregateForecastDetailsByStore } from '../domain/forecast-store-aggregation';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { Store } from '../domain/types';
@@ -159,15 +160,19 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(page).toContain('Programado + Não programado');
   expect(page).toContain('Orçamento previsto ultrapassado.');
  });
- it('adapta todos os popups de composição e mantém loja, referência e valores sem quebra',()=>{
-  // Every ForecastIndicator reuses a single modal and the same responsive table.
+ it('mostra uma linha por loja em todos os popups financeiros',()=>{
+  expect(page).toContain('aggregateForecastDetailsByStore(forecast.details[openIndicator])');
   expect(page).toContain('className="forecast-detail-modal"');
-  expect(page).toContain('entries: forecast.details[openIndicator]');
   expect(page).toContain('className="forecast-detail__store-code"');
   expect(page).toContain('className="forecast-detail__store-name"');
-  expect(page).toContain('data-label="Referência" title={entry.reference}');
-  expect(page).toContain('data-label="Categoria / Status"');
-  expect(page).toContain('data-label="Valor"');
+  expect(page).toContain('modalData.entries.map((entry)');
+  expect(page).toContain('Linhas de origem');
+  expect(page).toContain('Total por loja');
+  expect(page).toContain('modalData.detailTotal');
+  expect(page).toContain('reconciles:detailTotal===metricTotal');
+  expect(page).toContain('role="alert"');
+  expect(page).not.toContain('data-label="Referência"');
+  expect(page).not.toContain('data-label="Categoria / Status"');
   expect(style).toContain('.modal.forecast-detail-modal');
   expect(style).toContain('width: min(calc(100vw - 36px), 1220px)');
   expect(style).toContain('.forecast-detail td { white-space: nowrap; }');
@@ -176,7 +181,62 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(style).toContain('"store store"');
   expect(style).toContain('overflow-x: hidden; overflow-y: auto;');
   expect(style).toContain('@media (max-width: 420px)');
-  expect(style).toContain('.forecast-detail__store-separator { display: none; }');
+ });
+ it('agrega cada métrica por loja mantendo a soma exata do card com filtros e reembolso',()=>{
+  const settlement=new Map([
+    ['a',{receivedCents:4000n,absorbedCents:1000n}],
+    ['b',{receivedCents:3000n,absorbedCents:0n}],
+  ]);
+  for (const f of [all,{...all,state:'CE'},{...all,storeId:'b'}]) {
+    for (const reimbursement of [undefined,settlement]) {
+      const snapshot=buildBudgetForecast(stores,overview,payments,f,undefined,undefined,reimbursement);
+      const totals:Record<ForecastIndicator,bigint>={
+        bb:snapshot.bbCents,activeStores:BigInt(snapshot.activeStores),
+        planned:snapshot.plannedCents,forecastBalance:snapshot.forecastBalanceCents,
+        contracted:snapshot.contractedCents,contractBalance:snapshot.contractBalanceCents,
+        paid:snapshot.paidCents,payable:snapshot.payableCents,
+        bbBalance:snapshot.bbBalanceCents,reimbursed:snapshot.reimbursedCents,
+        absorbed:snapshot.absorbedCents,
+      };
+      for (const key of Object.keys(totals) as ForecastIndicator[]) {
+        const groups=aggregateForecastDetailsByStore(snapshot.details[key]);
+        expect(new Set(groups.map(group=>group.id)).size).toBe(groups.length);
+        expect(sum(groups)).toBe(totals[key]);
+        expect(sum(groups)).toBe(sum(snapshot.details[key]));
+      }
+    }
+  }
+ });
+ it('concilia valores monetários exatos em centavos, inclusive 113.121,52 e 25.889,50',()=>{
+  const origin=(storeCode:string,storeName:string,state:string,amountCents:bigint,id:string):ForecastDetail=>({
+    id,storeCode,storeName,state,amountCents,reference:id,category:'Compra',
+    status:'Consolidado',
+  });
+  const planned=[
+    origin('LOJ-001','LOJA A','CE',3000000n,'plan-a1'),
+    origin('LOJ-001','LOJA A','CE',2000000n,'plan-a2'),
+    origin('LOJ-002','LOJA B','MG',4000000n,'plan-b1'),
+    origin('LOJ-003','LOJA C','RN',2312152n,'plan-c1'),
+  ];
+  const contracted=[
+    origin('LOJ-001','LOJA A','CE',1000000n,'cmp-a1'),
+    origin('LOJ-001','LOJA A','CE',700000n,'obr-a2'),
+    origin('LOJ-002','LOJA B','MG',888950n,'cmp-b1'),
+  ];
+  const groupedPlan=aggregateForecastDetailsByStore(planned);
+  const groupedContract=aggregateForecastDetailsByStore(contracted);
+  expect(groupedPlan).toHaveLength(3);
+  expect(groupedPlan.find(group=>group.storeCode==='LOJ-001'))
+    .toMatchObject({amountCents:5000000n,sourceRows:2});
+  expect(sum(groupedPlan)).toBe(11312152n);
+  expect(groupedContract).toHaveLength(2);
+  expect(sum(groupedContract)).toBe(2588950n);
+  expect(aggregateForecastDetailsByStore([
+    ...contracted,origin('LOJ-002','LOJA B','MG',-500n,'adjustment'),
+  ]).find(group=>group.storeCode==='LOJ-002')?.amountCents).toBe(888450n);
+  expect(aggregateForecastDetailsByStore([
+    origin('—','Não alocado','—',150n,'undistributed'),...contracted,
+  ]).at(-1)?.storeName).toBe('Não alocado');
  });
  it('oculta abas antigas, mantém código legado e cria cinco quadros sem prospector',()=>{
   expect(app).toContain('path="dashboard/previsao-orcamentaria"');
