@@ -14,6 +14,7 @@ const store={id:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
   status:'active',financialClosure:{state:'closed'}} as unknown as Store;
 const row={storeId:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
   budgetTotalCents:1250000n,budgetVarianceToBbCents:-250000n,
+  realizedVarianceToBbCents:200000n,
   realizedTotalCents:800000n,paidCents:500000n,payableCents:300000n} as FinanceOverviewStoreRow;
 const entry=(id:string,type:'requested'|'received',cents:bigint,reversalOf:string|null=null):ManagerialReimbursementEntry=>({
   id,storeId:'s1',type,amountCents:cents,date:'2026-10-25',protocol:'TESTE',
@@ -26,11 +27,22 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(rows[0].storeStatus).toBe('Finalizada');
     expect(rows[0].realizedTotalCents).toBe(800000n);
     expect(managerialTotals(rows).realizedTotalCents).toBe(800000n);
-    expect(rows[0].varianceToBbCents).toBe(-250000n);
+    expect(rows[0].varianceToBbCents).toBe(200000n);
+    expect(managerialTotals(rows).varianceToBbCents).toBe(200000n);
     expect(rows[0].pendingCents).toBe(500000n);
     expect(rows[0].disbursementCents).toBe(300000n);
     expect(rows[0].reimbursementStatus).toBe('partial');
     expect(managerialTotals(rows).receivedCents).toBe(200000n);
+  });
+  it('usa a diferença Verba BB − Realizado, inclusive quando negativa',()=>{
+    const overBudgetRow={...row,realizedTotalCents:1400000n,
+      realizedVarianceToBbCents:-400000n};
+    const result=buildManagerialReimbursements([store],[overBudgetRow],[]);
+    expect(result).toHaveLength(1);
+    expect(result[0].varianceToBbCents).toBe(-400000n);
+    expect(managerialTotals(result).varianceToBbCents).toBe(-400000n);
+    // O indicador não pode reaproveitar a diferença sobre o Orçado (-250000n).
+    expect(result[0].varianceToBbCents).not.toBe(overBudgetRow.budgetVarianceToBbCents);
   });
   it('lida com estorno auditável sem perda do lançamento original',()=>{
     const rows=buildManagerialReimbursements([store],[row],[
@@ -60,6 +72,8 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('<th>Loja · Cidade/UF</th><th>Realizado total</th>');
     expect(page).toContain('<FinanceAmount cents={r.realizedTotalCents}/>');
     expect(page).not.toContain('Orçado total');
+    expect(page).toContain('Dif. em relação à verba = Verba BB − Realizado total.');
+    expect(page).toContain("label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'execution'");
   });
   it('mantém lançamentos em tabela isolada RLS e limita correções ao estorno',()=>{
     expect(migration).toContain('finance_managerial_reimbursement_entries');
