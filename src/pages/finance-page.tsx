@@ -1,5 +1,4 @@
 import {
-  BanknoteArrowDown,
   Building2,
   CalendarDays,
   CheckCircle2,
