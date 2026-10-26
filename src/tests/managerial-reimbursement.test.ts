@@ -118,7 +118,7 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('listManagerialReimbursements()');
     expect(page).toContain('Gerenciar');
     expect(page).toContain('Estornar');
-    expect(page).toContain("['Loja','UF','Situação da loja','Realizado total'");
+    expect(page).toContain("['Loja','UF','Verba BB','Realizado total'");
     expect(page).toContain("label:'Realizado total',value:totals.realizedTotalCents,group:'execution'");
     expect(page).toContain('<th>Loja · Cidade/UF</th><th>Verba BB</th><th>Realizado total</th>');
     expect(page).toContain('<FinanceAmount cents={r.bbCents}/>');
