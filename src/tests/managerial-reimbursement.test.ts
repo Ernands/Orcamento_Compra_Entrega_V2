@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildManagerialReimbursements, managerialTotals, reimbursementStatus, managerialSettlementsByStore } from '../domain/managerial-reimbursements';
+import { buildManagerialReimbursements, managerialTotals, reimbursementStatus, managerialSettlementsByStore,
+  reimbursementBalanceLines, reimbursementWorkflowStatus } from '../domain/managerial-reimbursements';
 import type { ManagerialReimbursementEntry } from '../domain/managerial-reimbursements';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
 import type { Store } from '../domain/types';
@@ -10,11 +11,12 @@ import app from '../app/app.tsx?raw';
 import finance from '../pages/finance-page.tsx?raw';
 import migration from '../../supabase/migrations/20261025235317_finance_managerial_reimbursement_entries.sql?raw';
 import closureMigration from '../../supabase/migrations/20261026013456_finance_managerial_reimbursement_finalization.sql?raw';
+import pageCss from '../pages/managerial-reimbursement-page.css?raw';
 
 const store={id:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
   status:'active',financialClosure:{state:'closed'}} as unknown as Store;
 const row={storeId:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
-  budgetTotalCents:1250000n,budgetVarianceToBbCents:-250000n,
+  budgetBbCents:1000000n,budgetTotalCents:1250000n,budgetVarianceToBbCents:-250000n,
   realizedVarianceToBbCents:200000n,
   realizedTotalCents:800000n,paidCents:500000n,payableCents:300000n} as FinanceOverviewStoreRow;
 const entry=(id:string,type:'requested'|'received'|'finalized',cents:bigint,reversalOf:string|null=null):ManagerialReimbursementEntry=>({
@@ -26,6 +28,8 @@ describe('Dashboard gerencial de reembolso',()=>{
     const rows=buildManagerialReimbursements([store],[row],[entry('a','requested',700000n),entry('b','received',200000n)]);
     expect(rows).toHaveLength(1);
     expect(rows[0].storeStatus).toBe('Finalizada');
+    expect(rows[0].bbCents).toBe(1000000n);
+    expect(managerialTotals(rows).bbCents).toBe(1000000n);
     expect(rows[0].realizedTotalCents).toBe(800000n);
     expect(managerialTotals(rows).realizedTotalCents).toBe(800000n);
     expect(rows[0].varianceToBbCents).toBe(200000n);
@@ -74,6 +78,23 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(zero[0].reimbursementStatus).toBe('finalized');
     expect(zero[0].absorbedCents).toBe(0n);
   });
+  it('classifica saldo aberto, perda finalizada e excedente sem confundi-los',()=>{
+    expect(reimbursementBalanceLines({absorbedCents:0n,pendingCents:1000000n}))
+      .toEqual([{kind:'pending',label:'Pendente',amountCents:1000000n}]);
+    expect(reimbursementBalanceLines({absorbedCents:1000000n,pendingCents:0n}))
+      .toEqual([{kind:'loss',label:'Perda absorvida',amountCents:1000000n}]);
+    expect(reimbursementBalanceLines({absorbedCents:0n,pendingCents:-200000n}))
+      .toEqual([{kind:'excess',label:'Acima do solicitado',amountCents:200000n}]);
+    expect(reimbursementBalanceLines({absorbedCents:1000000n,pendingCents:400000n}))
+      .toEqual([{kind:'loss',label:'Perda absorvida',amountCents:1000000n},
+        {kind:'pending',label:'Pendente',amountCents:400000n}]);
+    expect(reimbursementBalanceLines({absorbedCents:0n,pendingCents:0n}))
+      .toEqual([{kind:'settled',label:'Sem saldo',amountCents:0n}]);
+    expect(reimbursementWorkflowStatus({reimbursementStatus:'finalized'})).toBe('Finalizado');
+    expect(reimbursementWorkflowStatus({reimbursementStatus:'partial'})).toBe('Aberto');
+    expect(reimbursementWorkflowStatus({reimbursementStatus:'received'})).toBe('Aberto');
+    expect(reimbursementWorkflowStatus({reimbursementStatus:'not_requested'})).toBe('Aberto');
+  });
   it('lida com estorno auditável sem perda do lançamento original',()=>{
     const rows=buildManagerialReimbursements([store],[row],[
       entry('a','requested',700000n),entry('b','requested',-700000n,'a'),
@@ -99,7 +120,19 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('Estornar');
     expect(page).toContain("['Loja','UF','Situação da loja','Realizado total'");
     expect(page).toContain("label:'Realizado total',value:totals.realizedTotalCents,group:'execution'");
-    expect(page).toContain('<th>Loja · Cidade/UF</th><th>Realizado total</th>');
+    expect(page).toContain('<th>Loja · Cidade/UF</th><th>Verba BB</th><th>Realizado total</th>');
+    expect(page).toContain('<FinanceAmount cents={r.bbCents}/>');
+    expect(page).toContain('<th>Saldo / Perda / Excedente</th>');
+    expect(page).toContain('<th>Status do reembolso</th>');
+    expect(page).toContain("label:'Perdas absorvidas',value:totals.absorbedCents,group:'loss'");
+    expect(page).toContain('reimbursementBalanceLines(r).map');
+    expect(page).toContain('reimbursementWorkflowStatus(r)');
+    expect(page).toContain("numeric(r.bbCents)");
+    expect(page).toContain('numeric(r.absorbedCents)');
+    expect(page).toContain("numeric(r.pendingCents<0n?-r.pendingCents:0n)");
+    expect(page).toContain("colSpan={10}");
+    expect(pageCss).toContain('.managerial-refunds__workflow--closed');
+    expect(pageCss).toContain('.managerial-refunds__balance-line--excess');
     expect(page).toContain('<FinanceAmount cents={r.realizedTotalCents}/>');
     expect(page).not.toContain('Orçado total');
     expect(page).toContain('Dif. em relação à verba = Verba BB − Realizado total.');
