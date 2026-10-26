@@ -20,7 +20,10 @@ export async function addManagerialReimbursement(values:{
   storeId:string; type:ManagerialReimbursementType; amountCents:bigint;
   date:string; protocol:string; notes:string; reversalOf?:string;
 }):Promise<void> {
-  if(!values.storeId||!values.date||values.amountCents===0n) throw new Error('Informe loja, data e valor.');
+  if(!values.storeId||!values.date|| (values.type!=='finalized' && values.amountCents===0n))
+    throw new Error('Informe loja, data e valor.');
+  if(values.type==='finalized' && (values.amountCents<0n || values.reversalOf))
+    throw new Error('Valor absorvido inválido para finalização.');
   const {error}=await supabase.from('finance_managerial_reimbursement_entries' as never)
     .insert({
       store_id:values.storeId,entry_type:values.type,amount_cents:values.amountCents.toString(),
