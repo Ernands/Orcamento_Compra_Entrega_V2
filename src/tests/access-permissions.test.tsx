@@ -151,7 +151,7 @@ describe('AccessPage granular permissions', () => {
     expect(screen.getAllByText('Perfil: bloqueado').length).toBeGreaterThan(0);
 
     await user.selectOptions(
-      screen.getByLabelText('Visualizar a aba Visao Geral do Financeiro para Joana Consulta'),
+      screen.getByLabelText('Financeiro — Visão Geral (base dos dashboards gerenciais) para Joana Consulta'),
       'deny',
     );
     await user.selectOptions(
@@ -184,7 +184,7 @@ describe('AccessPage granular permissions', () => {
       screen.getByLabelText('Exibir o menu Financeiro para Joana Consulta'),
     ).toHaveValue('inherit');
     expect(
-      screen.getByLabelText('Visualizar a aba Visao Geral do Financeiro para Joana Consulta'),
+      screen.getByLabelText('Financeiro — Visão Geral (base dos dashboards gerenciais) para Joana Consulta'),
     ).toHaveValue('inherit');
     expect(
       screen.getByLabelText('Visualizar a aba Pagamentos do Financeiro para Joana Consulta'),
