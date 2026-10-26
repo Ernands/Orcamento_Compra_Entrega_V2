@@ -9,10 +9,12 @@ import type { WorkService } from './works-types';
 import type { PlannedBudgetItem } from './planned-budget-types';
 import { plannedBudgetAllocations } from './planned-budget-calculations';
 import { moneyToCents } from './supply-calculations';
+import type { ManagerialSettlement } from './managerial-reimbursements';
 
 export type ForecastIndicator =
   | 'bb' | 'activeStores' | 'planned' | 'forecastBalance'
-  | 'contracted' | 'contractBalance' | 'paid' | 'payable' | 'bbBalance';
+  | 'contracted' | 'contractBalance' | 'paid' | 'payable' | 'bbBalance'
+  | 'reimbursed' | 'absorbed';
 
 export interface ForecastFilters {
   state: string;
@@ -32,6 +34,9 @@ export interface ForecastDetail {
 }
 export interface ForecastSnapshot {
   bbCents: bigint;
+  originalBbCents: bigint;
+  reimbursedCents: bigint;
+  absorbedCents: bigint;
   activeStores: number;
   storesWithBudget: number;
   inactiveStoresWithBudget: number;
@@ -54,6 +59,7 @@ export interface ForecastEvidence {
 const emptyDetails = (): Record<ForecastIndicator, ForecastDetail[]> => ({
   bb: [], activeStores: [], planned: [], forecastBalance: [], contracted: [],
   contractBalance: [], paid: [], payable: [], bbBalance: [],
+  reimbursed: [], absorbed: [],
 });
 const sum = (rows: ForecastDetail[]): bigint => rows.reduce((total, item) => total + item.amountCents, 0n);
 const storeInfo = (store: Store) => ({
@@ -94,6 +100,7 @@ export function buildBudgetForecast(
   filters: ForecastFilters,
   evidence?: ForecastEvidence,
   eligibleStoreIds?: ReadonlySet<string>,
+  settlementByStore?: ReadonlyMap<string,ManagerialSettlement>,
 ): ForecastSnapshot {
   const chosenStores = selectForecastStores(stores, filters)
     .filter((store)=>!eligibleStoreIds||eligibleStoreIds.has(store.id));
@@ -105,8 +112,13 @@ export function buildBudgetForecast(
   chosenRows.forEach((row) => {
     const store = byStoreId.get(row.storeId)!;
     const basis = `Financeiro · ${row.code}`;
+    const settlement=settlementByStore?.get(row.storeId);
+    const received=settlement?.receivedCents||0n;
+    const absorbed=settlement?.absorbedCents||0n;
+    const remainingBb=row.budgetBbCents-received-absorbed;
     details.bb.push({
-      ...perStore(row, store, 'bb', row.budgetBbCents, 'Verba BB', basis),
+      ...perStore(row, store, 'bb', remainingBb,
+        settlementByStore?'Verba BB restante':'Verba BB', basis),
       status: store.status === 'active' ? 'Ativa' : 'Inativa',
     });
     if (store.status === 'active' && row.budgetBbCents > 0n) {
@@ -115,15 +127,17 @@ export function buildBudgetForecast(
         status: 'Ativa',
       });
     }
+    if(received!==0n) details.reimbursed.push(perStore(row,store,'reimbursed',received,'Reembolsado pelo BB',basis));
+    if(absorbed!==0n) details.absorbed.push(perStore(row,store,'absorbed',absorbed,'Perda absorvida / reembolso finalizado',basis));
     details.planned.push(perStore(row, store, 'planned', row.budgetTotalCents, 'Orçamento previsto', basis));
     details.forecastBalance.push(perStore(row, store, 'forecastBalance',
-      row.budgetBbCents - row.budgetTotalCents, 'Verba − orçamento previsto', basis));
+      remainingBb - row.budgetTotalCents, 'Verba − orçamento previsto', basis));
     details.contracted.push(perStore(row, store, 'contracted', row.realizedTotalCents,
       'Compras, obras e serviços', basis));
     details.contractBalance.push(perStore(row, store, 'contractBalance',
       row.budgetTotalCents - row.realizedTotalCents, 'Previsto − contratado', basis));
     details.bbBalance.push(perStore(row, store, 'bbBalance',
-      row.budgetBbCents - row.realizedTotalCents, 'Verba − contratado', basis));
+      remainingBb - row.realizedTotalCents, 'Verba − contratado', basis));
   });
 
   // Expand the contracted and planned store summaries into their real records
@@ -212,6 +226,9 @@ export function buildBudgetForecast(
   });
 
   const bbCents = sum(details.bb);
+  const originalBbCents = chosenRows.reduce((total,row)=>total+row.budgetBbCents,0n);
+  const reimbursedCents = sum(details.reimbursed);
+  const absorbedCents = sum(details.absorbed);
   const withBudget = chosenRows.filter((row) => row.budgetBbCents > 0n);
   const inactiveWithBudget = withBudget.filter((row) =>
     byStoreId.get(row.storeId)?.status === 'inactive');
@@ -225,7 +242,8 @@ export function buildBudgetForecast(
   const payableCents = paymentAmounts.plannedCents + paymentAmounts.unscheduledCents;
 
   return {
-    bbCents, activeStores: details.activeStores.length, storesWithBudget,
+    bbCents, originalBbCents, reimbursedCents, absorbedCents,
+    activeStores: details.activeStores.length, storesWithBudget,
     inactiveStoresWithBudget, inactiveBudgetCents, plannedCents,
     forecastBalanceCents: bbCents - plannedCents,
     contractedCents, contractBalanceCents: plannedCents - contractedCents,
