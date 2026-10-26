@@ -133,7 +133,7 @@ export function BudgetForecastDashboardPage() {
   const closureUnavailable = Boolean(dataset?.stores.some((store) =>
     store.financialClosure?.state === 'unavailable'));
   const settlementByStore=useMemo(()=>dataset && considerReimbursements
-    ? managerialSettlementsByStore(dataset.managerialEntries):undefined,
+    ? managerialSettlementsByStore(dataset.managerialEntries,dataset.overview):undefined,
     [dataset,considerReimbursements]);
   const forecast = useMemo(() =>
     dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters, {
