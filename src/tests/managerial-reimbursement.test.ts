@@ -202,7 +202,7 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(pageCss).toContain('.managerial-refunds__balance-line--excess');
     expect(page).toContain('<FinanceAmount cents={r.realizedTotalCents}/>');
     expect(page).not.toContain('Orçado total');
-    expect(page).toContain('Gasto extra = Realizado acima da Verba BB.');
+    expect(page).toContain('Gasto extra Verba BB = Realizado acima da Verba BB.');
     expect(page).toContain("label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'execution'");
   });
   it('mantém lançamentos em tabela isolada RLS e limita correções ao estorno',()=>{
