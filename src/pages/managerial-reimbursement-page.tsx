@@ -11,6 +11,7 @@ import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import { addManagerialReimbursement, listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
 import { buildManagerialReimbursements, managerialTotals, reimbursementStatusLabels,
+  reimbursementBalanceLines, reimbursementWorkflowStatus,
   type ManagerialReimbursementEntry, type ManagerialReimbursementRow, type ManagerialReimbursementMovementType,
   type ReimbursementStatus } from '../domain/managerial-reimbursements';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
@@ -117,11 +118,16 @@ export function ManagerialReimbursementPage() {
     const numeric=(v:bigint)=>String(v<0n?'-':'')+String((v<0n?-v:v)/100n)+','+
       String((v<0n?-v:v)%100n).padStart(2,'0');
     const lines=[
-      ['Loja','UF','Situação da loja','Realizado total','Dif. em relação à verba','Solicitado',
-       'Reembolsado','Perda absorvida','Pendente','Situação do reembolso'],
-      ...shown.map(r=>[r.code+' · '+r.name,r.state,r.storeStatus,numeric(r.realizedTotalCents),
-        numeric(r.varianceToBbCents),numeric(r.requestedCents),numeric(r.receivedCents),
-        numeric(r.absorbedCents),numeric(r.pendingCents),reimbursementStatusLabels[r.reimbursementStatus]]),
+      ['Loja','UF','Verba BB','Realizado total','Dif. em relação à verba','Valor solicitado',
+       'Valor reembolsado','Pendente','Perda absorvida','Acima do solicitado',
+       'Situação da loja','Status do reembolso'],
+      ...shown.map(r=>[r.code+' · '+r.name,r.state,numeric(r.bbCents),
+        numeric(r.realizedTotalCents),numeric(r.varianceToBbCents),
+        numeric(r.requestedCents),numeric(r.receivedCents),
+        numeric(r.pendingCents>0n?r.pendingCents:0n),
+        numeric(r.absorbedCents),
+        numeric(r.pendingCents<0n?-r.pendingCents:0n),
+        r.storeStatus,reimbursementWorkflowStatus(r)]),
     ];
     const blob=new Blob(['\uFEFF'+lines.map(line=>line.map(esc).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;
@@ -132,6 +138,7 @@ export function ManagerialReimbursementPage() {
     {label:'Dif. em relação à verba',value:totals.varianceToBbCents,group:'execution'},
     {label:'Total solicitado',value:totals.requestedCents,group:'finance'},
     {label:'Total reembolsado',value:totals.receivedCents,group:'finance'},
+    {label:'Perdas absorvidas',value:totals.absorbedCents,group:'loss'},
     {label:'Pendente de reembolso',value:totals.pendingCents,group:'tracking'},
   ];
   return <section className="page-stack managerial-refunds">
@@ -166,24 +173,40 @@ export function ManagerialReimbursementPage() {
       </div>
       <div className="managerial-refunds__table-scroll">
         <table className="managerial-refunds__table"><thead><tr>
-          <th>Loja · Cidade/UF</th><th>Realizado total</th><th>Dif. em relação à verba</th>
-          <th>Valor solicitado</th><th>Valor reembolsado</th><th>Situação da loja</th><th>Ações</th>
+          <th>Loja · Cidade/UF</th><th>Verba BB</th><th>Realizado total</th>
+          <th>Dif. em relação à verba</th><th>Valor solicitado</th><th>Valor reembolsado</th>
+          <th>Saldo / Perda / Excedente</th><th>Situação da loja</th>
+          <th>Status do reembolso</th><th>Ações</th>
         </tr></thead><tbody>
           {shown.map(r=><tr key={r.storeId}>
             <td><strong>{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
+            <td><FinanceAmount cents={r.bbCents}/></td>
             <td><FinanceAmount cents={r.realizedTotalCents}/></td>
             <td className={r.varianceToBbCents<0n?'value-negative':'value-positive'}>
               <FinanceAmount cents={r.varianceToBbCents}/></td>
             <td><FinanceAmount cents={r.requestedCents}/></td>
             <td><FinanceAmount cents={r.receivedCents}/></td>
+            <td>
+              <div className="managerial-refunds__balance">
+                {reimbursementBalanceLines(r).map(line=>
+                  <span key={line.kind} className={'managerial-refunds__balance-line managerial-refunds__balance-line--'+line.kind}>
+                    <small>{line.label}</small><FinanceAmount cents={line.amountCents}/>
+                  </span>)}
+              </div>
+            </td>
             <td>{r.storeStatus}</td>
+            <td><span className={'managerial-refunds__workflow managerial-refunds__workflow--'+
+              (reimbursementWorkflowStatus(r)==='Finalizado'?'closed':'open')}>
+              {reimbursementWorkflowStatus(r)}</span>
+              {r.reimbursementStatus==='not_requested'&&<small>Sem solicitação</small>}
+            </td>
             <td><button className="button button--secondary button--small" onClick={()=>open(r)}>
               {canEdit?'Gerenciar':'Histórico'}</button></td>
           </tr>)}
-          {!shown.length&&<tr><td colSpan={7}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
+          {!shown.length&&<tr><td colSpan={10}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
         </tbody></table>
       </div>
-      <p className="managerial-refunds__footnote">Dif. em relação à verba = Verba BB − Realizado total. Pendente = solicitado − recebido − perda absorvida. A perda só é reconhecida após finalizar o reembolso.</p>
+      <p className="managerial-refunds__footnote">Dif. em relação à verba = Verba BB − Realizado total. A coluna Saldo identifica valores pendentes, perdas reconhecidas em reembolsos finalizados ou recebimentos acima do solicitado. Perda absorvida não é presumida antes da finalização.</p>
     </>}
     <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
       title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
