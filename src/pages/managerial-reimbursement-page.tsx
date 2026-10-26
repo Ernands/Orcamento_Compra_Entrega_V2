@@ -88,7 +88,7 @@ export function ManagerialReimbursementPage() {
     const loss=eligibleRemaining>0n?eligibleRemaining:0n;
     if(!window.confirm(
       'Finalizar o reembolso desta loja? '+formatBRL(loss)+
-      ' será reconhecido como perda absorvida dentro da Verba BB. Gasto extra Verba BB acima da verba ('+
+      ' será reconhecido como perda absorvida dentro da Verba BB. O gasto excedente à verba ('+
       formatBRL(selected.extraCents)+') não entra na perda. Esta ação é irreversível.'
     ))return;
     setSaving(true);setFormError('');
