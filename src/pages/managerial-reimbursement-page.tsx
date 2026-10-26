@@ -84,16 +84,20 @@ export function ManagerialReimbursementPage() {
   const finalize=async()=>{
     if(!selected||saving||selected.reimbursementStatus==='finalized'
       || selected.requestedCents<=0n || selected.pendingCents<0n)return;
-    const loss=selected.pendingCents;
+    // A perda corresponde apenas ao realizado elegível dentro da verba BB.
+    // Valores acima da verba são Gasto Extra e nunca integram esta finalização.
+    const eligibleRemaining=selected.eligibleCents-selected.receivedCents-selected.recordedLossCents;
+    const loss=eligibleRemaining>0n?eligibleRemaining:0n;
     if(!window.confirm(
       'Finalizar o reembolso desta loja? '+formatBRL(loss)+
-      ' será reconhecido como perda absorvida. Isso não cancela a despesa e não pode ser desfeito.'
+      ' será reconhecido como perda absorvida dentro da Verba BB. Gasto extra acima da verba ('+
+      formatBRL(selected.extraCents)+') não entra na perda. Esta ação é irreversível.'
     ))return;
     setSaving(true);setFormError('');
     try {
       await addManagerialReimbursement({
         storeId:selected.storeId,type:'finalized',amountCents:loss,
-        date:today(),protocol:'',notes:'Reembolso finalizado; saldo não recebido absorvido.',
+        date:today(),protocol:'',notes:'Finalização; perda somente sobre despesas elegíveis até o limite da Verba BB.',
       });
       await load();setSelected(null);
     }catch(e){setFormError(e instanceof Error?e.message:'Não foi possível finalizar o reembolso.');}
@@ -119,13 +123,13 @@ export function ManagerialReimbursementPage() {
       String((v<0n?-v:v)%100n).padStart(2,'0');
     const lines=[
       ['Loja','UF','Verba BB','Realizado total','Dif. em relação à verba','Valor solicitado',
-       'Valor reembolsado','Pendente','Perda absorvida','Acima do solicitado',
+       'Valor reembolsado','Pendente','Perda absorvida','Gasto extra','Acima do solicitado',
        'Situação da loja','Status do reembolso'],
       ...shown.map(r=>[r.code+' · '+r.name,r.state,numeric(r.bbCents),
         numeric(r.realizedTotalCents),numeric(r.varianceToBbCents),
         numeric(r.requestedCents),numeric(r.receivedCents),
         numeric(r.pendingCents>0n?r.pendingCents:0n),
-        numeric(r.absorbedCents),
+        numeric(r.absorbedCents),numeric(r.extraCents),
         numeric(r.pendingCents<0n?-r.pendingCents:0n),
         r.storeStatus,reimbursementWorkflowStatus(r)]),
     ];
@@ -139,6 +143,7 @@ export function ManagerialReimbursementPage() {
     {label:'Total solicitado',value:totals.requestedCents,group:'finance'},
     {label:'Total reembolsado',value:totals.receivedCents,group:'finance'},
     {label:'Perdas absorvidas',value:totals.absorbedCents,group:'loss'},
+    {label:'Gasto extra',value:totals.extraCents,group:'extra'},
     {label:'Pendente de reembolso',value:totals.pendingCents,group:'tracking'},
   ];
   return <section className="page-stack managerial-refunds">
@@ -179,14 +184,14 @@ export function ManagerialReimbursementPage() {
           <th>Status do reembolso</th><th>Ações</th>
         </tr></thead><tbody>
           {shown.map(r=><tr key={r.storeId}>
-            <td><strong>{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
-            <td><FinanceAmount cents={r.bbCents}/></td>
-            <td><FinanceAmount cents={r.realizedTotalCents}/></td>
-            <td className={r.varianceToBbCents<0n?'value-negative':'value-positive'}>
+            <td data-label="Loja"><strong>{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
+            <td data-label="Verba BB"><FinanceAmount cents={r.bbCents}/></td>
+            <td data-label="Realizado"><FinanceAmount cents={r.realizedTotalCents}/></td>
+            <td data-label="Dif. Verba" className={r.varianceToBbCents<0n?'value-negative':'value-positive'}>
               <FinanceAmount cents={r.varianceToBbCents}/></td>
-            <td><FinanceAmount cents={r.requestedCents}/></td>
-            <td><FinanceAmount cents={r.receivedCents}/></td>
-            <td>
+            <td data-label="Solicitado"><FinanceAmount cents={r.requestedCents}/></td>
+            <td data-label="Reembolsado"><FinanceAmount cents={r.receivedCents}/></td>
+            <td data-label="Saldo">
               <div className="managerial-refunds__balance">
                 {reimbursementBalanceLines(r).map(line=>
                   <span key={line.kind} className={'managerial-refunds__balance-line managerial-refunds__balance-line--'+line.kind}>
@@ -194,19 +199,19 @@ export function ManagerialReimbursementPage() {
                   </span>)}
               </div>
             </td>
-            <td>{r.storeStatus}</td>
-            <td><span className={'managerial-refunds__workflow managerial-refunds__workflow--'+
+            <td data-label="Situação da Loja">{r.storeStatus}</td>
+            <td data-label="Status Reembolso"><span className={'managerial-refunds__workflow managerial-refunds__workflow--'+
               (reimbursementWorkflowStatus(r)==='Finalizado'?'closed':'open')}>
               {reimbursementWorkflowStatus(r)}</span>
               {r.reimbursementStatus==='not_requested'&&<small>Sem solicitação</small>}
             </td>
-            <td><button className="button button--secondary button--small" onClick={()=>open(r)}>
+            <td data-label="Ações"><button className="button button--secondary button--small" onClick={()=>open(r)}>
               {canEdit?'Gerenciar':'Histórico'}</button></td>
           </tr>)}
           {!shown.length&&<tr><td colSpan={10}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
         </tbody></table>
       </div>
-      <p className="managerial-refunds__footnote">Dif. em relação à verba = Verba BB − Realizado total. A coluna Saldo identifica valores pendentes, perdas reconhecidas em reembolsos finalizados ou recebimentos acima do solicitado. Perda absorvida não é presumida antes da finalização.</p>
+      <p className="managerial-refunds__footnote">Gasto extra = Realizado acima da Verba BB. Perda absorvida = parcela do realizado elegível não reembolsada quando o processo é finalizado. Valores acima da Verba BB não integram a perda nem a dedução na Previsão Orçamentária.</p>
     </>}
     <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
       title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
@@ -216,6 +221,7 @@ export function ManagerialReimbursementPage() {
           <span>Solicitado: {formatBRL(selected.requestedCents)}</span>
           <span>Recebido: {formatBRL(selected.receivedCents)}</span>
           <span>Perda absorvida: {formatBRL(selected.absorbedCents)}</span>
+          <span>Gasto extra: {formatBRL(selected.extraCents)}</span>
           <span>Pendente: {formatBRL(selected.pendingCents)}</span>
           <strong>{reimbursementStatusLabels[selected.reimbursementStatus]}</strong>
         </div>
@@ -232,8 +238,9 @@ export function ManagerialReimbursementPage() {
         {canEdit && selected.reimbursementStatus!=='finalized' &&
           selected.requestedCents>0n && selected.pendingCents>=0n && <div className="managerial-refunds__finalize">
             <div><strong>Finalizar reembolso</strong>
-              <small>Se o BB não pagar mais este processo, o saldo de {formatBRL(selected.pendingCents)}
-                será registrado como perda absorvida. Enquanto estiver em aberto, permanece pendente.</small>
+              <small>Ao finalizar, a perda considera somente o realizado elegível até a Verba BB:
+                {formatBRL(selected.eligibleCents)} menos {formatBRL(selected.receivedCents)} recebidos.
+                Gasto extra de {formatBRL(selected.extraCents)} é separado.</small>
             </div>
             <button type="button" className="button button--secondary" disabled={saving}
               onClick={()=>void finalize()}>Marcar como finalizado</button>
