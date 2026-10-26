@@ -92,7 +92,7 @@ describe('AppShell', () => {
   });
 
   it('mostra apenas a Previsão Orçamentária e oculta as visões antigas', () => {
-    renderShell(['dashboard.view', 'finance.overview_view', 'items.view']);
+    renderShell(['dashboard.view', 'finance.overview_view', 'dashboard.budget_forecast_view', 'items.view']);
     const links = screen.getAllByRole('link', { name: 'Previsão Orçamentária' });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0]).toHaveAttribute('href', '/dashboard/previsao-orcamentaria');
@@ -100,6 +100,13 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Implantacao' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Suprimentos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Lojas' })).not.toBeInTheDocument();
+  });
+
+  it('exibe apenas a aba gerencial especificamente liberada', () => {
+    renderShell(['dashboard.view','finance.overview_view','dashboard.reimbursement_view']);
+    expect(screen.getByRole('link',{name:'Reembolso'})).toHaveAttribute('href','/dashboard/reembolso');
+    expect(screen.queryByRole('link',{name:'Previsão Orçamentária'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'Composição Financeira'})).not.toBeInTheDocument();
   });
 
   it('remove o cabeçalho global duplicado sem perder o acesso ao menu móvel', async () => {
