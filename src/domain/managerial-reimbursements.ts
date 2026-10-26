@@ -79,3 +79,19 @@ export function managerialTotals(rows: ManagerialReimbursementRow[]) {
     pendingStores: rows.filter(r=>r.reimbursementStatus==='requested'||r.reimbursementStatus==='partial'||r.reimbursementStatus==='divergent').length,
   };
 }
+
+/** Immutable settlement breakdown, including historical reversals. */
+export type ManagerialSettlement = {receivedCents:bigint;absorbedCents:bigint};
+export function managerialSettlementsByStore(
+  entries:ManagerialReimbursementEntry[],
+):ReadonlyMap<string,ManagerialSettlement> {
+  const settlements=new Map<string,ManagerialSettlement>();
+  for(const entry of entries) {
+    if(entry.type==='requested') continue;
+    const current=settlements.get(entry.storeId)||{receivedCents:0n,absorbedCents:0n};
+    if(entry.type==='received') current.receivedCents+=entry.amountCents;
+    if(entry.type==='finalized') current.absorbedCents+=entry.amountCents;
+    settlements.set(entry.storeId,current);
+  }
+  return settlements;
+}
