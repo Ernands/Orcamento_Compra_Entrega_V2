@@ -19,6 +19,7 @@ import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import { buildUnifiedFinancePayments } from '../domain/finance-payments';
 import { formatBRL } from '../domain/supply-calculations';
 import { buildBudgetForecast, type ForecastFilters, type ForecastIndicator } from '../domain/budget-forecast';
+import { aggregateForecastDetailsByStore } from '../domain/forecast-store-aggregation';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
 import type { FinanceStoreRow } from '../domain/finance-types';
 import type { WorkService } from '../domain/works-types';
@@ -195,9 +196,17 @@ export function BudgetForecastDashboardPage() {
         note: 'Verba BB Reembolsável − Orçamentos Contratados',
         description: 'Saldo da verba BB após os compromissos realizados.' },
     }), [forecast,considerReimbursements]);
-  const modalData = openIndicator && forecast && indicators
-    ? { indicator: indicators[openIndicator], entries: forecast.details[openIndicator] }
-    : null;
+  // Only the popup presentation is grouped by store: financial evidence and
+  // card totals continue to come directly from buildBudgetForecast.
+  const modalData = useMemo(()=>{
+    if(!openIndicator || !forecast || !indicators)return null;
+    const indicator=indicators[openIndicator];
+    const entries=aggregateForecastDetailsByStore(forecast.details[openIndicator]);
+    const detailTotal=entries.reduce((total,entry)=>total+entry.amountCents,0n);
+    const metricTotal=typeof indicator.value==='bigint'
+      ?indicator.value:BigInt(indicator.value);
+    return {indicator,entries,detailTotal,reconciles:detailTotal===metricTotal};
+  },[openIndicator,forecast,indicators]);
 
   const exportCsv = () => {
     if (!forecast || !indicators) return;
@@ -324,28 +333,35 @@ export function BudgetForecastDashboardPage() {
         {modalData && <div className="forecast-detail">
           <div className="forecast-detail__total">
             <strong>Total: {valueText(modalData.indicator.value, modalData.indicator.isCount)}</strong>
-            <small>{modalData.entries.length} registro(s)</small>
+            <small>{modalData.entries.length} {modalData.entries.length===1?'loja':'lojas'}</small>
           </div>
-          {modalData.entries.length ? <div className="forecast-detail__scroll"><table>
-            <thead><tr><th>Loja</th><th>UF</th><th>Referência</th><th>Categoria / Status</th><th>Valor</th></tr></thead>
-            <tbody>{modalData.entries.map((entry)=><tr key={entry.id}>
-              <td data-label="Loja" title={`${entry.storeCode} · ${entry.storeName}`}>
-                <span className="forecast-detail__store">
-                  <span className="forecast-detail__store-code">{entry.storeCode}</span>
-                  <span className="forecast-detail__store-separator"> · </span>
-                  <span className="forecast-detail__store-name">{entry.storeName}</span>
-                </span>
-              </td>
-              <td data-label="UF">{entry.state}</td>
-              <td data-label="Referência" title={entry.reference}>{entry.reference}</td>
-              <td data-label="Categoria / Status">{entry.category}<small>{entry.status}</small></td>
-              <td data-label="Valor">{modalData.indicator.isCount ? '1' : formatBRL(entry.amountCents)}</td>
-            </tr>)}</tbody>
-            <tfoot><tr><th colSpan={4}>Total detalhado</th>
-              <th>{valueText(modalData.indicator.isCount
-                ? modalData.entries.length : modalData.entries.reduce((value,entry)=>value+entry.amountCents,0n),
-                modalData.indicator.isCount)}</th></tr></tfoot>
-          </table></div> : <p>Não existem registros para os filtros selecionados.</p>}
+          {!modalData.reconciles && <p className="forecast-detail__warning" role="alert">
+            Divergência de conciliação: a soma das lojas ({valueText(
+              modalData.detailTotal,modalData.indicator.isCount
+            )}) não corresponde ao total do indicador. Confira os lançamentos de origem.
+          </p>}
+          {modalData.entries.length ? <div className="forecast-detail__scroll">
+            <table>
+              <thead><tr>
+                <th>Loja</th><th>UF</th><th>Linhas de origem</th><th>Total por loja</th>
+              </tr></thead>
+              <tbody>{modalData.entries.map((entry)=><tr key={entry.id}>
+                <td data-label="Loja" title={`${entry.storeCode} · ${entry.storeName}`}>
+                  <span className="forecast-detail__store">
+                    <span className="forecast-detail__store-code">{entry.storeCode}</span>
+                    <span className="forecast-detail__store-separator"> · </span>
+                    <span className="forecast-detail__store-name">{entry.storeName}</span>
+                  </span>
+                </td>
+                <td data-label="UF">{entry.state}</td>
+                <td data-label="Linhas de origem">{entry.sourceRows.toLocaleString('pt-BR')}</td>
+                <td data-label="Total por loja">{valueText(entry.amountCents,modalData.indicator.isCount)}</td>
+              </tr>)}</tbody>
+              <tfoot><tr><th colSpan={3}>Total detalhado</th>
+                <th>{valueText(modalData.detailTotal,modalData.indicator.isCount)}</th>
+              </tr></tfoot>
+            </table>
+          </div> : <p>Não existem registros para os filtros selecionados.</p>}
         </div>}
       </Modal>
     </section>
