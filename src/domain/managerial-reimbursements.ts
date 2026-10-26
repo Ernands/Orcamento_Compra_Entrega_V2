@@ -52,7 +52,7 @@ export function buildManagerialReimbursements(
     return [{
       storeId:row.storeId,code:row.code,name:row.name,city:row.city,state:row.state,
       storeStatus:store.financialClosure?.state==='closed'?'Finalizada' as const:'Ativa' as const,
-      realizedTotalCents:row.realizedTotalCents,varianceToBbCents:row.budgetVarianceToBbCents,
+      realizedTotalCents:row.realizedTotalCents,varianceToBbCents:row.realizedVarianceToBbCents,
       requestedCents,receivedCents,pendingCents:requestedCents-receivedCents,
       disbursementCents:row.paidCents-receivedCents,
       reimbursementStatus:reimbursementStatus(requestedCents,receivedCents),
