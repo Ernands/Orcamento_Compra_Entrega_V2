@@ -280,7 +280,8 @@ BEGIN
    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Sem permissão para finalizar ou reabrir esta loja.';
  END IF;
  IF p_action NOT IN ('close','reopen') THEN RAISE EXCEPTION 'Operação inválida.'; END IF;
- IF p_confirm_text <> CASE WHEN p_action='close' THEN 'FINALIZAR' ELSE 'REABRIR' END THEN
+ IF (p_action='close' AND p_confirm_text IS DISTINCT FROM 'FINALIZAR')
+    OR (p_action='reopen' AND p_confirm_text IS DISTINCT FROM 'REABRIR') THEN
    RAISE EXCEPTION 'Confirmação adicional obrigatória.';
  END IF;
  IF p_action='reopen' AND length(trim(coalesce(p_reason,'')))<10 THEN
