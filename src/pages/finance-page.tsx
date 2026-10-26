@@ -938,21 +938,6 @@ export function FinancePage() {
             <span>Custo realizado</span>
             <strong>{formatBRL(kpis.realizedCents)}</strong>
           </article>
-          <article>
-            <Landmark size={21} />
-            <span>Disponivel para solicitar</span>
-            <strong>{formatBRL(kpis.availableCents)}</strong>
-          </article>
-          <article>
-            <ReceiptText size={21} />
-            <span>Reembolso solicitado</span>
-            <strong>{formatBRL(kpis.requestedCents)}</strong>
-          </article>
-          <article>
-            <BanknoteArrowDown size={21} />
-            <span>Reembolso recebido</span>
-            <strong>{formatBRL(kpis.receivedCents)}</strong>
-          </article>
         </section>
       )}
 
