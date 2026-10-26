@@ -31,7 +31,6 @@ export function ManagerialReimbursementPage() {
   const [error,setError]=useState<string|null>(null);
   const [uf,setUf]=useState('');
   const [storeId,setStoreId]=useState('');
-  const [implantation,setImplantation]=useState('all');
   const [status,setStatus]=useState<ReimbursementStatus|'all'>('all');
   const [selected,setSelected]=useState<ManagerialReimbursementRow|null>(null);
   const [kind,setKind]=useState<ManagerialReimbursementMovementType>('requested');
@@ -61,8 +60,7 @@ export function ManagerialReimbursementPage() {
   const allRows=useMemo(()=>data?buildManagerialReimbursements(data.stores,data.overview,data.entries):[],[data]);
   const states=useMemo(()=>[...new Set(allRows.map(r=>r.state))].sort(),[allRows]);
   const shown=useMemo(()=>allRows.filter(r=>(!uf||r.state===uf)&&(!storeId||r.storeId===storeId)
-    &&(implantation==='all'||(implantation==='closed'?r.storeStatus==='Finalizada':r.storeStatus==='Ativa'))
-    &&(status==='all'||r.reimbursementStatus===status)),[allRows,uf,storeId,implantation,status]);
+    &&(status==='all'||r.reimbursementStatus===status)),[allRows,uf,storeId,status]);
   const totals=useMemo(()=>managerialTotals(shown),[shown]);
   const open=(row:ManagerialReimbursementRow)=>{
     setSelected(row);setKind('requested');setAmount('');setEntryDate(today());
@@ -90,7 +88,7 @@ export function ManagerialReimbursementPage() {
     const loss=eligibleRemaining>0n?eligibleRemaining:0n;
     if(!window.confirm(
       'Finalizar o reembolso desta loja? '+formatBRL(loss)+
-      ' será reconhecido como perda absorvida dentro da Verba BB. Gasto extra acima da verba ('+
+      ' será reconhecido como perda absorvida dentro da Verba BB. Gasto extra Verba BB acima da verba ('+
       formatBRL(selected.extraCents)+') não entra na perda. Esta ação é irreversível.'
     ))return;
     setSaving(true);setFormError('');
@@ -123,7 +121,7 @@ export function ManagerialReimbursementPage() {
       String((v<0n?-v:v)%100n).padStart(2,'0');
     const lines=[
       ['Loja','UF','Verba BB','Realizado total','Dif. em relação à verba','Valor solicitado',
-       'Valor reembolsado','Pendente','Perda absorvida','Gasto extra','Acima do solicitado',
+       'Valor reembolsado','Pendente','Perda absorvida','Gasto extra Verba BB','Acima do solicitado',
        'Situação da loja','Status do reembolso'],
       ...shown.map(r=>[r.code+' · '+r.name,r.state,numeric(r.bbCents),
         numeric(r.realizedTotalCents),numeric(r.varianceToBbCents),
@@ -143,7 +141,7 @@ export function ManagerialReimbursementPage() {
     {label:'Total solicitado',value:totals.requestedCents,group:'finance'},
     {label:'Total reembolsado',value:totals.receivedCents,group:'finance'},
     {label:'Perdas absorvidas',value:totals.absorbedCents,group:'loss'},
-    {label:'Gasto extra',value:totals.extraCents,group:'extra'},
+    {label:'Gasto extra Verba BB',value:totals.extraCents,group:'extra'},
     {label:'Pendente de reembolso',value:totals.pendingCents,group:'tracking'},
   ];
   return <section className="page-stack managerial-refunds">
@@ -166,13 +164,11 @@ export function ManagerialReimbursementPage() {
         <label>Loja <select value={storeId} onChange={e=>setStoreId(e.target.value)}>
           <option value="">Todas</option>{allRows.filter(r=>!uf||r.state===uf).map(r=>
             <option key={r.storeId} value={r.storeId}>{r.code} · {r.city}/{r.state}</option>)}</select></label>
-        <label>Situação da implantação <select value={implantation} onChange={e=>setImplantation(e.target.value)}>
-          <option value="all">Todas</option><option value="open">Em andamento</option><option value="closed">Finalizadas</option></select></label>
         <label>Situação do reembolso <select value={status} onChange={e=>setStatus(e.target.value as typeof status)}>
           <option value="all">Todas</option>{Object.entries(reimbursementStatusLabels).map(([key,label])=>
             <option key={key} value={key}>{label}</option>)}</select></label>
         <button className="button button--secondary" onClick={()=>{
-          setUf('');setStoreId('');setImplantation('all');setStatus('all');}}>Limpar</button>
+          setUf('');setStoreId('');setStatus('all');}}>Limpar</button>
         <button className="button button--secondary" onClick={csv} disabled={!shown.length}>
           <ArrowDownToLine size={16}/> Exportar Excel (CSV)</button>
       </div>
@@ -184,7 +180,7 @@ export function ManagerialReimbursementPage() {
           <th>Status do reembolso</th><th>Ações</th>
         </tr></thead><tbody>
           {shown.map(r=><tr key={r.storeId}>
-            <td data-label="Loja"><strong>{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
+            <td data-label="Loja"><strong className="managerial-refunds__store-name">{r.code} · {r.name}</strong><small>{r.city}/{r.state}</small></td>
             <td data-label="Verba BB"><FinanceAmount cents={r.bbCents}/></td>
             <td data-label="Realizado"><FinanceAmount cents={r.realizedTotalCents}/></td>
             <td data-label="Dif. Verba" className={r.varianceToBbCents<0n?'value-negative':'value-positive'}>
@@ -211,7 +207,7 @@ export function ManagerialReimbursementPage() {
           {!shown.length&&<tr><td colSpan={10}>Nenhuma loja com movimentação financeira encontrada nos filtros.</td></tr>}
         </tbody></table>
       </div>
-      <p className="managerial-refunds__footnote">Gasto extra = Realizado acima da Verba BB. Perda absorvida = parcela do realizado elegível não reembolsada quando o processo é finalizado. Valores acima da Verba BB não integram a perda nem a dedução na Previsão Orçamentária.</p>
+      <p className="managerial-refunds__footnote">Gasto extra Verba BB = Realizado acima da Verba BB. Perda absorvida = parcela do realizado elegível não reembolsada quando o processo é finalizado. Valores acima da Verba BB não integram a perda nem a dedução na Previsão Orçamentária.</p>
     </>}
     <Modal open={Boolean(selected)} onClose={()=>setSelected(null)}
       title={selected?'Reembolso · '+selected.code+' · '+selected.city+'/'+selected.state:'Reembolso'}
@@ -221,7 +217,7 @@ export function ManagerialReimbursementPage() {
           <span>Solicitado: {formatBRL(selected.requestedCents)}</span>
           <span>Recebido: {formatBRL(selected.receivedCents)}</span>
           <span>Perda absorvida: {formatBRL(selected.absorbedCents)}</span>
-          <span>Gasto extra: {formatBRL(selected.extraCents)}</span>
+          <span>Gasto extra Verba BB: {formatBRL(selected.extraCents)}</span>
           <span>Pendente: {formatBRL(selected.pendingCents)}</span>
           <strong>{reimbursementStatusLabels[selected.reimbursementStatus]}</strong>
         </div>
@@ -246,7 +242,7 @@ export function ManagerialReimbursementPage() {
             <div><strong>Finalizar reembolso</strong>
               <small>Ao finalizar, a perda considera somente o realizado elegível até a Verba BB:
                 {formatBRL(selected.eligibleCents)} menos {formatBRL(selected.receivedCents)} recebidos.
-                Gasto extra de {formatBRL(selected.extraCents)} é separado.</small>
+                Gasto extra Verba BB de {formatBRL(selected.extraCents)} é separado.</small>
             </div>
             <button type="button" className="button button--secondary" disabled={saving}
               onClick={()=>void finalize()}>Marcar como finalizado</button>
