@@ -70,6 +70,39 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
     expect(sum(forecast.details[key])).toBe(total);
   }
  });
+ it('deduz reembolso recebido e perda absorvida apenas no modo considerar reembolsos',()=>{
+  const settlement=new Map([
+    ['a',{receivedCents:4000n,absorbedCents:1000n}],
+    ['b',{receivedCents:3000n,absorbedCents:0n}],
+  ]);
+  const full=buildBudgetForecast(stores,overview,payments,all,undefined,undefined,settlement);
+  expect(full.originalBbCents).toBe(95000n);
+  expect(full.reimbursedCents).toBe(7000n);
+  expect(full.absorbedCents).toBe(1000n);
+  expect(full.bbCents).toBe(87000n);
+  expect(full.forecastBalanceCents).toBe(11000n);
+  expect(full.bbBalanceCents).toBe(7000n);
+  expect(full.plannedCents).toBe(76000n);
+  expect(full.contractedCents).toBe(80000n);
+  expect(full.paidCents).toBe(30000n);
+  expect(full.payableCents).toBe(16000n);
+  expect(sum(full.details.bb)).toBe(full.bbCents);
+  expect(sum(full.details.reimbursed)).toBe(full.reimbursedCents);
+  expect(sum(full.details.absorbed)).toBe(full.absorbedCents);
+  expect(sum(full.details.forecastBalance)).toBe(full.forecastBalanceCents);
+  expect(sum(full.details.bbBalance)).toBe(full.bbBalanceCents);
+  const scoped=buildBudgetForecast(stores,overview,payments,{...all,state:'CE'},
+    undefined,undefined,settlement);
+  expect(scoped.originalBbCents).toBe(50000n);
+  expect(scoped.bbCents).toBe(45000n);
+  expect(scoped.reimbursedCents).toBe(4000n);
+  expect(scoped.absorbedCents).toBe(1000n);
+  expect(scoped.activeStores).toBe(1);
+  const unaffected=buildBudgetForecast(stores,overview,payments,all);
+  expect(unaffected.bbCents).toBe(95000n);
+  expect(unaffected.reimbursedCents).toBe(0n);
+  expect(unaffected.absorbedCents).toBe(0n);
+ });
  it('filtra situação operacional e fechamento independentemente',()=>{
   const ended=buildBudgetForecast(stores,overview,payments,
     {...all,operation:'active',implantation:'closed'});
@@ -133,9 +166,12 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(shell).not.toContain('<NavLink to="/dashboard/implantacao"');
   expect(shell).not.toContain('<NavLink to="/dashboard/suprimentos"');
   expect(page).not.toContain('Prospector');
-  // Five original sections remain; the sixth only renders when reimbursement comparison is enabled.
-  expect(page.match(/<ForecastSection color=/g)).toHaveLength(6);
-  expect(page).toContain('considerReimbursements && filteredManagerialTotals');
+  // Reimbursement amounts are integrated in the original five sections.
+  expect(page.match(/<ForecastSection color=/g)).toHaveLength(5);
+  expect(page).toContain("(['bb','activeStores','reimbursed'] as const)");
+  expect(page).toContain('Perda absorvida: ');
+  expect(page).not.toContain('Situação do reembolso');
+  expect(page).not.toContain('Reembolsos — Visão gerencial');
   for(const color of ['bb','purple','blue','green','orange'])expect(style).toContain(`forecast-section--${color}`);
   expect(page).toContain('Situação da Implantação');
   expect(page).toContain('Limpar filtros');
