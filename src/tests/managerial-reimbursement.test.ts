@@ -220,9 +220,13 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('Marcar como finalizado');
     expect(page).toContain('finalizeReimbursementAndCloseStore({');
     expect(page).toContain('setConfirmingClosure(true)');
-    expect(page).toContain('confirmation:closureConfirmation');
+    expect(page).toContain("confirmation:'FINALIZAR'");
+    expect(page).not.toContain('closureConfirmation');
+    expect(page).not.toContain('Digite <strong>FINALIZAR</strong>');
+    expect(page).toContain('disabled={saving||!closureAcknowledged}');
     expect(page).toContain("can('stores.finalize_reopen')");
-    expect(page).toContain("closureConfirmation!=='FINALIZAR'");
+    expect(page).toContain('!closureAcknowledged');
+    expect(pageCss).not.toContain('.managerial-refunds__closure-typed');
     expect(page).toContain("checked={closureAcknowledged}");
     expect(page).toContain('Confirmar finalização e bloqueio');
     expect(page).toContain('Bloqueia novas compras, Obras e Serviços, pagamentos');
