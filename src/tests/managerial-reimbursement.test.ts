@@ -8,7 +8,7 @@ import forecast from '../pages/budget-forecast-dashboard-page.tsx?raw';
 import shell from '../app/app-shell.tsx?raw';
 import app from '../app/app.tsx?raw';
 import finance from '../pages/finance-page.tsx?raw';
-import migration from '../../supabase/migrations/20261025234000_finance_managerial_reimbursement_entries.sql?raw';
+import migration from '../../supabase/migrations/20261025235317_finance_managerial_reimbursement_entries.sql?raw';
 
 const store={id:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
   status:'active',financialClosure:{state:'closed'}} as unknown as Store;
