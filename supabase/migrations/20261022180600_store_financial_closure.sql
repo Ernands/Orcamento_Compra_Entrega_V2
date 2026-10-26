@@ -174,7 +174,7 @@ END; $$;
 -- even after closure. Changing its owner store or deleting its history is forbidden.
 CREATE FUNCTION private.guard_reimbursement_reference_change() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
-AS $
+AS $$
 BEGIN
  IF TG_OP='DELETE' THEN
    PERFORM private.assert_store_financially_open(OLD.store_id);
@@ -185,7 +185,7 @@ BEGIN
    PERFORM private.assert_store_financially_open(NEW.store_id);
  END IF;
  RETURN NEW;
-END; $;
+END; $$;
 CREATE TRIGGER financial_reimbursement_protect_reference
  BEFORE UPDATE OR DELETE ON public.finance_reimbursements
  FOR EACH ROW EXECUTE FUNCTION private.guard_reimbursement_reference_change();
