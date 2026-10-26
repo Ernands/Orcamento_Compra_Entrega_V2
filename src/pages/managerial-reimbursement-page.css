@@ -1,6 +1,7 @@
 .managerial-refunds{width:min(100%,1550px);gap:20px}
 .managerial-refunds__summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .managerial-refunds__metric{--edge:#bea5ff;display:grid;align-content:center;gap:10px;padding:16px;background:#fff;border:1px solid #dce3e9;border-top:7px solid var(--edge);border-radius:7px;min-width:0}
+.managerial-refunds__metric--execution{--edge:#96c9ff}
 .managerial-refunds__metric--finance{--edge:#91eda7}
 .managerial-refunds__metric--tracking{--edge:#ffc28c}
 .managerial-refunds__metric small{color:#53647a;font-weight:650;font-size:.78rem}
@@ -12,7 +13,8 @@
 .managerial-refunds__table{min-width:1110px;width:100%;border-collapse:collapse}
 .managerial-refunds__table th,.managerial-refunds__table td{text-align:left;padding:12px 10px;border-bottom:1px solid #e1e8ed;font-size:.79rem}
 .managerial-refunds__table th{color:#415b67;background:#f2f6f8;font-weight:750}
-.managerial-refunds__table th:nth-child(2),.managerial-refunds__table th:nth-child(3){background:#f0eafc;color:#624693}
+.managerial-refunds__table th:nth-child(2){background:#e9f3fd;color:#255f8d}
+.managerial-refunds__table th:nth-child(3){background:#f0eafc;color:#624693}
 .managerial-refunds__table th:nth-child(4),.managerial-refunds__table th:nth-child(5){background:#e8f5ed;color:#256b4b}
 .managerial-refunds__table td small{display:block;color:#687b89;margin-top:5px}
 .managerial-refunds__table td .finance-amount{font-size:.81rem}
