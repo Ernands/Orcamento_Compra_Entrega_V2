@@ -24,7 +24,8 @@ describe('Dashboard gerencial de reembolso',()=>{
     const rows=buildManagerialReimbursements([store],[row],[entry('a','requested',700000n),entry('b','received',200000n)]);
     expect(rows).toHaveLength(1);
     expect(rows[0].storeStatus).toBe('Finalizada');
-    expect(rows[0].budgetTotalCents).toBe(1250000n);
+    expect(rows[0].realizedTotalCents).toBe(800000n);
+    expect(managerialTotals(rows).realizedTotalCents).toBe(800000n);
     expect(rows[0].varianceToBbCents).toBe(-250000n);
     expect(rows[0].pendingCents).toBe(500000n);
     expect(rows[0].disbursementCents).toBe(300000n);
@@ -54,6 +55,11 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(page).toContain('listManagerialReimbursements()');
     expect(page).toContain('Gerenciar');
     expect(page).toContain('Estornar');
+    expect(page).toContain("['Loja','UF','Situação da loja','Realizado total'");
+    expect(page).toContain("label:'Realizado total',value:totals.realizedTotalCents,group:'execution'");
+    expect(page).toContain('<th>Loja · Cidade/UF</th><th>Realizado total</th>');
+    expect(page).toContain('<FinanceAmount cents={r.realizedTotalCents}/>');
+    expect(page).not.toContain('Orçado total');
   });
   it('mantém lançamentos em tabela isolada RLS e limita correções ao estorno',()=>{
     expect(migration).toContain('finance_managerial_reimbursement_entries');
