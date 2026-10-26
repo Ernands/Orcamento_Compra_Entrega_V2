@@ -201,7 +201,7 @@ describe('AccessPage granular permissions', () => {
       screen.getByLabelText('Visualizar a aba Lojas e UFs do Financeiro para Joana Consulta'),
     ).toHaveValue('deny');
     expect(
-      screen.getByLabelText('Visualizar a aba Reembolsos do Financeiro para Joana Consulta'),
+      screen.getByLabelText('Financeiro — Reembolsos antigos (aba desativada; não controla Reembolso gerencial) para Joana Consulta'),
     ).toHaveValue('deny');
 
     await user.click(screen.getByRole('button', { name: 'Salvar permissoes' }));
