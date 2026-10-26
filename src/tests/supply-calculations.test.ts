@@ -4,6 +4,7 @@ import {
   calculateQuoteTotals,
   formatBRL,
   moneyToCents,
+  moneyToSqlNumeric,
 } from '../domain/supply-calculations';
 
 const baseLine = {
@@ -68,4 +69,17 @@ describe('calculos de cotacao', () => {
     expect(moneyToCents('10.50')).toBe(1050n);
     expect(moneyToCents('0.125')).toBe(13n);
   });
+  it('serializa valores brasileiros para numeric SQL sem perda de centavos', () => {
+    expect(moneyToSqlNumeric('112,50')).toBe('112.50');
+    expect(moneyToSqlNumeric('1.234,56')).toBe('1234.56');
+    expect(moneyToSqlNumeric('R$ 1.234,56')).toBe('1234.56');
+    expect(moneyToSqlNumeric('1,234.56')).toBe('1234.56');
+    expect(moneyToSqlNumeric('0,01')).toBe('0.01');
+    expect(moneyToSqlNumeric('4880')).toBe('4880.00');
+    expect(moneyToSqlNumeric('0')).toBe('0.00');
+    expect(moneyToSqlNumeric('14652,96')).toBe('14652.96');
+    expect(moneyToSqlNumeric('0.125')).toBe('0.13');
+    expect(() => moneyToSqlNumeric('abc')).toThrow();
+  });
+
 });
