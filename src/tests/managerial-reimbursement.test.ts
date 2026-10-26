@@ -16,6 +16,7 @@ import bbLimitMigration from '../../supabase/migrations/20261026025214_finance_m
 import pageCss from '../pages/managerial-reimbursement-page.css?raw';
 import managerRepository from '../data/finance/managerial-reimbursements-repository.ts?raw';
 import atomicMigration from '../../supabase/migrations/20261026034137_managerial_reimbursement_store_close_atomic.sql?raw';
+import closurePermissionFix from '../../supabase/migrations/20261026034901_managerial_reimbursement_closure_permission_fix.sql?raw';
 
 const store={id:'s1',code:'LOJ-001',name:'ACARAU',city:'ACARAU',state:'CE',
   status:'active',financialClosure:{state:'closed'}} as unknown as Store;
@@ -238,6 +239,10 @@ describe('Dashboard gerencial de reembolso',()=>{
       .toBeLessThan(atomicMigration.indexOf("perform public.change_store_financial_closure("));
     expect(atomicMigration).toContain('revoke all on function public.finalize_managerial_reimbursement_and_close_store');
     expect(atomicMigration).toContain('to authenticated;');
+    expect(closurePermissionFix).toContain('create or replace function public.finalize_managerial_reimbursement_and_close_store');
+    expect(closurePermissionFix).toContain('perform 1 from public.lojas where id=p_store_id;');
+    expect(closurePermissionFix).not.toContain('perform 1 from public.lojas where id=p_store_id for update;');
+    expect(closurePermissionFix).toContain('public.change_store_financial_closure(');
     expect(closureMigration).toContain("entry_type in ('requested','received','finalized')");
     expect(closureMigration).toContain('new.amount_cents <> open_balance');
     expect(closureMigration).toContain('Reimbursement already finalized');
