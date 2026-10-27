@@ -266,7 +266,8 @@ describe('solicitação de reembolso por loja', () => {
       text: 'Comprovante_Pagamento_Prestador Silva_OBR-00019_OBR.pdf; Comprovante_Pagamento_Prestador Silva_OBR-00019_OBR.jpg',
       hyperlink: "#'Arquivos do ZIP'!A3",
     });
-    expect(book.getWorksheet('Resumo')?.getCell('B11').value).toBe(2);
+    expect(book.getWorksheet('Resumo')?.getCell('B11').value).toBe(0);
+    expect(book.getWorksheet('Resumo')?.getCell('B12').value).toBe(2);
     expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(4);
     expect(book.getWorksheet('Arquivos do ZIP')?.getCell('A3').value).toEqual({
       text: names.get('work:proof-1'), hyperlink: names.get('work:proof-1'),
