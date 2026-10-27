@@ -90,7 +90,7 @@ export function FinanceReimbursementModal({
         <p className="finance-reimbursement-explanation">
           Relatório inspirado no modelo enviado: lista cada compromisso com a parcela e a referência de origem.
           Notas e recibos fiscais continuam em Notas_e_Recibos; comprovantes de pagamento
-          de obras e serviços vão na pasta Recibos_Pagamentos_Obras_Servicos. A planilha traz
+          de obras e serviços vão na pasta Comprovantes_Pagamentos_Obras_Servicos. A planilha traz
           uma coluna própria com links para esses recibos. Arquivos indisponíveis não reduzem
           o valor solicitado.
         </p>
@@ -107,7 +107,7 @@ export function FinanceReimbursementModal({
             </div>
             <div className="finance-reimbursement-meta">
               <span><FileText size={15} /> {report.lines.length} lançamentos</span>
-              <span><FileArchive size={15} /> {report.documents.length} notas/recibos fiscais · {report.paymentProofs.length} recibos de pagamento de obras/serviços</span>
+              <span><FileArchive size={15} /> {report.documents.length} notas/recibos fiscais · {report.paymentProofs.length} comprovantes de pagamento de obras/serviços</span>
               {report.pendingLines.length > 0 && (
                 <span className="finance-reimbursement-warning"><AlertTriangle size={15} /> {report.pendingLines.length} pendências ou vínculos a conferir</span>
               )}
