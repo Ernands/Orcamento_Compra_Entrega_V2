@@ -388,7 +388,7 @@ export async function createStoreReimbursementWorkbook(input: {
 export async function downloadStoreReimbursementZip(input: {
   store: Store;
   report: ReimbursementReport;
-  getSignedUrl: (document: ReimbursementFiscalDocument) => Promise<string>;
+  getSignedUrl: (document: ReimbursementExportAttachment) => Promise<string>;
 }): Promise<{ failed: number; missing: number; review: number }> {
   if (!input.report.lines.length) throw new Error('A loja não possui lançamentos para o relatório.');
   if (!input.report.sumMatches) throw new Error('A soma dos compromissos não confere com o total.');
