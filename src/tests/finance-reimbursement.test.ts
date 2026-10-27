@@ -66,6 +66,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(report.totals.commitmentCents).toBe(60000n);
     expect(report.lines).toHaveLength(3);
     expect(report.documents).toHaveLength(1); // same invoice reused, not copied three times
+    expect(report.paymentProofs).toHaveLength(0);
     expect(report.sumMatches).toBe(true);
   });
   it('identifica falta de nota/recibo em qualquer situação e ignora orçamento/comprovante', () => {
@@ -209,6 +210,109 @@ describe('solicitação de reembolso por loja', () => {
     expect(names.get('work:rec-work')).toBe('Notas_e_Recibos/Recibo_Servicos Silva Souza_OBR-00019.jpg');
   });
 
+  it('exporta comprovantes das obras em pasta própria e na nova coluna com links', async () => {
+    const { planReimbursementZipFileNames, createReimbursementOfflineIndex,
+      groupReimbursementLinesByReference, createStoreReimbursementWorkbook } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const workRows = [
+      { ...row('pay-1', 'paid', 100n), workServiceId: 'obra-1', purchaseIds: [],
+        referenceCodes: ['OBR-00019'], supplierName: 'Prestador Silva' },
+      { ...row('pay-2', 'paid', 200n), workServiceId: 'obra-1', purchaseIds: [],
+        referenceCodes: ['OBR-00019'], supplierName: 'Prestador Silva' },
+    ];
+    const works = [{
+      id: 'obra-1', storeId: storeA,
+      documents: [
+        { id: 'nf', documentType: 'invoice', paymentId: null,
+          storagePath: 'obras/nota.pdf', originalName: 'Nota.pdf' },
+        { id: 'proof-1', documentType: 'payment_proof', paymentId: 'pay-1',
+          storagePath: 'obras/comprovante1.pdf', originalName: 'comprovante1.pdf' },
+        { id: 'proof-2', documentType: 'payment_proof', paymentId: 'pay-2',
+          storagePath: 'obras/comprovante2.jpg', originalName: 'comprovante2.jpg' },
+        { id: 'budget', documentType: 'quote', paymentId: null,
+          storagePath: 'obras/orcamento.pdf', originalName: 'orcamento.pdf' },
+      ],
+    }] as unknown as WorkService[];
+    const report = buildStoreReimbursement(workRows, [], works, storeA);
+    expect(report.documents).toHaveLength(1);
+    expect(report.paymentProofs).toHaveLength(2);
+    expect(report.lines[0].paymentProofs.map((doc) => doc.id)).toEqual(['proof-1']);
+    expect(report.lines[1].paymentProofs.map((doc) => doc.id)).toEqual(['proof-2']);
+    expect(report.totals.commitmentCents).toBe(300n);
+    expect(report.sumMatches).toBe(true);
+    expect(groupReimbursementLinesByReference(report.lines)[0].paymentProofs).toHaveLength(2);
+
+    const names = planReimbursementZipFileNames(report);
+    expect(names.get('work:nf')).toBe('Notas_e_Recibos/Nota_Prestador Silva_OBR-00019.pdf');
+    expect(names.get('work:proof-1')).toBe('Recibos_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf');
+    expect(names.get('work:proof-2')).toBe('Recibos_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg');
+    expect([...names.values()].some((name) => name.includes('orcamento'))).toBe(false);
+
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report, generatedAt: new Date('2026-10-27T12:00:00Z'),
+      zipNames: names, unavailable: new Set(),
+    });
+    const book = new Workbook();
+    await book.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof book.xlsx.load>[0]);
+    const sheet = book.getWorksheet('Solicitação de Reembolso');
+    expect(sheet?.getCell('F5').value).toBe(3);
+    expect(sheet?.getCell('H5').value).toEqual({
+      text: names.get('work:nf'), hyperlink: names.get('work:nf'),
+    });
+    expect(sheet?.getCell('I4').value).toBe('Recibo(s) de pagamento');
+    expect(sheet?.getCell('I5').value).toEqual({
+      text: 'Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf; Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg',
+      hyperlink: "#'Arquivos do ZIP'!A3",
+    });
+    expect(book.getWorksheet('Resumo')?.getCell('B11').value).toBe(2);
+    expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(4);
+    expect(book.getWorksheet('Arquivos do ZIP')?.getCell('A3').value).toEqual({
+      text: names.get('work:proof-1'), hyperlink: names.get('work:proof-1'),
+    });
+    expect(createReimbursementOfflineIndex(report, names)).toContain('Recibos_Pagamentos_Obras_Servicos');
+  });
+
+  it('linka diretamente um recibo único e não incorpora comprovante de outra loja ou pagamento', async () => {
+    const { planReimbursementZipFileNames, createStoreReimbursementWorkbook } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const works = [{
+      id: 'obra-a', storeId: storeA,
+      documents: [
+        { id: 'proof-a', documentType: 'payment_proof', paymentId: 'pay-a',
+          storagePath: 'obras/recibo.pdf', originalName: 'Recibo de pagamento.pdf' },
+        { id: 'proof-other', documentType: 'payment_proof', paymentId: 'pay-outro',
+          storagePath: 'obras/irrelevante.pdf', originalName: 'Outro.pdf' },
+      ],
+    }, {
+      id: 'obra-b', storeId: storeB,
+      documents: [{ id: 'proof-b', documentType: 'payment_proof', paymentId: 'pay-a',
+        storagePath: 'obras/loja-b.pdf', originalName: 'Loja B.pdf' }],
+    }] as unknown as WorkService[];
+    const report = buildStoreReimbursement([
+      { ...row('pay-a', 'paid', 100n), workServiceId: 'obra-a', purchaseIds: [],
+        referenceCodes: ['OBR-00020'] },
+    ], [], works, storeA);
+    expect(report.paymentProofs.map((doc) => doc.id)).toEqual(['proof-a']);
+    expect(report.lines[0].fiscalState).toBe('missing'); // proof does not replace NF/recibo fiscal
+    const names = planReimbursementZipFileNames(report);
+    const path = names.get('work:proof-a');
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report, generatedAt: new Date('2026-10-27T12:00:00Z'),
+      zipNames: names, unavailable: new Set(),
+    });
+    const book = new Workbook();
+    await book.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof book.xlsx.load>[0]);
+    expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('I5').value).toEqual({
+      text: path?.split('/').pop(), hyperlink: path,
+    });
+    expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('H5').value).toBe('—');
+    expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('F5').value).toBe(1);
+  });
+
   it('agrupa referências repetidas de Acaraú e soma seus pagamentos mantendo documentos e total', async () => {
     const { groupReimbursementLinesByReference, createStoreReimbursementWorkbook, planReimbursementZipFileNames } =
       await import('../data/exports/finance-reimbursement-export');
@@ -266,7 +370,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(sheet?.getCell('C5').value).toBe('CMP-00002 + CMP-00003');
     expect(sheet?.getCell('F5').value).toBe(6638);
     expect(sheet?.getCell('G5').value).toEqual(expect.stringContaining('Pendente'));
-    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('1 lançamento'));
+    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('1 lançamento'));
     expect(sheet?.getCell('H5').value).toEqual({
       text: names.get('purchase:nota'),
       hyperlink: names.get('purchase:nota'),
@@ -322,17 +426,19 @@ describe('solicitação de reembolso por loja', () => {
     expect(sheet?.getCell('A1').isMerged).toBe(true);
     expect(sheet?.getCell('B1').isMerged).toBe(true);
     expect(sheet?.views[0]?.showGridLines).toBe(false);
-    expect(Array.from({ length: 9 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
+    expect(Array.from({ length: 10 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
       'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
-      'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP', 'Pendência',
+      'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP',
+      'Recibo(s) de pagamento', 'Pendência',
     ]);
-    expect(sheet?.getCell('J4').value).toBeNull();
+    expect(sheet?.getCell('K4').value).toBeNull();
     expect(sheet?.getCell('A5').value).toBe('LOJ-001 · Acaraú');
     expect(sheet?.getCell('F5').value).toBe(123.45);
     expect(sheet?.getCell('H5').value).toBe('—');
-    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('Conferir vínculo'));
-    expect(sheet?.getCell('I5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
-    expect(sheet?.autoFilter).toBe('A4:I4');
+    expect(sheet?.getCell('I5').value).toBe('—');
+    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('Conferir vínculo'));
+    expect(sheet?.getCell('J5').value).toEqual(expect.stringContaining('falha ao obter anexo'));
+    expect(sheet?.autoFilter).toBe('A4:J4');
     const pending = workbook.getWorksheet('Pendências Documentais');
     expect(pending?.rowCount).toBe(2);
     expect(pending?.views[0]?.showGridLines).toBe(false);
