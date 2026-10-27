@@ -63,6 +63,43 @@ describe('Excel e ZIP de conferência', () => {
     expect(names[0]).toBe('Notas_e_Recibos/Nota_Fornecedor_CMP-TESTE1.xml');
     expect(names[1]).toBe('Notas_e_Recibos/Nota_Fornecedor_CMP-TESTE1_1.xml');
   });
+  it('baixa todos os originais antes de ler os documentos e construir o resultado', async () => {
+    const first = auditDoc();
+    const second = auditDoc('doc2');
+    const events: string[] = [];
+    const progress: string[] = [];
+    const result = await generateAuditPackage({
+      store: auditStore,
+      records: [{ ...auditRecord(), documents: [first, second] }],
+      recipients: ACCEPTED_AUDIT_RECIPIENTS,
+      ocr: false,
+      getSignedUrl: vi.fn(),
+      progress: (message) => progress.push(message),
+      fetchDocument: async (doc) => {
+        events.push(`download:${doc.id}`);
+        return new TextEncoder().encode(doc.id).buffer;
+      },
+      reader: {
+        read: vi.fn(async (_bytes, doc) => {
+          events.push(`read:${doc.id}`);
+          return readFiscalXml(auditXml());
+        }),
+        dispose: vi.fn(async () => {}),
+      },
+    });
+    expect(events).toEqual([
+      'download:doc-1',
+      'download:doc2',
+      'read:doc-1',
+      'read:doc2',
+    ]);
+    expect(progress.some((step) => step.startsWith('Etapa 1/3'))).toBe(true);
+    expect(progress.some((step) => step.startsWith('Etapa 2/3'))).toBe(true);
+    expect(progress.some((step) => step.startsWith('Etapa 3/3'))).toBe(true);
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    expect(Object.keys(zip.files).filter((name) => name.endsWith('.xlsx'))).toHaveLength(1);
+    expect(Object.keys(zip.files).filter((name) => name.startsWith('Notas_e_Recibos/') && !zip.files[name].dir)).toHaveLength(2);
+  });
   it('inclui o original uma vez por conteúdo e mantém ambos os vínculos', async () => {
     const a = auditDoc(),
       b = auditDoc('doc2');
