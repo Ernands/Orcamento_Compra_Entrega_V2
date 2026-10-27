@@ -2442,7 +2442,7 @@ function DocumentsModal({
         <label className="field">Valor<input value={documentAmount} onChange={(event) => setDocumentAmount(event.target.value)} /></label>
         <label className="field">Arquivos<input
           ref={fileInputRef} type="file" multiple disabled={saving}
-          accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx"
+          accept=".pdf,.xml,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v,.docx,.xlsx"
           onChange={(event) => {
             setFiles(Array.from(event.target.files || []));
             setUploadSummary(null); setUploadProgress(null); setError(null);

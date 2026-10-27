@@ -63,6 +63,7 @@ export type Capability =
   | 'finance.overview_view'
   | 'finance.store_detail_view'
   | 'finance.store_detail_documents_view'
+  | 'finance.document_audit_view'
   | 'finance.payments_view'
   | 'finance.account_reconciliation_view'
   | 'finance.account_reconciliation_manage'

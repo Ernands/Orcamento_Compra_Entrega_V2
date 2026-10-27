@@ -52,7 +52,7 @@ describe('buildPurchasePaymentRpcPayloadV2', () => {
       p_purchase_order_id: 'order-1',
       p_payment_method: 'pix',
       p_source_label: 'Conta operacional',
-      p_amount: '4880',
+      p_amount: '4880.00',
       p_entry_amount: null,
       p_installment_count: 2,
       p_first_due_date: null,
@@ -94,7 +94,7 @@ describe('buildPurchaseOperationRpcPayloadV2', () => {
     expect(payload.p_payments).toEqual([expect.objectContaining({
       payment_method: 'pix',
       source_label: 'Conta operacional',
-      amount: '411,70',
+      amount: '411.70',
       status: 'paid',
       notes: 'quitado',
     })]);
@@ -122,11 +122,25 @@ describe('atualizacao de parcela existente', () => {
     expect(rpc).toMatchObject({
       p_payment_id: 'parcela-original',
       p_purchase_order_id: 'pedido-original',
-      p_amount: '14652,96',
+      p_amount: '14652.96',
       p_status: 'paid',
       p_first_due_date: '2026-10-13',
       p_paid_at: '2026-10-09T12:00:00.000Z',
     });
+  });
+
+  it('converte o valor de CMP-00059 de 112,50 para numeric SQL sem alterar os centavos', () => {
+    const payment = buildPurchasePaymentRpcPayloadV2({
+      id: null, purchaseId: 'CMP-00059', purchaseOrderId: 'order-1',
+      paymentMethod: 'pix', sourceLabel: '',
+      amount: '112,50', entryAmount: '12,50', installmentCount: '',
+      firstDueDate: '2026-09-24', status: 'paid',
+      paidAt: paidAtFromDateV2('2026-09-24'), notes: 'Compra de cabo para 25 lojas',
+    });
+    expect(payment.p_amount).toBe('112.50');
+    expect(payment.p_entry_amount).toBe('12.50');
+    expect(payment.p_status).toBe('paid');
+    expect(payment.p_paid_at).toBe('2026-09-24T12:00:00.000Z');
   });
 
   it('rejeita data impossivel ou em branco', () => {

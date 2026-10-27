@@ -39,7 +39,10 @@ function documentExtension(doc: ReimbursementFiscalDocument): string {
 }
 
 /** Plan one unique ZIP filename per attachment, using the worksheet's fiscal type, supplier and references. */
-export function planReimbursementZipFileNames(report: ReimbursementReport): Map<string, string> {
+export function planReimbursementZipFileNames(report: {
+  documents: ReimbursementFiscalDocument[];
+  lines: Array<{ documents: ReimbursementFiscalDocument[]; row: { supplierName: string; referenceCodes: string[] } }>;
+}): Map<string, string> {
   const names = new Map<string, string>();
   const reserved = new Set<string>();
 

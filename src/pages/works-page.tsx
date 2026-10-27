@@ -487,7 +487,7 @@ function WorkServiceModal({
             <input
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
+              accept=".pdf,.xml,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
               onChange={(event) => setQuoteFiles(Array.from(event.target.files || []))}
             />
             <small>
@@ -949,7 +949,7 @@ function WorkPaymentModal({
                       Arquivo
                       <input
                         type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
+                        accept=".pdf,.xml,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
                         onChange={(event) =>
                           updateDocument(entry.key, document.key, {
                             file: event.target.files?.[0] || null,
@@ -1153,7 +1153,7 @@ function WorkDocumentModal({
           {document ? 'Substituir arquivo (opcional)' : 'Arquivo (opcional)'}
           <input
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
+            accept=".pdf,.xml,.jpg,.jpeg,.png,.webp,.docx,.xlsx"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
           />
           {document?.originalName && !file && (

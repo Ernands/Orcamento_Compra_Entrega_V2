@@ -69,6 +69,17 @@ export function moneyToCents(value: DecimalInput): bigint {
   return decimalToScaledInteger(normalizeMoneyDecimal(value), 2);
 }
 
+/** Convert BRL input to an exact numeric string accepted by PostgreSQL
+ * (period decimal separator, always two decimal places). Never use Number
+ * for financial serialization: large values must retain cent precision.
+ */
+export function moneyToSqlNumeric(value: DecimalInput): string {
+  const cents = moneyToCents(value);
+  const negative = cents < 0n;
+  const absolute = negative ? -cents : cents;
+  return `${negative ? '-' : ''}${absolute / 100n}.${(absolute % 100n).toString().padStart(2, '0')}`;
+}
+
 export function quantityToThousandths(value: DecimalInput): bigint {
   return decimalToScaledInteger(value, 3);
 }
