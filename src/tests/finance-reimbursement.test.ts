@@ -245,8 +245,8 @@ describe('solicitação de reembolso por loja', () => {
 
     const names = planReimbursementZipFileNames(report);
     expect(names.get('work:nf')).toBe('Notas_e_Recibos/Nota_Prestador Silva_OBR-00019.pdf');
-    expect(names.get('work:proof-1')).toBe('Recibos_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf');
-    expect(names.get('work:proof-2')).toBe('Recibos_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg');
+    expect(names.get('work:proof-1')).toBe('Comprovantes_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf');
+    expect(names.get('work:proof-2')).toBe('Comprovantes_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg');
     expect([...names.values()].some((name) => name.includes('orcamento'))).toBe(false);
 
     const bytes = await createStoreReimbursementWorkbook({
@@ -261,7 +261,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(sheet?.getCell('H5').value).toEqual({
       text: names.get('work:nf'), hyperlink: names.get('work:nf'),
     });
-    expect(sheet?.getCell('I4').value).toBe('Recibo(s) de pagamento');
+    expect(sheet?.getCell('I4').value).toBe('Comprovante(s) de pagamento');
     expect(sheet?.getCell('I5').value).toEqual({
       text: 'Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf; Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg',
       hyperlink: "#'Arquivos do ZIP'!A3",
@@ -271,7 +271,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(book.getWorksheet('Arquivos do ZIP')?.getCell('A3').value).toEqual({
       text: names.get('work:proof-1'), hyperlink: names.get('work:proof-1'),
     });
-    expect(createReimbursementOfflineIndex(report, names)).toContain('Recibos_Pagamentos_Obras_Servicos');
+    expect(createReimbursementOfflineIndex(report, names)).toContain('Comprovantes_Pagamentos_Obras_Servicos');
   });
 
   it('linka diretamente um recibo único e não incorpora comprovante de outra loja ou pagamento', async () => {
@@ -282,7 +282,7 @@ describe('solicitação de reembolso por loja', () => {
       id: 'obra-a', storeId: storeA,
       documents: [
         { id: 'proof-a', documentType: 'payment_proof', paymentId: 'pay-a',
-          storagePath: 'obras/recibo.pdf', originalName: 'Recibo de pagamento.pdf' },
+          storagePath: 'obras/recibo.pdf', originalName: 'Comprovante de pagamento.pdf' },
         { id: 'proof-other', documentType: 'payment_proof', paymentId: 'pay-outro',
           storagePath: 'obras/irrelevante.pdf', originalName: 'Outro.pdf' },
       ],
@@ -429,7 +429,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(Array.from({ length: 10 }, (_, i) => sheet?.getCell(4, i + 1).value)).toEqual([
       'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
       'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP',
-      'Recibo(s) de pagamento', 'Pendência',
+      'Comprovante(s) de pagamento', 'Pendência',
     ]);
     expect(sheet?.getCell('K4').value).toBeNull();
     expect(sheet?.getCell('A5').value).toBe('LOJ-001 · Acaraú');
