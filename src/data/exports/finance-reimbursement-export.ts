@@ -175,9 +175,13 @@ function groupedDocumentStatus(group: ReimbursementReferenceGroup, unavailable: 
     const status = currentStatus(line, unavailable);
     if (status) counts.set(status, (counts.get(status) || 0) + 1);
   });
-  return [...counts.entries()].map(([status, count]) =>
+  const details = [...counts.entries()].map(([status, count]) =>
     group.lines.length === 1 ? status : `${status} (${count} lançamento${count === 1 ? '' : 's'})`
-  ).join('; ');
+  );
+  const failedProofs = group.paymentProofs.filter((doc) =>
+    unavailable.has(`${doc.source}:${doc.id}`)).length;
+  if (failedProofs) details.push(`Falha ao obter ${failedProofs} recibo(s) de pagamento de obras/serviços`);
+  return details.join('; ');
 }
 
 /** Offline-only file index: no sessions, signed URLs or external network dependencies. */
