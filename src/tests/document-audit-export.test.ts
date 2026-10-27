@@ -13,6 +13,7 @@ import { ACCEPTED_AUDIT_RECIPIENTS } from '../domain/document-audit-recipients';
 import { buildAuditFindings } from '../domain/document-audit';
 import { emptyReading, readFiscalXml } from '../domain/fiscal-document-reading';
 import { auditStore, auditXml, auditDoc, auditRecord, auditFile } from './fixtures/document-audit';
+import type { AuditDocument } from '../domain/document-audit-types';
 
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
@@ -75,16 +76,16 @@ describe('Excel e ZIP de conferência', () => {
       ocr: false,
       getSignedUrl: vi.fn(),
       progress: (message) => progress.push(message),
-      fetchDocument: async (doc) => {
+      fetchDocument: (doc) => {
         events.push(`download:${doc.id}`);
-        return new TextEncoder().encode(doc.id).buffer;
+        return Promise.resolve(new TextEncoder().encode(doc.id).buffer);
       },
       reader: {
-        read: vi.fn(async (_bytes, doc) => {
+        read: vi.fn((_bytes: ArrayBuffer, doc: AuditDocument) => {
           events.push(`read:${doc.id}`);
-          return readFiscalXml(auditXml());
+          return Promise.resolve(readFiscalXml(auditXml()));
         }),
-        dispose: vi.fn(async () => {}),
+        dispose: vi.fn(() => Promise.resolve()),
       },
     });
     expect(events).toEqual([
