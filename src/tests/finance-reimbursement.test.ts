@@ -210,7 +210,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(names.get('work:rec-work')).toBe('Notas_e_Recibos/Recibo_Servicos Silva Souza_OBR-00019.jpg');
   });
 
-  it('exporta comprovantes das obras em pasta própria e na nova coluna com links', async () => {
+  it('exporta comprovantes de obras em pasta compartilhada com sufixo OBR e links na coluna', async () => {
     const { planReimbursementZipFileNames, createReimbursementOfflineIndex,
       groupReimbursementLinesByReference, createStoreReimbursementWorkbook } =
       await import('../data/exports/finance-reimbursement-export');
@@ -245,8 +245,8 @@ describe('solicitação de reembolso por loja', () => {
 
     const names = planReimbursementZipFileNames(report);
     expect(names.get('work:nf')).toBe('Notas_e_Recibos/Nota_Prestador Silva_OBR-00019.pdf');
-    expect(names.get('work:proof-1')).toBe('Comprovantes_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf');
-    expect(names.get('work:proof-2')).toBe('Comprovantes_Pagamentos_Obras_Servicos/Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg');
+    expect(names.get('work:proof-1')).toBe('Comprovantes_Pagamentos/Comprovante_Pagamento_Prestador Silva_OBR-00019_OBR.pdf');
+    expect(names.get('work:proof-2')).toBe('Comprovantes_Pagamentos/Comprovante_Pagamento_Prestador Silva_OBR-00019_OBR.jpg');
     expect([...names.values()].some((name) => name.includes('orcamento'))).toBe(false);
 
     const bytes = await createStoreReimbursementWorkbook({
@@ -263,7 +263,7 @@ describe('solicitação de reembolso por loja', () => {
     });
     expect(sheet?.getCell('I4').value).toBe('Comprovante(s) de pagamento');
     expect(sheet?.getCell('I5').value).toEqual({
-      text: 'Comprovante_Pagamento_Prestador Silva_OBR-00019.pdf; Comprovante_Pagamento_Prestador Silva_OBR-00019.jpg',
+      text: 'Comprovante_Pagamento_Prestador Silva_OBR-00019_OBR.pdf; Comprovante_Pagamento_Prestador Silva_OBR-00019_OBR.jpg',
       hyperlink: "#'Arquivos do ZIP'!A3",
     });
     expect(book.getWorksheet('Resumo')?.getCell('B11').value).toBe(2);
@@ -271,7 +271,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(book.getWorksheet('Arquivos do ZIP')?.getCell('A3').value).toEqual({
       text: names.get('work:proof-1'), hyperlink: names.get('work:proof-1'),
     });
-    expect(createReimbursementOfflineIndex(report, names)).toContain('Comprovantes_Pagamentos_Obras_Servicos');
+    expect(createReimbursementOfflineIndex(report, names)).toContain('Comprovantes_Pagamentos');
   });
 
   it('linka diretamente um recibo único e não incorpora comprovante de outra loja ou pagamento', async () => {
@@ -311,6 +311,116 @@ describe('solicitação de reembolso por loja', () => {
     });
     expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('H5').value).toBe('—');
     expect(book.getWorksheet('Solicitação de Reembolso')?.getCell('F5').value).toBe(1);
+  });
+
+  it('reúne comprovantes CMP e OBR na mesma pasta, com sufixo de origem ao final', async () => {
+    const { planReimbursementZipFileNames, createStoreReimbursementWorkbook,
+      createReimbursementOfflineIndex } = await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+
+    const cmp = purchase([
+      { ...attachment('nf-cmp', 'invoice'), paymentId: null },
+      { ...attachment('proof-cmp', 'payment_proof'), paymentId: 'pay-cmp',
+        originalName: 'Banco.pdf' },
+      { ...attachment('proof-cmp-2', 'payment_proof'), paymentId: 'pay-cmp',
+        originalName: 'Comprovante 2.pdf' },
+      { ...attachment('proof-other-installment', 'payment_proof'), paymentId: 'outro-pagamento' },
+      { ...attachment('proof-other-store', 'payment_proof', [{ storeId: storeB }]),
+        paymentId: 'pay-cmp' },
+      { ...attachment('proof-other-order', 'payment_proof'), paymentId: 'pay-cmp',
+        purchaseOrderId: 'order-2' },
+    ]);
+    const works = [{
+      id: 'obra-1', storeId: storeA, documents: [{
+        id: 'proof-obr', documentType: 'payment_proof', paymentId: 'pay-obr',
+        storagePath: 'obras/comp.pdf', originalName: 'Banco.pdf',
+      }],
+    }] as unknown as WorkService[];
+    const paymentCMP = {
+      ...row('pay-cmp', 'paid', 100n),
+      referenceCodes: ['CMP-00055'],
+      supplierName: 'Fornecedor X',
+    };
+    const paymentOBR = {
+      ...row('pay-obr', 'paid', 200n),
+      workServiceId: 'obra-1',
+      purchaseIds: [],
+      paymentIds: ['pay-obr'],
+      referenceCodes: ['OBR-00105'],
+      supplierName: 'Fornecedor X',
+    };
+    const report = buildStoreReimbursement([paymentCMP, paymentOBR], [cmp], works, storeA);
+    expect(report.paymentProofs.map((proof) => proof.id)).toEqual([
+      'proof-cmp', 'proof-cmp-2', 'proof-obr',
+    ]);
+    expect(report.lines[0].paymentProofs.map((proof) => proof.id)).toEqual([
+      'proof-cmp', 'proof-cmp-2',
+    ]);
+    expect(report.totals.commitmentCents).toBe(300n);
+    expect(report.sumMatches).toBe(true);
+
+    const names = planReimbursementZipFileNames(report);
+    expect(names.get('purchase:proof-cmp')).toBe(
+      'Comprovantes_Pagamentos/Comprovante_Pagamento_Fornecedor X_CMP-00055_CMP.pdf');
+    expect(names.get('purchase:proof-cmp-2')).toBe(
+      'Comprovantes_Pagamentos/Comprovante_Pagamento_Fornecedor X_CMP-00055_1_CMP.pdf');
+    expect(names.get('work:proof-obr')).toBe(
+      'Comprovantes_Pagamentos/Comprovante_Pagamento_Fornecedor X_OBR-00105_OBR.pdf');
+    expect([...names.values()].filter((path) => path.startsWith('Comprovantes_Pagamentos/')))
+      .toHaveLength(3);
+
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report, generatedAt: new Date('2026-10-27T12:00:00Z'),
+      zipNames: names, unavailable: new Set(),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Solicitação de Reembolso');
+    expect(sheet?.getCell('F5').value).toBe(1);
+    expect(sheet?.getCell('F6').value).toBe(2);
+    expect(sheet?.getCell('I5').value).toEqual({
+      text: 'Comprovante_Pagamento_Fornecedor X_CMP-00055_CMP.pdf; Comprovante_Pagamento_Fornecedor X_CMP-00055_1_CMP.pdf',
+      hyperlink: "#'Arquivos do ZIP'!A3",
+    });
+    expect(sheet?.getCell('I6').value).toEqual({
+      text: 'Comprovante_Pagamento_Fornecedor X_OBR-00105_OBR.pdf',
+      hyperlink: names.get('work:proof-obr'),
+    });
+    expect(workbook.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(5);
+    const html = createReimbursementOfflineIndex(report, names);
+    expect(html).toContain('_CMP.pdf');
+    expect(html).toContain('_OBR.pdf');
+  });
+
+  it('sinaliza comprovante CMP sem vínculo de pagamento/loja como revisão sem alterar valores', async () => {
+    const { groupReimbursementLinesByReference, createStoreReimbursementWorkbook,
+      planReimbursementZipFileNames } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const p = purchase([
+      { ...attachment('sem-vinculo', 'payment_proof', []), paymentId: null },
+    ]);
+    const paid = { ...row('pay-cmp', 'paid', 100n), referenceCodes: ['CMP-00055'] };
+    const planned = { ...row('plan-cmp', 'planned', 200n), referenceCodes: ['CMP-00055'] };
+    const report = buildStoreReimbursement([paid, planned], [p], [], storeA);
+    expect(report.lines[0].paymentProofs.map((doc) => doc.id)).toEqual(['sem-vinculo']);
+    expect(report.lines[1].paymentProofs).toHaveLength(0);
+    expect(report.paymentProofs[0].needsStoreReview).toBe(true);
+    expect(report.paymentProofs[0].needsPaymentReview).toBe(true);
+    expect(report.totals.commitmentCents).toBe(300n);
+    expect(groupReimbursementLinesByReference(report.lines)[0].amountCents).toBe(300n);
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Acaraú', city: 'Acaraú' } as never,
+      report, generatedAt: new Date('2026-10-27T12:00:00Z'),
+      zipNames: planReimbursementZipFileNames(report), unavailable: new Set(),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    expect(workbook.getWorksheet('Solicitação de Reembolso')?.getCell('J5').value)
+      .toEqual(expect.stringContaining('sem loja explicitamente vinculada'));
+    expect(workbook.getWorksheet('Solicitação de Reembolso')?.getCell('J5').value)
+      .toEqual(expect.stringContaining('sem vínculo a pagamento específico'));
   });
 
   it('agrupa referências repetidas de Acaraú e soma seus pagamentos mantendo documentos e total', async () => {
