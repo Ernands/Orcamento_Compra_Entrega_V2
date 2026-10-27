@@ -365,8 +365,10 @@ export function FinanceDocumentAuditPage() {
                 Ler imagens e páginas digitalizadas por OCR
               </label>
               <p>
-                O OCR pode demorar. Leituras incompletas e correspondências incertas ficam
-                sinalizadas para revisão no Excel.
+                Primeiro o sistema baixa todos os anexos originais da seleção; depois lê e confere
+                cada documento; por último gera o Excel de divergências dentro do ZIP. O OCR pode
+                demorar. Anexos indisponíveis e correspondências incertas ficam sinalizados para
+                revisão, sem presumir valores ou alterar lançamentos.
               </p>
             </div>
             <button

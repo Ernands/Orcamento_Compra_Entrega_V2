@@ -577,62 +577,78 @@ export async function generateAuditPackage(input: {
   const names = auditFileNames(documents);
   const hashes = new Map<string, AuditFile>();
   const files: AuditFile[] = [];
-  const reader =
-    input.reader ||
-    createFiscalReader({ ocr: input.ocr, signal: input.signal, progress: input.progress });
-  try {
-    for (let index = 0; index < documents.length; index++) {
-      checkAbort();
-      const doc = documents[index];
-      input.progress?.(`Documento ${index + 1}/${documents.length}: ${doc.name}`);
-      const file: AuditFile = {
-        document: doc,
-        path: null,
-        hash: null,
-        duplicateOf: null,
-        error: null,
-        reading: emptyReading('unavailable', 'Anexo ainda não obtido.'),
-      };
-      files.push(file);
+  // Os originais devem estar disponíveis antes de qualquer leitura ou comparação.
+  // Manter os bytes em memória evita uma segunda chamada a URLs assinadas.
+  const downloaded: Array<{ file: AuditFile; bytes: ArrayBuffer }> = [];
+  for (let index = 0; index < documents.length; index++) {
+    checkAbort();
+    const doc = documents[index];
+    input.progress?.(`Etapa 1/3 · Baixando anexos ${index + 1}/${documents.length}: ${doc.name}`);
+    const file: AuditFile = {
+      document: doc,
+      path: null,
+      hash: null,
+      duplicateOf: null,
+      error: null,
+      reading: emptyReading('unavailable', 'Anexo ainda não obtido.'),
+    };
+    files.push(file);
+    try {
+      if (!doc.storagePath.trim()) throw new Error('Cadastro do anexo não contém arquivo.');
       let bytes: ArrayBuffer;
-      try {
-        if (!doc.storagePath.trim()) throw new Error('Cadastro do anexo não contém arquivo.');
-        if (input.fetchDocument) bytes = await input.fetchDocument(doc);
-        else {
-          const url = await input.getSignedUrl(doc);
-          const response = await fetch(url, { signal: input.signal });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          bytes = await response.arrayBuffer();
-        }
-        checkAbort();
-        if (!bytes.byteLength) throw new Error('Arquivo vazio.');
-        file.hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
-          .map((part) => part.toString(16).padStart(2, '0'))
-          .join('');
-        const existing = hashes.get(file.hash);
-        if (existing) {
-          file.path = existing.path;
-          file.duplicateOf = existing.document.key;
-          file.reading = existing.reading;
-          continue;
-        }
-        file.path = names.get(doc.key)!;
-        zip.file(file.path, new Uint8Array(bytes));
-        hashes.set(file.hash, file);
-      } catch (error) {
-        checkAbort();
-        // Never export a signed URL, token, or raw fetch error containing credentials.
-        const message =
-          error instanceof Error &&
-          /^HTTP \d{3}$|^Arquivo vazio\.$|^Cadastro do anexo não contém arquivo\.$/.test(
-            error.message,
-          )
-            ? error.message
-            : 'Não foi possível obter o arquivo com o acesso atual. Verifique o anexo e tente novamente.';
-        file.error = message;
-        file.reading = emptyReading('unavailable', message);
+      if (input.fetchDocument) bytes = await input.fetchDocument(doc);
+      else {
+        const url = await input.getSignedUrl(doc);
+        const response = await fetch(url, { signal: input.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        bytes = await response.arrayBuffer();
+      }
+      checkAbort();
+      if (!bytes.byteLength) throw new Error('Arquivo vazio.');
+      file.hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+        .map((part) => part.toString(16).padStart(2, '0'))
+        .join('');
+      const existing = hashes.get(file.hash);
+      if (existing) {
+        file.path = existing.path;
+        file.duplicateOf = existing.document.key;
         continue;
       }
+      file.path = names.get(doc.key)!;
+      zip.file(file.path, new Uint8Array(bytes));
+      hashes.set(file.hash, file);
+      downloaded.push({ file, bytes });
+    } catch (error) {
+      checkAbort();
+      // Nunca exportar URLs assinadas, tokens nem mensagens de fetch com credenciais.
+      const message =
+        error instanceof Error &&
+        /^HTTP \d{3}$|^Arquivo vazio\.$|^Cadastro do anexo não contém arquivo\.$/.test(
+          error.message,
+        )
+          ? error.message
+          : 'Não foi possível obter o arquivo com o acesso atual. Verifique o anexo e tente novamente.';
+      file.error = message;
+      file.reading = emptyReading('unavailable', message);
+    }
+  }
+
+  // Só agora, com o download de todos os anexos concluído, iniciar a conferência.
+  const reader =
+    input.reader ||
+    createFiscalReader({
+      ocr: input.ocr,
+      signal: input.signal,
+      progress: (message) => input.progress?.(`Etapa 2/3 · ${message}`),
+    });
+  try {
+    for (let index = 0; index < downloaded.length; index++) {
+      checkAbort();
+      const { file, bytes } = downloaded[index];
+      const doc = file.document;
+      input.progress?.(
+        `Etapa 2/3 · Conferindo anexos ${index + 1}/${downloaded.length}: ${doc.name}`,
+      );
       try {
         file.reading = await reader.read(bytes, doc);
       } catch {
@@ -648,11 +664,20 @@ export async function generateAuditPackage(input: {
           `EXTRAÇÃO AUTOMÁTICA — NÃO SUBSTITUI O DOCUMENTO ORIGINAL\n${file.reading.source}\n${file.reading.warnings.join('\n')}\n\n${file.reading.evidence}`,
         );
     }
+    // A duplicidade por SHA-256 não elimina os vínculos nem repete a leitura fiscal.
+    const byKey = new Map(files.map((file) => [file.document.key, file]));
+    for (const file of files) {
+      if (file.duplicateOf) {
+        file.reading =
+          byKey.get(file.duplicateOf)?.reading ||
+          emptyReading('unavailable', 'Não foi possível localizar o original deduplicado.');
+      }
+    }
   } finally {
     await reader.dispose();
   }
   checkAbort();
-  input.progress?.('Correlacionando itens e preparando a planilha…');
+  input.progress?.('Etapa 3/3 · Conferindo divergências e atualizando a planilha…');
   const findings = buildAuditFindings({ ...input, files });
   const summary = auditSummary(input.records, files, input.store.id);
   const generatedAt = new Date();
@@ -675,7 +700,7 @@ export async function generateAuditPackage(input: {
     ].join('\n'),
   );
   checkAbort();
-  input.progress?.('Compactando arquivos…');
+  input.progress?.('Etapa 3/3 · Compactando os originais e a planilha…');
   const blob = await zip.generateAsync(
     { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
     () => checkAbort(),

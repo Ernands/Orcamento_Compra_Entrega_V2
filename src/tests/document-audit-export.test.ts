@@ -13,6 +13,7 @@ import { ACCEPTED_AUDIT_RECIPIENTS } from '../domain/document-audit-recipients';
 import { buildAuditFindings } from '../domain/document-audit';
 import { emptyReading, readFiscalXml } from '../domain/fiscal-document-reading';
 import { auditStore, auditXml, auditDoc, auditRecord, auditFile } from './fixtures/document-audit';
+import type { AuditDocument } from '../domain/document-audit-types';
 
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
@@ -62,6 +63,43 @@ describe('Excel e ZIP de conferência', () => {
     const names = [...auditFileNames([auditDoc(), auditDoc('doc2')]).values()];
     expect(names[0]).toBe('Notas_e_Recibos/Nota_Fornecedor_CMP-TESTE1.xml');
     expect(names[1]).toBe('Notas_e_Recibos/Nota_Fornecedor_CMP-TESTE1_1.xml');
+  });
+  it('baixa todos os originais antes de ler os documentos e construir o resultado', async () => {
+    const first = auditDoc();
+    const second = auditDoc('doc2');
+    const events: string[] = [];
+    const progress: string[] = [];
+    const result = await generateAuditPackage({
+      store: auditStore,
+      records: [{ ...auditRecord(), documents: [first, second] }],
+      recipients: ACCEPTED_AUDIT_RECIPIENTS,
+      ocr: false,
+      getSignedUrl: vi.fn(),
+      progress: (message) => progress.push(message),
+      fetchDocument: (doc) => {
+        events.push(`download:${doc.id}`);
+        return Promise.resolve(new TextEncoder().encode(doc.id).buffer);
+      },
+      reader: {
+        read: vi.fn((_bytes: ArrayBuffer, doc: AuditDocument) => {
+          events.push(`read:${doc.id}`);
+          return Promise.resolve(readFiscalXml(auditXml()));
+        }),
+        dispose: vi.fn(() => Promise.resolve()),
+      },
+    });
+    expect(events).toEqual([
+      'download:doc-1',
+      'download:doc2',
+      'read:doc-1',
+      'read:doc2',
+    ]);
+    expect(progress.some((step) => step.startsWith('Etapa 1/3'))).toBe(true);
+    expect(progress.some((step) => step.startsWith('Etapa 2/3'))).toBe(true);
+    expect(progress.some((step) => step.startsWith('Etapa 3/3'))).toBe(true);
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    expect(Object.keys(zip.files).filter((name) => name.endsWith('.xlsx'))).toHaveLength(1);
+    expect(Object.keys(zip.files).filter((name) => name.startsWith('Notas_e_Recibos/') && !zip.files[name].dir)).toHaveLength(2);
   });
   it('inclui o original uma vez por conteúdo e mantém ambos os vínculos', async () => {
     const a = auditDoc(),

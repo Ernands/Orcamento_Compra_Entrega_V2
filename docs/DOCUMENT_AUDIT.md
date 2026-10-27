@@ -4,6 +4,10 @@ Rota: `/financeiro/conferencia-compras-obras`, abaixo de Conciliação Conta. Re
 
 A tela lista compras e obras, inclusive sem pagamento, com seleção individual/múltipla. O ZIP contém os documentos originais, o Excel com três abas e extrações de texto identificadas em `Leituras/`. Compras canceladas/devolvidas e pedidos cancelados permanecem identificados e não compõem os totais ativos. Dados aprovados sem compra registrada não são apresentados como compra realizada. O rateio reutiliza `purchaseOrderStoreCosts`; nenhum rateio é inventado. Frete/desconto/outros valores permanecem na origem em que foram cadastrados.
 
+## Ordem obrigatória da conferência
+
+A geração é feita em três etapas sequenciais e visíveis na tela: **1. baixar todos os anexos originais**, **2. ler e conferir os arquivos efetivamente baixados**, **3. cruzar com lançamentos e gerar a planilha/ZIP**. O sistema nunca deve iniciar a leitura de um documento enquanto houver anexos ainda aguardando download. A mesma cópia binária baixada é a incluída no ZIP e utilizada para leitura; arquivos com conteúdo idêntico são lidos apenas uma vez. As falhas de download continuam no relatório como indisponíveis, não como zero ou ausência comprovada de nota. O processo permanece somente leitura e não grava ajustes nas CMPs/OBRs.
+
 ## Documentos e totais
 
 Os nomes dos anexos usam o mesmo planejador do reembolso. Arquivos de conteúdo idêntico são incluídos uma vez por SHA-256. Notas com a mesma chave fiscal somam uma vez no resumo documental, preservando versões diferentes e seus vínculos. Versões da mesma chave com totais diferentes impedem conclusão automática. Notas compartilhadas entre referências são comparadas por grupo; vínculos externos à seleção impedem atribuição integral automática. Recibos são apresentados separadamente e não somados às notas do mesmo lançamento.
