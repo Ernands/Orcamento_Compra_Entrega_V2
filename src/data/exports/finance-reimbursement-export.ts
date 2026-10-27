@@ -67,19 +67,22 @@ export function planReimbursementZipFileNames(report: {
     const type = doc.type === 'invoice' ? 'Nota' : doc.type === 'payment_proof' ? 'Comprovante_Pagamento' : 'Recibo';
     const supplier = documentNamePart(suppliers.join(' + ') || 'Fornecedor', 55);
     const reference = documentNamePart(references.join(' + ') || 'Sem referencia', 100);
-    const base = `${type}_${supplier}_${reference}`.slice(0, 175).trim().replace(/[. ]+$/g, '');
+    // Identificar comprovantes com _CMP ou _OBR, sempre imediatamente antes da extensão.
+    // Em nomes repetidos, o contador vem antes do identificador: _1_CMP.pdf.
+    const originSuffix = doc.type === 'payment_proof'
+      ? (doc.source === 'purchase' ? '_CMP' : '_OBR')
+      : '';
+    const base = `${type}_${supplier}_${reference}`
+      .slice(0, 175 - originSuffix.length).trim().replace(/[. ]+$/g, '');
     const extension = documentExtension(doc);
-    let file = `${base}${extension}`;
+    let file = `${base}${originSuffix}${extension}`;
     let suffix = 1;
     while (reserved.has(file.toLowerCase())) {
-      file = `${base}_${suffix}${extension}`;
+      file = `${base}_${suffix}${originSuffix}${extension}`;
       suffix += 1;
     }
     reserved.add(file.toLowerCase());
-    const folder = doc.type === 'payment_proof'
-      ? (doc.source === 'purchase' ? 'Comprovantes_Pagamentos_Compras'
-        : 'Comprovantes_Pagamentos_Obras_Servicos')
-      : 'Notas_e_Recibos';
+    const folder = doc.type === 'payment_proof' ? 'Comprovantes_Pagamentos' : 'Notas_e_Recibos';
     names.set(key, `${folder}/${file}`);
   });
 
@@ -449,7 +452,7 @@ export async function downloadStoreReimbursementZip(input: {
     `Anexos indisponíveis no download: ${unavailable.size}`,
     'Consulte a aba Pendências Documentais no Excel; pendências não reduzem o valor solicitado.',
     'LINKS DE DOCUMENTOS: extraia TODO o ZIP para uma única pasta antes de abrir a planilha.',
-    'Documentos fiscais: Notas_e_Recibos/. Comprovantes CMP: Comprovantes_Pagamentos_Compras/. Comprovantes OBR: Comprovantes_Pagamentos_Obras_Servicos/.',
+    'Documentos fiscais: Notas_e_Recibos/. Comprovantes CMP e OBR: Comprovantes_Pagamentos/. O tipo aparece no sufixo _CMP ou _OBR, antes da extensao.',
     'Comprovantes de CMP sem vinculo de pagamento ou loja explicito exigem conferencia manual; nunca sao tratados como nota fiscal.',
     'Na planilha, as colunas Arquivo(s) no ZIP e Comprovante(s) de pagamento possuem links. Havendo vários, acesse a aba Arquivos do ZIP.',
     'Para abrir sem Excel ou acesso ao sistema, use Abrir_Arquivos.html no navegador após extrair o ZIP.',
