@@ -77,7 +77,7 @@ export function planReimbursementZipFileNames(report: {
     }
     reserved.add(file.toLowerCase());
     names.set(key, `${doc.type === 'payment_proof'
-      ? 'Recibos_Pagamentos_Obras_Servicos' : 'Notas_e_Recibos'}/${file}`);
+      ? 'Comprovantes_Pagamentos_Obras_Servicos' : 'Notas_e_Recibos'}/${file}`);
   });
 
   return names;
@@ -180,7 +180,7 @@ function groupedDocumentStatus(group: ReimbursementReferenceGroup, unavailable: 
   );
   const failedProofs = group.paymentProofs.filter((doc) =>
     unavailable.has(`${doc.source}:${doc.id}`)).length;
-  if (failedProofs) details.push(`Falha ao obter ${failedProofs} recibo(s) de pagamento de obras/serviços`);
+  if (failedProofs) details.push(`Falha ao obter ${failedProofs} comprovante(s) de pagamento de obras/serviços`);
   return details.join('; ');
 }
 
@@ -205,7 +205,7 @@ export function createReimbursementOfflineIndex(
     const references = [...new Set(lines.flatMap((line) => line.row.referenceCodes))].join(' + ');
     const href = path.split('/').map(encodeURIComponent).join('/');
     const label = doc.type === 'invoice'
-      ? 'Nota' : doc.type === 'payment_proof' ? 'Recibo de pagamento de obra/serviço' : 'Recibo fiscal';
+      ? 'Nota' : doc.type === 'payment_proof' ? 'Comprovante de pagamento de obra/serviço' : 'Recibo fiscal';
     return [`<tr><td><a href="${escapeHtml(href)}">${escapeHtml(path)}</a></td><td>${label}</td><td>${escapeHtml(supplier)}</td><td>${escapeHtml(references)}</td></tr>`];
   });
   return `<!doctype html>
@@ -250,7 +250,7 @@ export async function createStoreReimbursementWorkbook(input: {
   sheet.getRow(4).values = [
     'Loja(s)', 'Origem', 'Referência', 'Fornecedor / prestador',
     'Item / serviço', 'Valor', 'Nota/Recibo', 'Arquivo(s) no ZIP',
-    'Recibo(s) de pagamento', 'Pendência',
+    'Comprovante(s) de pagamento', 'Pendência',
   ];
   sheet.columns = [27, 19, 26, 31, 50, 17, 18, 58, 56, 45]
     .map((width) => ({ width }));
@@ -315,7 +315,7 @@ export async function createStoreReimbursementWorkbook(input: {
         hyperlink: receiptPaths.length === 1
           ? receiptPaths[0] : `#'Arquivos do ZIP'!A${firstIndexRow}`,
         tooltip: receiptPaths.length === 1
-          ? 'Extraia o ZIP para abrir o recibo de pagamento'
+          ? 'Extraia o ZIP para abrir o comprovante de pagamento'
           : 'Clique para abrir o índice, que oferece um link direto por recibo',
       };
       linkCell.font = { color: { argb: 'FF0563C1' }, underline: true };
@@ -345,7 +345,7 @@ export async function createStoreReimbursementWorkbook(input: {
   summary.addRow(['Lançamentos de origem', input.report.lines.length]);
   summary.addRow(['Referências consolidadas', groups.length]);
   summary.addRow(['Documentos fiscais únicos', input.report.documents.length]);
-  summary.addRow(['Recibos de pagamento de obras/serviços', input.report.paymentProofs.length]);
+  summary.addRow(['Comprovantes de pagamento de obras/serviços', input.report.paymentProofs.length]);
   summary.addRow(['Lançamentos com pendência/conferência', input.report.lines.filter((line) => currentStatus(line, input.unavailable)).length]);
   for (const index of [4, 5, 6, 7]) summary.getRow(index).getCell(2).numFmt = MONEY;
   summary.getRow(7).font = { bold: true, color: { argb: GREEN } };
@@ -376,7 +376,7 @@ export async function createStoreReimbursementWorkbook(input: {
     const supplier = [...new Set(lines.map((line) => line.row.supplierName))].join(' + ');
     const references = [...new Set(lines.flatMap((line) => line.row.referenceCodes))].join(' + ');
     const type = doc.type === 'invoice' ? 'Nota'
-      : doc.type === 'payment_proof' ? 'Recibo de pagamento' : 'Recibo fiscal';
+      : doc.type === 'payment_proof' ? 'Comprovante de pagamento' : 'Recibo fiscal';
     const row = index.addRow([path, type, supplier, references]);
     row.getCell(1).value = { text: path, hyperlink: path, tooltip: 'Extrair o ZIP completo antes de abrir' };
     row.getCell(1).font = { color: { argb: 'FF0563C1' }, underline: true };
@@ -435,8 +435,8 @@ export async function downloadStoreReimbursementZip(input: {
     `Anexos indisponíveis no download: ${unavailable.size}`,
     'Consulte a aba Pendências Documentais no Excel; pendências não reduzem o valor solicitado.',
     'LINKS DE DOCUMENTOS: extraia TODO o ZIP para uma única pasta antes de abrir a planilha.',
-    'Documentos fiscais: Notas_e_Recibos/. Recibos/comprovantes de pagamentos de obras e serviços: Recibos_Pagamentos_Obras_Servicos/.',
-    'Na planilha, as colunas Arquivo(s) no ZIP e Recibo(s) de pagamento possuem links. Havendo vários, acesse a aba Arquivos do ZIP.',
+    'Documentos fiscais: Notas_e_Recibos/. Comprovantes de pagamentos de obras e serviços: Comprovantes_Pagamentos_Obras_Servicos/.',
+    'Na planilha, as colunas Arquivo(s) no ZIP e Comprovante(s) de pagamento possuem links. Havendo vários, acesse a aba Arquivos do ZIP.',
     'Para abrir sem Excel ou acesso ao sistema, use Abrir_Arquivos.html no navegador após extrair o ZIP.',
     'Links relativos não funcionam de forma confiável quando a planilha está aberta dentro do ZIP.',
   ].join('\n'));
