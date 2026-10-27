@@ -16,14 +16,51 @@ export interface ReimbursementFiscalDocument {
   needsStoreReview: boolean;
 }
 
+/** Comprovante de pagamento de obra/serviço, independente de nota ou recibo fiscal. */
+export interface ReimbursementPaymentProof {
+  id: string;
+  source: 'work';
+  type: 'payment_proof';
+  name: string;
+  storagePath: string;
+  paymentId: string | null;
+}
+
 export interface ReimbursementLine {
   row: UnifiedFinancePaymentRow;
   documents: ReimbursementFiscalDocument[];
+  paymentProofs: ReimbursementPaymentProof[];
   fiscalState: ReimbursementFiscalState;
 }
 
-function uniqueDocuments(documents: ReimbursementFiscalDocument[]) {
+function uniqueDocuments<T extends { source: string; id: string }>(documents: T[]): T[] {
   return [...new Map(documents.map((doc) => [`${doc.source}:${doc.id}`, doc])).values()];
+}
+
+/** Link only work payment proofs for the selected store and payment occurrence.
+ * A proof with no paymentId belongs to the service as a whole, not an invented parcel.
+ */
+export function workPaymentProofsForPayment(
+  row: UnifiedFinancePaymentRow,
+  works: WorkService[],
+  storeId: string,
+): ReimbursementPaymentProof[] {
+  if (!row.workServiceId) return [];
+  const work = works.find((item) => item.id === row.workServiceId);
+  if (!work || work.storeId !== storeId) return [];
+  return uniqueDocuments(work.documents
+    .filter((doc) =>
+      doc.documentType === 'payment_proof' &&
+      Boolean(doc.storagePath?.trim()) &&
+      (!doc.paymentId || row.paymentIds.includes(doc.paymentId)))
+    .map((doc) => ({
+      id: doc.id,
+      source: 'work' as const,
+      type: 'payment_proof' as const,
+      name: doc.originalName || doc.documentNumber || 'Comprovante de pagamento',
+      storagePath: doc.storagePath!,
+      paymentId: doc.paymentId,
+    })));
 }
 
 /** Fiscal evidence linked to an expense. Never use quotes or payment proofs as fiscal documents. */
@@ -108,16 +145,19 @@ export function buildStoreReimbursement(
     .filter((row) => row.amountCents > 0n);
   const lines: ReimbursementLine[] = scoped.map((row) => {
     const documents = fiscalDocumentsForPayment(row, purchases, works, storeId);
+    const paymentProofs = workPaymentProofsForPayment(row, works, storeId);
     const fiscalState: ReimbursementFiscalState = !documents.length
       ? 'missing'
       : documents.some((doc) => !doc.needsStoreReview) ? 'present' : 'review';
-    return { row, documents, fiscalState };
+    return { row, documents, paymentProofs, fiscalState };
   });
   const totals = financePaymentTotals(scoped);
   const unique = uniqueDocuments(lines.flatMap((line) => line.documents));
+  const paymentProofs = uniqueDocuments(lines.flatMap((line) => line.paymentProofs));
   return {
     lines,
     documents: unique,
+    paymentProofs,
     totals,
     pendingLines: lines.filter((line) => line.fiscalState !== 'present'),
     sumMatches:
