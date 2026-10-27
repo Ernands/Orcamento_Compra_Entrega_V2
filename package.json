@@ -21,18 +21,25 @@
     "supabase:reset": "supabase db reset --local",
     "types:generate": "supabase gen types typescript --local > src/data/supabase/database.types.ts",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
-    "security:scan": "node scripts/scan-secrets.mjs"
+    "security:scan": "node scripts/scan-secrets.mjs",
+    "prepare:fiscal-assets": "node scripts/prepare-fiscal-assets.mjs",
+    "predev": "npm run prepare:fiscal-assets",
+    "prebuild": "npm run prepare:fiscal-assets"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
+    "@tesseract.js-data/por": "1.0.0",
     "exceljs": "^4.4.0",
+    "fast-xml-parser": "5.11.2",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.31.0",
+    "pdfjs-dist": "6.4.299",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
-    "jszip": "^3.10.1"
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,5 +1,6 @@
 import type { Database, Json } from '../supabase/database.types';
 import { supabase } from '../supabase/client';
+import { fetchAllPages } from '../supabase/pagination';
 import { moneyToCents } from '../../domain/supply-calculations';
 import type {
   FinanceStoreBudget,
@@ -16,6 +17,8 @@ const WORKS_BUCKET = 'works-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = new Set([
   'application/pdf',
+  'application/xml',
+  'text/xml',
   'image/jpeg',
   'image/png',
   'image/webp',
@@ -150,16 +153,19 @@ function mapService(
   };
 }
 
-export async function listWorkServices(): Promise<WorkService[]> {
-  const [servicesResult, paymentsResult, documentsResult, componentsResult] = await Promise.all([
-    supabase.from('works_services').select('*').order('updated_at', { ascending: false }),
-    supabase
-      .from('works_service_payments')
-      .select('*')
-      .order('due_date', { ascending: true, nullsFirst: false }),
-    supabase.from('works_service_documents').select('*').order('created_at', { ascending: false }),
-    supabase.from('works_service_components').select('*').order('sort_order', { ascending: true }),
-  ]);
+export async function listWorkServices(options?: { allRows?: boolean }): Promise<WorkService[]> {
+  const servicesQuery = () => supabase.from('works_services').select('*').order('updated_at', { ascending: false }).order('id');
+  const paymentsQuery = () => supabase.from('works_service_payments').select('*').order('due_date', { ascending: true, nullsFirst: false }).order('id');
+  const documentsQuery = () => supabase.from('works_service_documents').select('*').order('created_at', { ascending: false }).order('id');
+  const componentsQuery = () => supabase.from('works_service_components').select('*').order('sort_order', { ascending: true }).order('id');
+  const [servicesResult, paymentsResult, documentsResult, componentsResult] = options?.allRows
+    ? await Promise.all([
+      fetchAllPages((from, to) => servicesQuery().range(from, to)).then((data) => ({ data, error: null })),
+      fetchAllPages((from, to) => paymentsQuery().range(from, to)).then((data) => ({ data, error: null })),
+      fetchAllPages((from, to) => documentsQuery().range(from, to)).then((data) => ({ data, error: null })),
+      fetchAllPages((from, to) => componentsQuery().range(from, to)).then((data) => ({ data, error: null })),
+    ])
+    : await Promise.all([servicesQuery(), paymentsQuery(), documentsQuery(), componentsQuery()]);
 
   const error =
     servicesResult.error || paymentsResult.error || documentsResult.error || componentsResult.error;
@@ -245,7 +251,7 @@ function safeFileName(name: string): string {
 }
 
 function mimeType(file: File): string {
-  return file.type.trim().toLowerCase();
+  return file.type.trim().toLowerCase() || (/\.xml$/i.test(file.name) ? 'application/xml' : '');
 }
 
 function validateFile(file: File): void {

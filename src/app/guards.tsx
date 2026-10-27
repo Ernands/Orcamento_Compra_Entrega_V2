@@ -20,6 +20,7 @@ export function authorizedHomePath(capabilities: Capability[]): string {
   if (has('quotes.view')) return '/suprimentos/cotacoes';
   if (has('purchases.view')) return '/suprimentos/compras';
   if (has('works.view')) return '/obras';
+  if (has('finance.view') && has('finance.document_audit_view')) return '/financeiro/conferencia-compras-obras';
   if (has('finance.view')) return '/financeiro';
   if (has('access.view')) return '/acessos';
   // Preserve the authorized legacy dashboard as a fallback for dashboard-only

@@ -37,6 +37,8 @@ const MAX_SIZE = 100 * 1024 * 1024;
 
 const ALLOWED_MIME = new Set([
   'application/pdf',
+  'application/xml',
+  'text/xml',
   'image/jpeg',
   'image/png',
   'image/webp',
@@ -49,7 +51,7 @@ const ALLOWED_MIME = new Set([
 ]);
 
 const MIME_BY_EXTENSION: Record<string, string> = {
-  pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+  xml: 'application/xml', pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
   mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', m4v: 'video/x-m4v',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -215,10 +217,10 @@ function mapAttachmentStore(row: AttachmentStoreRow): PurchaseAttachmentStoreV2 
     name: row.store_name_snapshot, city: row.store_city_snapshot, state: row.store_state_snapshot };
 }
 
-export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
+export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Promise<PurchaseV2[]> {
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult] = await Promise.all([
-    supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
+    options?.allRows ? fetchPagedResult<PurchaseRow>((from, to) => supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseRow>>) : supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
     fetchPagedResult<PurchaseStoreRow>((from, to) => (
       supabase.from('supply_purchase_stores' as never)
         .select('*')
@@ -226,8 +228,8 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
         .order('id')
         .range(from, to) as unknown as PromiseLike<PagedResult<PurchaseStoreRow>>
     )),
-    supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
-    supabase.from('supply_items' as never).select('id, subcategory, group_name, financial_group'),
+    options?.allRows ? fetchPagedResult<PurchaseItemRow>((from, to) => supabase.from('supply_purchase_items' as never).select('*').order('created_at').order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseItemRow>>) : supabase.from('supply_purchase_items' as never).select('*').order('created_at'),
+    options?.allRows ? Promise.resolve({ data: [], error: null }) : supabase.from('supply_items' as never).select('id, subcategory, group_name, financial_group'),
     fetchPagedResult<DestinationRow>((from, to) => (
       supabase.from('supply_purchase_destinations' as never)
         .select('*')
@@ -242,13 +244,13 @@ export async function listSupplyPurchasesV2(): Promise<PurchaseV2[]> {
         .order('id')
         .range(from, to) as unknown as PromiseLike<PagedResult<DestinationStoreRow>>
     )),
-    supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
-    supabase.from('supply_purchase_order_items' as never).select('*').order('created_at'),
-    supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot'),
-    supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }),
-    supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
-    supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot'),
-    supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
+    options?.allRows ? fetchPagedResult<OrderRow>((from, to) => supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderRow>>) : supabase.from('supply_purchase_orders' as never).select('*').order('created_at', { ascending: false }),
+    options?.allRows ? fetchPagedResult<OrderLineRow>((from, to) => supabase.from('supply_purchase_order_items' as never).select('*').order('created_at').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineRow>>) : supabase.from('supply_purchase_order_items' as never).select('*').order('created_at'),
+    options?.allRows ? fetchPagedResult<OrderLineStoreRow>((from, to) => supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineStoreRow>>) : supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot'),
+    options?.allRows ? fetchPagedResult<PaymentRow>((from, to) => supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PaymentRow>>) : supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }),
+    options?.allRows ? fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>) : supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
+    options?.allRows ? fetchPagedResult<AttachmentStoreRow>((from, to) => supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>) : supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot'),
+    options?.allRows ? Promise.resolve({ data: [], error: null }) : supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
   ]);
   const resultWithError = [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult].find((result) => result.error);

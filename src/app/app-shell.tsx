@@ -336,6 +336,12 @@ export function AppShell() {
                 Conciliação Conta
               </NavLink>
             )}
+            {can('finance.document_audit_view') && (
+              <NavLink className="nav-sub-link" to="/financeiro/conferencia-compras-obras" onClick={() => setMobileOpen(false)}>
+                <ClipboardCheck size={18} />
+                Conferência de Compras e Obras
+              </NavLink>
+            )}
           </>
         )}
 

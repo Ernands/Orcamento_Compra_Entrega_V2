@@ -50,6 +50,7 @@ const emptyForm: AccessFormValues = {
 
 const financeOverviewOnlyHiddenKeys = new Set<AccessPermission['key']>([
   'finance.payments_view',
+  'finance.document_audit_view',
   'finance.account_reconciliation_view',
   'finance.account_reconciliation_manage',
   'finance.stores_ufs_view',
@@ -69,6 +70,9 @@ function permissionLabel(permission: AccessPermission): string {
   }
   if (permission.key === 'finance.overview_view') {
     return 'Financeiro — Visão Geral (base dos dashboards gerenciais)';
+  }
+  if (permission.key === 'finance.document_audit_view') {
+    return 'Conferência de Compras e Obras — visualizar e exportar documentos (somente leitura)';
   }
   if (permission.key === 'finance.account_reconciliation_view') {
     return 'Conciliação Conta — visualizar aba';

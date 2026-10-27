@@ -8,6 +8,7 @@ import { DashboardPage } from '../pages/dashboard-page';
 import { BudgetForecastDashboardPage } from '../pages/budget-forecast-dashboard-page';
 import { FinancialCompositionPage } from '../pages/financial-composition-page';
 import { FinancePage } from '../pages/finance-page';
+import { FinanceDocumentAuditPage } from '../pages/finance-document-audit-page';
 import { FinancePaymentsPage } from '../pages/finance-payments-page';
 import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
 import { ManagerialReimbursementPage } from '../pages/managerial-reimbursement-page';
@@ -336,6 +337,16 @@ export function App() {
                     <RequireCapability capability="finance.account_reconciliation_view">
                       <FinanceAccountReconciliationPage />
                     </RequireCapability>
+                  </RequireCapability>
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="financeiro/conferencia-compras-obras"
+              element={
+                <RequireCapability capability="finance.view">
+                  <RequireCapability capability="finance.document_audit_view">
+                    <FinanceDocumentAuditPage />
                   </RequireCapability>
                 </RequireCapability>
               }
