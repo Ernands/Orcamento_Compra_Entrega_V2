@@ -107,6 +107,7 @@ export interface PurchaseItemV2 {
   storeCode: string | null;
   quantityApproved: string;
   purchasedQuantity: string;
+  cancelledQuantity?: string;
   unit: string;
   quotedUnitPrice: string;
   quotedDiscountAmount: string;
