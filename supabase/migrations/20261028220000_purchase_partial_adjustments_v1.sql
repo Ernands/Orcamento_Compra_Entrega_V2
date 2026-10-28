@@ -304,7 +304,7 @@ create trigger partial_refund_attachment_immutable before update or delete
 
 -- Preserva também o vínculo físico de cada linha à loja após o ajuste.
 create or replace function private.guard_partial_refund_store_allocation()
-returns trigger language plpgsql set search_path='' as $
+returns trigger language plpgsql set search_path='' as $store_allocation_guard$
 declare v_line_id uuid;
 begin
  v_line_id:=case when tg_op='DELETE' then old.order_line_id else new.order_line_id end;
@@ -326,7 +326,7 @@ begin
  if tg_op='DELETE' then return old; end if;
  return new;
 end;
-$;
+$store_allocation_guard$;
 drop trigger if exists partial_refund_store_allocation_immutable on public.supply_purchase_order_line_stores;
 create trigger partial_refund_store_allocation_immutable before insert or update or delete
  on public.supply_purchase_order_line_stores
