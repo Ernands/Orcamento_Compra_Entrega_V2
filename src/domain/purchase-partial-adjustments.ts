@@ -72,6 +72,7 @@ export function applyPurchasePartialAdjustments(
   const applicable = records.filter((record) => record.purchase_id === purchase.id);
   if (!applicable.length) return purchase;
   const adjustments: PurchasePartialAdjustment[] = [];
+  const cancelledByItem = new Map<string, bigint>();
   const originalOrders = new Map(purchase.orders.map((order) => [order.id, order]));
   const originalPayments = new Map(purchase.payments.map((payment) => [payment.id, payment]));
   for (const record of applicable) {
@@ -107,6 +108,10 @@ export function applyPurchasePartialAdjustments(
           throw new Error('Cancelamento exige abatimento do valor integral da linha.');
         }
         cancelled += BigInt(item.reduction_cents);
+        if (line.purchaseItemId) {
+          cancelledByItem.set(line.purchaseItemId,
+            (cancelledByItem.get(line.purchaseItemId) || 0n) + quantityToThousandths(line.quantity));
+        }
         cancelledLines.push({
           id: line.id, itemCode: line.itemCode, itemName: line.itemName,
           originalTotalCents: lineAmount, originalShippingCents: freightAmount,
@@ -162,7 +167,8 @@ export function applyPurchasePartialAdjustments(
     const lines = activeLines.filter((line) => line.purchaseItemId === item.id);
     const amount = lines.reduce((total, line) => total + moneyToCents(line.lineTotal || '0'), 0n);
     const qty = lines.reduce((total, line) => total + quantityToThousandths(line.quantity), 0n);
-    return { ...item, actualTotal: toSqlMoney(amount), purchasedQuantity: decimalFromThousandths(qty) };
+    return { ...item, actualTotal: toSqlMoney(amount), purchasedQuantity: decimalFromThousandths(qty),
+      cancelledQuantity: decimalFromThousandths(cancelledByItem.get(item.id) || 0n) };
   });
   purchase.adjustments = adjustments;
   return purchase;
