@@ -24,6 +24,7 @@ import { useSession } from '../app/session-provider';
 import { listStoreFinancialClosures } from '../data/stores/store-financial-closure-repository';
 import '../styles/store-financial-close.css';
 import { ItemMultiFilter, matchesSelectedItems, type ItemFilterOption } from '../components/item-multi-filter';
+import { PurchasePartialAdjustmentPanel } from '../components/purchase-partial-adjustment-panel';
 import { EmptyState, ErrorState, IconButton, InlineLoading, Modal, StatusBadge } from '../components/ui';
 import {
   cancelSupplyPurchaseOrderV2,
@@ -103,7 +104,7 @@ const DOCUMENT_LABELS: Record<PurchaseDocumentType, string> = {
   purchase_order: 'Pedido / ordem de compra', reimbursement: 'Documento de reembolso', photo: 'Foto / evidencia', other: 'Outro',
 };
 const OPERATIONAL_DOCUMENT_TYPES: PurchaseDocumentType[] = [
-  'invoice', 'receipt', 'payment_proof', 'boleto', 'purchase_order', 'photo', 'other',
+  'invoice', 'receipt', 'payment_proof', 'reimbursement', 'boleto', 'purchase_order', 'photo', 'other',
 ];
 const QUOTE_DOCUMENT_LABELS: Record<string, string> = {
   quote: 'Cotacao / proposta', invoice: 'Nota fiscal', receipt: 'Recibo', payment_proof: 'Comprovante de pagamento',
@@ -2596,13 +2597,20 @@ function PurchaseManagementModal({
             <div><small>Lojas e arquivos</small><strong>{costs.rows.length} lojas · {attachments.length} arquivos</strong><span className={`purchase-v2-pill ${costs.isConfirmed ? 'is-ok' : 'is-warning'}`}>{costs.isConfirmed ? 'Custos confirmados' : 'Custos pendentes'}</span></div>
             <div><span className={`purchase-v2-pill ${order.status === 'cancelled' ? '' : financialClass}`}>{order.status === 'cancelled' ? 'Cancelada' : financial.isReconciled ? 'Pagamento conciliado' : 'Pagamento divergente'}</span></div>
             <div className="row-actions">
-              {order.status === 'active' && <>{canEdit && <button type="button" className="button button--secondary button--small" onClick={() => setEditor({ kind: 'payment', orderId: order.id })}><CreditCard size={15}/>Pagamento</button>}{canAddDocuments && <button type="button" className="button button--secondary button--small" onClick={() => setEditor({ kind: 'documents', orderId: order.id })}><Paperclip size={15}/>Arquivo</button>}{canEdit && <button type="button" className="button button--secondary button--small" disabled={cancellingOrderId === order.id} onClick={() => void cancelOrder(order)}><XCircle size={15}/>Cancelar</button>}</>}
+              {order.status === 'active' && <>{canEdit && !purchase.adjustments?.some((adjustment) => adjustment.orderId === order.id) && <button type="button" className="button button--secondary button--small" onClick={() => setEditor({ kind: 'payment', orderId: order.id })}><CreditCard size={15}/>Pagamento</button>}{canAddDocuments && <button type="button" className="button button--secondary button--small" onClick={() => setEditor({ kind: 'documents', orderId: order.id })}><Paperclip size={15}/>Arquivo</button>}{canEdit && !purchase.adjustments?.some((adjustment) => adjustment.orderId === order.id) && <button type="button" className="button button--secondary button--small" disabled={cancellingOrderId === order.id} onClick={() => void cancelOrder(order)}><XCircle size={15}/>Cancelar</button>}</>}
             </div>
           </header>
           <div className="purchase-v2-operation-body">
+            <PurchasePartialAdjustmentPanel
+              purchase={purchase}
+              order={order}
+              canEdit={canEdit}
+              onSaved={onSaved}
+              onAttachRefundProof={() => setEditor({ kind: 'documents', orderId: order.id })}
+            />
             <section><h4>Itens e destino</h4>{order.lines.map((line) => <div className="purchase-v2-operation-line" key={line.id}><span><strong>{line.itemName}</strong><small>{line.itemCode} · {line.destinationLabel || 'Destino por loja'}</small></span><span>{formatQuantityV2(line.quantity)} {line.unit}</span><strong>{lineTotalCents(line) === null ? 'Pendente' : formatBRL(lineTotalCents(line)!)}</strong></div>)}</section>
             <section><h4>Custo final por loja</h4><small className="purchase-v2-muted">Itens e custos compartilhados sao rateados pela quantidade; todos os centavos permanecem fechados.</small>{costs.rows.length ? costs.rows.map((store) => <div className="purchase-v2-operation-line" key={store.storeId}><span><strong>{store.code} · {store.name}</strong><small>{store.city}/{store.state} · {store.lines.map((line) => `${formatQuantityV2(line.quantity)} ${line.unit} ${line.itemName}`).join(' + ')}</small></span><strong>{formatBRL(store.costCents)}</strong></div>) : <span className="purchase-v2-inline-warning">Defina as lojas para concluir o custo.</span>}{costs.unallocatedCents !== 0n && <div className="purchase-v2-inline-warning">Ainda sem loja: {formatBRL(costs.unallocatedCents)}</div>}</section>
-            <section><h4>Pagamentos desta compra</h4>{financial.payments.length ? financial.payments.map((payment) => <div className="purchase-v2-operation-line" key={payment.id}><span><strong>{PAYMENT_LABELS[payment.paymentMethod]}</strong><small>{payment.sourceLabel || 'Origem nao informada'}{payment.installmentCount ? ` · ${payment.installmentCount}x` : ' · a vista'}</small></span><strong>{formatBRL(moneyToCents(payment.amount))}</strong><span className={`purchase-v2-pill ${payment.status === 'paid' ? 'is-ok' : payment.status === 'planned' ? 'is-warning' : ''}`}>{payment.status === 'paid' ? 'Pago' : payment.status === 'planned' ? 'Previsto' : 'Cancelado'}</span></div>) : <span className="purchase-v2-inline-warning">Nenhum pagamento vinculado.</span>}<div className="purchase-v2-operation-balance"><span>Saldo a pagar</span><strong>{financial.balanceToPayCents === null ? 'Pendente' : formatBRL(financial.balanceToPayCents)}</strong></div></section>
+            <section><h4>Pagamentos desta compra</h4>{financial.payments.length ? financial.payments.map((payment) => <div className="purchase-v2-operation-line" key={payment.id}><span><strong>{PAYMENT_LABELS[payment.paymentMethod]}</strong><small>{payment.sourceLabel || 'Origem nao informada'}{payment.installmentCount ? ` · ${payment.installmentCount}x` : ' · a vista'}</small></span><strong>{formatBRL(moneyToCents(payment.amount))}{payment.grossAmount ? ` líquido (original ${formatBRL(moneyToCents(payment.grossAmount))})` : ''}</strong><span className={`purchase-v2-pill ${payment.status === 'paid' ? 'is-ok' : payment.status === 'planned' ? 'is-warning' : ''}`}>{payment.status === 'paid' ? 'Pago' : payment.status === 'planned' ? 'Previsto' : 'Cancelado'}</span></div>) : <span className="purchase-v2-inline-warning">Nenhum pagamento vinculado.</span>}<div className="purchase-v2-operation-balance"><span>Saldo a pagar</span><strong>{financial.balanceToPayCents === null ? 'Pendente' : formatBRL(financial.balanceToPayCents)}</strong></div></section>
             <section><h4>Arquivos desta compra</h4>{attachments.length ? attachments.map((attachment) => <div className="purchase-v2-operation-line" key={attachment.id}><span><strong>{attachment.originalName}</strong><small>{DOCUMENT_LABELS[attachment.documentType]}{attachment.documentNumber ? ` · ${attachment.documentNumber}` : ''}</small></span></div>) : <span className="purchase-v2-muted">Nenhum arquivo anexado.</span>}</section>
           </div>
         </article>;

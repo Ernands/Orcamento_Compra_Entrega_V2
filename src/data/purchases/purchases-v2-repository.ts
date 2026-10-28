@@ -1,6 +1,7 @@
 import { supabase } from '../supabase/client';
 import { fetchAllPages } from '../supabase/pagination';
 import { moneyToSqlNumeric } from '../../domain/supply-calculations';
+import { applyPurchasePartialAdjustments, type PartialAdjustmentRecord } from '../../domain/purchase-partial-adjustments';
 import type {
   AllocationSource,
   DistributionStatus,
@@ -219,7 +220,7 @@ function mapAttachmentStore(row: AttachmentStoreRow): PurchaseAttachmentStoreV2 
 
 export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Promise<PurchaseV2[]> {
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
-    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult] = await Promise.all([
+    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult] = await Promise.all([
     options?.allRows ? fetchPagedResult<PurchaseRow>((from, to) => supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseRow>>) : supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }),
     fetchPagedResult<PurchaseStoreRow>((from, to) => (
       supabase.from('supply_purchase_stores' as never)
@@ -251,9 +252,13 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
     options?.allRows ? fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>) : supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
     options?.allRows ? fetchPagedResult<AttachmentStoreRow>((from, to) => supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>) : supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot'),
     options?.allRows ? Promise.resolve({ data: [], error: null }) : supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }),
+    fetchPagedResult<PartialAdjustmentRecord>((from, to) => supabase
+      .from('supply_purchase_partial_adjustments' as never)
+      .select('*').order('created_at').order('id')
+      .range(from, to) as unknown as PromiseLike<PagedResult<PartialAdjustmentRecord>>),
   ]);
   const resultWithError = [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
-    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult].find((result) => result.error);
+    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult].find((result) => result.error);
   if (resultWithError?.error) throw resultWithError.error;
 
   const purchases = purchaseResult.data as unknown as PurchaseRow[];
@@ -270,6 +275,7 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
   const attachments = attachmentResult.data as unknown as AttachmentRow[];
   const attachmentStores = attachmentStoreResult.data as unknown as AttachmentStoreRow[];
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
+  const adjustments = adjustmentResult.data as unknown as PartialAdjustmentRecord[];
 
   const storesByPurchase = groupRowsBy(stores, (row) => row.purchase_id);
   const itemsByPurchase = groupRowsBy(items, (row) => row.purchase_id);
@@ -282,8 +288,9 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
   const attachmentsByPurchase = groupRowsBy(attachments, (row) => row.purchase_id);
   const attachmentStoresByAttachment = groupRowsBy(attachmentStores, (row) => row.attachment_id);
   const quoteAttachmentsByQuote = groupRowsBy(quoteAttachments, (row) => row.quote_id);
+  const adjustmentsByPurchase = groupRowsBy(adjustments, (row) => row.purchase_id);
 
-  return purchases.map((purchase): PurchaseV2 => ({
+  return purchases.map((purchase): PurchaseV2 => applyPurchasePartialAdjustments({
     id: purchase.id, code: purchase.codigo_negocio, quoteId: purchase.quote_id, quoteCode: purchase.quote_code_snapshot,
     supplierId: purchase.supplier_id, supplierName: purchase.supplier_name_snapshot, quoteDate: purchase.quote_date_snapshot,
     approvedTotal: stringValue(purchase.approved_total), hasPendingShipping: purchase.has_pending_shipping, status: purchase.status,
@@ -360,7 +367,48 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
       mimeType: attachment.mime_type, sizeBytes: attachment.size_bytes, description: attachment.description,
       documentType: attachment.document_type, createdAt: attachment.created_at,
     })),
-  }));
+  }, adjustmentsByPurchase.get(purchase.id) || []));
+}
+
+export interface RegisterPartialPurchaseAdjustmentInput {
+  orderId: string;
+  paymentId: string;
+  attachmentId: string;
+  refundedOn: string;
+  reference: string;
+  reason: string;
+  expectedOriginalCents: bigint;
+  refundCents: bigint;
+  cancelled: Array<{ lineId: string; amountCents: bigint }>;
+}
+
+/** RPC performs all authorization, exact matching, duplicate prevention and
+ * proportional freight allocation in one transaction. Client cannot dictate
+ * the distribution or alter payments/lines directly.
+ */
+export async function registerPartialPurchaseAdjustment(
+  input: RegisterPartialPurchaseAdjustmentInput,
+): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    'register_supply_purchase_partial_adjustment_v1' as never,
+    {
+      p_order_id: input.orderId,
+      p_payment_id: input.paymentId,
+      p_refund_attachment_id: input.attachmentId,
+      p_refunded_on: input.refundedOn,
+      p_reference: input.reference,
+      p_reason: input.reason,
+      p_expected_original_cents: Number(input.expectedOriginalCents),
+      p_refund_cents: Number(input.refundCents),
+      p_adjustments: input.cancelled.map((line) => ({
+        line_id: line.lineId,
+        kind: 'cancelled',
+        reduction_cents: Number(line.amountCents),
+      })),
+    } as never,
+  );
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export function buildPurchaseOrderRpcPayloadV2(values: RegisterPurchaseOrderInputV2) {

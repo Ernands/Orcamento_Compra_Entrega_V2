@@ -39,6 +39,8 @@ export interface UnifiedFinancePaymentRow {
   installmentLabel: string;
   forwardedToFinance?: boolean | null;
   amountCents: bigint;
+  refundCents?: bigint; // crédito referente a pagamento originalmente maior
+  refundDate?: string | null;
   storeIds: string[];
   storeCodes: string[];
   states: string[];
@@ -329,6 +331,9 @@ function purchasePaymentRow(
     : paymentContext.combined;
   const storeResult = allocatePaymentToStores(event.amountCents, context);
   const notes = paymentNotes(purchase, event.paymentId);
+  const originalPayment = purchase.payments.find((payment) => payment.id === event.paymentId);
+  const refundCents = originalPayment?.refundedAmount
+    ? moneyToCents(originalPayment.refundedAmount) : 0n;
   const fallbackStores = purchase.stores;
   const storeIds = event.storeIds.length ? event.storeIds : fallbackStores.map((store) => store.storeId);
   const states = event.states.length ? event.states : unique(fallbackStores.map((store) => store.state));
@@ -358,6 +363,8 @@ function purchasePaymentRow(
     installmentLabel: sourceInstallment,
     forwardedToFinance: paymentForwardedToFinance(purchase, event.paymentId),
     amountCents: event.amountCents,
+    refundCents,
+    refundDate: originalPayment?.refundedOn || null,
     storeIds: unique(storeIds),
     storeCodes,
     states: unique(states),
@@ -415,6 +422,8 @@ function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
         : null,
     description: unique(rows.map((row) => row.description)).join(' + '),
     amountCents: rows.reduce((sum, row) => sum + row.amountCents, 0n),
+    refundCents: rows.reduce((sum, row) => sum + (row.refundCents || 0n), 0n),
+    refundDate: rows.find((row) => row.refundDate)?.refundDate || null,
     storeIds: unique(rows.flatMap((row) => row.storeIds)),
     storeCodes: unique(rows.flatMap((row) => row.storeCodes)).sort(),
     states: unique(rows.flatMap((row) => row.states)).sort(),
