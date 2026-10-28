@@ -9,6 +9,7 @@ import {
   scopeFinancePaymentToOccurrenceDateRange,
 } from '../domain/finance-payment-occurrences';
 import { buildFinanceStoreRows } from '../domain/finance-calculations';
+import { itemExecution, remainingItemQuantity } from '../domain/purchase-v2-calculations';
 import { buildStoreReimbursement } from '../domain/finance-reimbursement';
 
 const D = (v: number) => (v / 100).toFixed(2);
@@ -96,6 +97,11 @@ describe('cancelamento parcial auditável: invariantes e integração entre mód
     expect(after.orders[0].lines.reduce((sum,line)=>sum+moneyToCents(line.lineTotal||'0'),0n)).toBe(19500n);
     expect(after.orders[0].lines.map(line=>line.shippingAmount)).toEqual(['8.33','16.67']);
     expect(after.payments[0].amount).toBe('195.00');
+    const cancelled = after.items.find(item=>item.id==='line-cancel')!;
+    expect(cancelled.cancelledQuantity).toBe('1');
+    expect(cancelled.purchasedQuantity).toBe('0');
+    expect(itemExecution(cancelled,after).missingQuantity).toBe(0n);
+    expect(remainingItemQuantity(cancelled,after)).toBe(0n);
     expect(after.payments[0].grossAmount).toBe('320.00');
     expect(after.payments[0].refundedAmount).toBe('125.00');
     expect(after.adjustments?.[0].freightReductionCents).toBe(500n);
