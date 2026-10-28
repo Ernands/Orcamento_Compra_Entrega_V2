@@ -28,7 +28,13 @@ revoke all on public.supply_purchase_partial_adjustments from public,anon,authen
 grant select on public.supply_purchase_partial_adjustments to authenticated;
 drop policy if exists purchase_partial_adjustments_read on public.supply_purchase_partial_adjustments;
 create policy purchase_partial_adjustments_read on public.supply_purchase_partial_adjustments
-for select to authenticated using (app.can_read_supply_purchase(purchase_id));
+for select to authenticated using (
+  app.can_read_supply_purchase(purchase_id)
+  or (
+    app.can('finance','view')
+    and app.can_read_supply_purchase_for(purchase_id,'finance','document_audit_view')
+  )
+);
 
 create or replace function public.register_supply_purchase_partial_adjustment_v1(
  p_order_id uuid,p_payment_id uuid,p_refund_attachment_id uuid,p_refunded_on date,
