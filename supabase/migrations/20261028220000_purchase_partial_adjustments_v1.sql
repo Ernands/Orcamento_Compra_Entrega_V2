@@ -296,4 +296,34 @@ drop trigger if exists partial_refund_attachment_immutable on public.supply_purc
 create trigger partial_refund_attachment_immutable before update or delete
  on public.supply_purchase_attachments for each row execute function private.guard_partial_refund_original();
 
+-- Preserva também o vínculo físico de cada linha à loja após o ajuste.
+create or replace function private.guard_partial_refund_store_allocation()
+returns trigger language plpgsql set search_path='' as $
+declare v_line_id uuid;
+begin
+ v_line_id:=case when tg_op='DELETE' then old.order_line_id else new.order_line_id end;
+ if exists (
+   select 1 from public.supply_purchase_order_items li
+   join public.supply_purchase_partial_adjustments a on a.order_id=li.order_id
+   where li.id=v_line_id
+ ) then
+   raise exception 'Distribuição de itens de pedido ajustado não pode ser alterada';
+ end if;
+ if tg_op='UPDATE' and old.order_line_id is distinct from new.order_line_id
+   and exists(
+     select 1 from public.supply_purchase_order_items li
+     join public.supply_purchase_partial_adjustments a on a.order_id=li.order_id
+     where li.id=old.order_line_id
+   ) then
+   raise exception 'Distribuição original de pedido ajustado não pode ser movida';
+ end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end;
+$;
+drop trigger if exists partial_refund_store_allocation_immutable on public.supply_purchase_order_line_stores;
+create trigger partial_refund_store_allocation_immutable before insert or update or delete
+ on public.supply_purchase_order_line_stores
+ for each row execute function private.guard_partial_refund_store_allocation();
+
 commit;
