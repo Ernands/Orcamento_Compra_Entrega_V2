@@ -107,6 +107,7 @@ export interface PurchaseItemV2 {
   storeCode: string | null;
   quantityApproved: string;
   purchasedQuantity: string;
+  cancelledQuantity?: string;
   unit: string;
   quotedUnitPrice: string;
   quotedDiscountAmount: string;
@@ -183,7 +184,10 @@ export interface PurchasePaymentV2 {
   purchaseOrderId: string | null;
   paymentMethod: PaymentMethod;
   sourceLabel: string | null;
-  amount: string;
+  amount: string; // valor líquido no read model quando há ajuste
+  grossAmount?: string; // pagamento histórico original, preservado no banco
+  refundedAmount?: string;
+  refundedOn?: string;
   entryAmount: string | null;
   installmentCount: number | null;
   firstDueDate: string | null;
@@ -268,6 +272,7 @@ export interface PurchaseV2 {
   payments: PurchasePaymentV2[];
   attachments: PurchaseAttachmentV2[];
   quoteAttachments: QuoteAttachmentReadOnlyV2[];
+  adjustments?: import('./purchase-partial-adjustments').PurchasePartialAdjustment[];
 }
 
 export interface StoreAllocationInputV2 {

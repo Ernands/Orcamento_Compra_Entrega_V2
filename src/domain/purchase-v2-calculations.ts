@@ -87,14 +87,17 @@ export function itemExecution(item: PurchaseItemV2, purchase: Pick<PurchaseV2, '
   const lines = activeLines(purchase).filter((line) => line.purchaseItemId === item.id);
   const purchasedQuantity = lines.reduce((sum, line) => sum + quantityToThousandths(line.quantity), 0n);
   const approvedQuantity = quantityToThousandths(item.quantityApproved);
+  const cancelledQuantity = quantityToThousandths(item.cancelledQuantity || '0');
+  const executedQuantity = purchasedQuantity + cancelledQuantity;
   const realizedCents = lines.reduce((sum, line) => sum + (lineTotalCents(line) ?? 0n), 0n);
   const hasPendingShipping = lines.some(lineHasPendingShipping);
-  const completed = purchasedQuantity >= approvedQuantity;
+  const completed = executedQuantity >= approvedQuantity;
   return {
     lines,
     approvedQuantity,
     purchasedQuantity,
-    missingQuantity: approvedQuantity > purchasedQuantity ? approvedQuantity - purchasedQuantity : 0n,
+    cancelledQuantity,
+    missingQuantity: approvedQuantity > executedQuantity ? approvedQuantity - executedQuantity : 0n,
     realizedCents,
     hasPendingShipping,
     completed,

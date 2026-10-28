@@ -170,7 +170,8 @@ export function FinancePaymentOccurrencesModal({
   const official = financePaymentOfficialAmount(row);
   const detailed = occurrences.reduce((sum, occurrence) => sum + occurrence.amountCents, 0n);
   const difference = detailed - official;
-  const editable = canEdit && row.workServiceId === null && row.paymentIds.length === 1;
+  const editable = canEdit && row.workServiceId === null && row.paymentIds.length === 1
+    && !row.refundCents;
   const editDifference = draftTotal === null ? null : draftTotal - official;
   // Editing must report the CURRENT input, not yesterday's saved divergence.
   const displayedDetailed = editing ? draftTotal : detailed;

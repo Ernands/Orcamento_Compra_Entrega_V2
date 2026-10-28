@@ -10,7 +10,7 @@ export interface FinancePaymentOccurrenceDisplay {
   amountCents: bigint;
   paymentMethod: string | null;
   referenceLabel: string | null;
-  source: 'manual' | 'proof_backfill' | 'payment_record' | 'fallback';
+  source: 'manual' | 'proof_backfill' | 'payment_record' | 'fallback' | 'refund';
   notes: string | null;
 }
 
@@ -105,7 +105,7 @@ export function decorateFinancePaymentsWithOccurrences(
             paymentId: row.paymentIds[0] || null,
             attachmentId: null,
             date: row.date,
-            amountCents: row.amountCents,
+            amountCents: row.amountCents + (row.refundCents || 0n),
             paymentMethod: row.paymentMethod,
             referenceLabel: row.sourceLabel || row.installmentLabel || null,
             source: 'fallback',
@@ -113,7 +113,24 @@ export function decorateFinancePaymentsWithOccurrences(
           }]
         : [];
 
-    const paymentOccurrences = structured.length ? structured : fallback;
+    // Os pagamentos originais seguem intactos no banco/ocorrências.
+    // O crédito é exibido como evento negativo rastreável; não é nova despesa.
+    const paymentOccurrences = [
+      ...(structured.length ? structured : fallback),
+      ...(row.status === 'paid' && (row.refundCents || 0n) > 0n
+        ? [{
+            id: `refund:${row.id}`,
+            paymentId: row.paymentIds[0] || null,
+            attachmentId: null,
+            date: row.refundDate || row.date || '',
+            amountCents: -(row.refundCents || 0n),
+            paymentMethod: 'credito_de_reembolso',
+            referenceLabel: 'Crédito por cancelamento parcial',
+            source: 'refund' as const,
+            notes: 'Valor devolvido; o comprovante do pagamento original permanece preservado.',
+          }]
+        : []),
+    ];
     const officialAmountCents = row.amountCents;
     const occurrenceSumCents = paymentOccurrences.reduce((sum, item) => sum + item.amountCents, 0n);
     const occurrenceDifferenceCents = occurrenceSumCents - officialAmountCents;
@@ -144,6 +161,16 @@ export function financePaymentMatchesDateRange(
   dateTo: string,
 ): boolean {
   if (!dateFrom && !dateTo) return true;
+  // Em pagamentos reembolsados, o filtro de "Pago" considera a data do
+  // desembolso original com saldo líquido atual. O evento de crédito mantém
+  // sua data real no detalhamento sem se tornar um "pagamento" negativo isolado.
+  if (row.status === 'paid' && (row.refundCents || 0n) > 0n) {
+    return Boolean(row.date && occurrenceInRange({
+      id: row.id, paymentId: null, attachmentId: null, date: row.date,
+      amountCents: row.amountCents, paymentMethod: null, referenceLabel: null,
+      source: 'fallback', notes: null,
+    }, dateFrom, dateTo));
+  }
   const dates = row.status === 'paid'
     ? row.paymentDates
     : row.date
@@ -158,6 +185,9 @@ export function scopeFinancePaymentToOccurrenceDateRange(
   dateTo: string,
 ): UnifiedFinancePaymentRowWithOccurrences {
   if (row.status !== 'paid' || (!dateFrom && !dateTo)) return row;
+  // O ajuste já está refletido no valor líquido; não separar seu crédito
+  // como "pago negativo" no período para não romper alocações e dashboards.
+  if ((row.refundCents || 0n) > 0n) return row;
 
   const matchingOccurrences = row.paymentOccurrences.filter((occurrence) =>
     occurrenceInRange(occurrence, dateFrom, dateTo),
@@ -213,7 +243,7 @@ export function scopeFinancePaymentToOccurrenceDateRange(
 }
 
 export function financePaymentLatestDate(row: UnifiedFinancePaymentRowWithOccurrences): string | null {
-  if (row.status !== 'paid') return row.date;
+  if (row.status !== 'paid' || (row.refundCents || 0n) > 0n) return row.date;
   return row.paymentDates.length ? row.paymentDates[row.paymentDates.length - 1] : row.date;
 }
 
