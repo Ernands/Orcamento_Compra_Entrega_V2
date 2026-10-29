@@ -46,5 +46,5 @@ export async function lookupReferenceAudit(code: string): Promise<ReferenceAudit
     { p_code: code } as never,
   );
   if (error) throw new Error(error.message);
-  return data as ReferenceAudit | null;
+  return data;
 }
