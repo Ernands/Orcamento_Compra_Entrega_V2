@@ -35,7 +35,7 @@ describe('AdminReferenceAuditPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Consultar' }));
     await waitFor(() => expect(lookupReferenceAudit).toHaveBeenCalledWith('OBR-00320'));
     expect(screen.getByText('Dados de criação · OBR-00320')).toBeInTheDocument();
-    expect(screen.getByText('27/10/2026, 09:23:33')).toBeInTheDocument();
+    expect(screen.getAllByText('27/10/2026, 09:23:33')).toHaveLength(2);
     expect(screen.getAllByText('nota.pdf')).toHaveLength(2);
     expect(screen.getByText('Arquivo anexado')).toBeInTheDocument();
   });
