@@ -1,0 +1,38 @@
+.admin-reference-audit { max-width: 1420px; }
+.admin-audit-search, .admin-audit-panel {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #dfe5ec);
+  border-radius: 12px;
+  padding: 20px 22px;
+}
+.admin-audit-search { display: grid; gap: 11px; }
+.admin-audit-search label { font-weight: 650; color: #203149; }
+.admin-audit-search > div { display: flex; gap: 10px; align-items: stretch; max-width: 670px; }
+.admin-audit-search input { min-width: 0; flex: 1; padding: 11px 13px; border: 1px solid #c9d4df; border-radius: 8px; font: inherit; }
+.admin-audit-search small, .admin-audit-source { color: #64748b; font-size: 13px; }
+.admin-audit-message { padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+.admin-audit-error { border-color: #f1bdbd; color: #9d2929; }
+.admin-audit-panel { display: grid; gap: 18px; }
+.admin-audit-panel-heading { display: flex; align-items: center; gap: 9px; color: #1c436b; }
+.admin-audit-panel-heading h3 { margin: 0; font-size: 17px; font-weight: 650; }
+.admin-audit-facts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
+.admin-audit-facts > div { display: grid; gap: 5px; min-width: 0; }
+.admin-audit-facts span { font-size: 12px; color: #66758a; }
+.admin-audit-facts strong { font-weight: 600; overflow-wrap: anywhere; }
+.admin-audit-source { margin: 0; }
+.admin-audit-table-scroll { width: 100%; overflow-x: auto; }
+.admin-audit-table { border-collapse: collapse; width: 100%; min-width: 800px; font-size: 13px; }
+.admin-audit-table th { background: #f3f6fa; padding: 12px; text-align: left; color: #475569; font-weight: 650; }
+.admin-audit-table td { padding: 12px; border-top: 1px solid #e7ebf0; vertical-align: top; }
+.admin-audit-table tbody tr:hover { background: #fafbfc; }
+.admin-audit-filename { overflow-wrap: anywhere; max-width: 470px; }
+.admin-audit-filename small { display: block; color: #64748b; margin-top: 5px; }
+.admin-audit-empty { color: #64748b; margin: 0; }
+@media(max-width: 800px) {
+  .admin-audit-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .admin-audit-search, .admin-audit-panel { padding: 16px; }
+}
+@media(max-width: 520px) {
+  .admin-audit-facts { grid-template-columns: 1fr; }
+  .admin-audit-search > div { flex-direction: column; }
+}

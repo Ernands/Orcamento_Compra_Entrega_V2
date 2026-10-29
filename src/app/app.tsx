@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AccessPage } from '../pages/access-page';
+import { AdminReferenceAuditPage } from '../pages/admin-reference-audit-page';
 import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
 import { ChecklistMasterPage } from '../pages/checklist-master-page';
@@ -366,6 +367,16 @@ export function App() {
               element={
                 <RequireCapability capability="quotes.view">
                   <SupplyComparisonPage />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="administracao/auditoria"
+              element={
+                <RequireCapability capability="access.view">
+                  <RequireCapability capability="access.audit_view">
+                    <AdminReferenceAuditPage />
+                  </RequireCapability>
                 </RequireCapability>
               }
             />
