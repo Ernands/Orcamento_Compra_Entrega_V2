@@ -7,6 +7,7 @@ import {
   KeyRound,
   Landmark,
   HardHat,
+  FileClock,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -93,7 +94,7 @@ export function AppShell() {
       setSupplyOpen(true);
       persistSectionState(SECTION_STORAGE.supply, true);
     }
-    if (location.pathname.startsWith('/acessos')) {
+    if ((location.pathname.startsWith('/acessos') || location.pathname.startsWith('/administracao/'))) {
       setAdministrationOpen(true);
       persistSectionState(SECTION_STORAGE.administration, true);
     }
@@ -360,10 +361,18 @@ export function AppShell() {
               </button>
             )}
             {(compact || administrationOpen) && (
-              <NavLink to="/acessos" onClick={() => setMobileOpen(false)}>
-                <ShieldCheck size={19} />
-                Acessos
-              </NavLink>
+              <>
+                <NavLink to="/acessos" onClick={() => setMobileOpen(false)}>
+                  <ShieldCheck size={19} />
+                  Acessos
+                </NavLink>
+                {can('access.audit_view') && (
+                  <NavLink to="/administracao/auditoria" onClick={() => setMobileOpen(false)}>
+                    <FileClock size={19} />
+                    Auditoria OBR/CMP
+                  </NavLink>
+                )}
+              </>
             )}
           </>
         )}

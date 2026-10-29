@@ -26,6 +26,7 @@ export type Capability =
   | 'stores.delete'
   | 'stores.finalize_reopen'
   | 'access.view'
+  | 'access.audit_view'
   | 'access.create'
   | 'access.edit'
   | 'access.disable'
