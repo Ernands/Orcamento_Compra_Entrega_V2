@@ -30,6 +30,8 @@ function formatDate(value: string): string {
 }
 
 function formatAdjustmentDate(value: string): string {
+  // Datas legadas sem horário são datas de calendário, não instantes UTC.
+  if (!value.includes('T')) return formatDate(value);
   const timestamp = new Date(value);
   if (Number.isNaN(timestamp.getTime())) return formatDate(value);
   return new Intl.DateTimeFormat('pt-BR', {
