@@ -23,6 +23,7 @@ export type PartialAdjustmentRecord = {
   reference: string;
   reason: string;
   line_adjustments: PartialAdjustmentLine[];
+  refund_entries?: Array<{ line_id: string; amount_cents: number; refunded_on: string }>;
   created_at: string;
 };
 
@@ -37,6 +38,7 @@ export type PurchasePartialAdjustment = {
   refundedCents: bigint;
   netCents: bigint;
   refundedOn: string;
+  refundEntries: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
   reference: string;
   reason: string;
   createdAt: string;
@@ -127,6 +129,13 @@ export function applyPurchasePartialAdjustments(
         });
       } else throw new Error('Tipo de ajuste desconhecido.');
     }
+    if (record.refund_entries?.length && (
+      record.refund_entries.some((entry) =>
+        !cancelledLines.some((line) => line.id === entry.line_id) ||
+        !Number.isSafeInteger(entry.amount_cents) || entry.amount_cents <= 0 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(entry.refunded_on)) ||
+      record.refund_entries.reduce((sum, entry) => sum + BigInt(entry.amount_cents), 0n) !== BigInt(record.refund_cents)
+    )) throw new Error('Lançamentos individuais do crédito não conciliados.');
     if (cancelled !== BigInt(record.cancelled_cents) ||
       freight !== BigInt(record.freight_reduction_cents) ||
       cancelled + freight !== BigInt(record.refund_cents) ||
@@ -149,6 +158,9 @@ export function applyPurchasePartialAdjustments(
     currentPayment.grossAmount = payment.amount;
     currentPayment.refundedAmount = toSqlMoney(BigInt(record.refund_cents));
     currentPayment.refundedOn = record.refunded_on;
+    currentPayment.refundEntries = (record.refund_entries || []).map((entry) => ({
+      lineId: entry.line_id, amountCents: BigInt(entry.amount_cents), refundedOn: entry.refunded_on,
+    }));
     currentPayment.amount = toSqlMoney(BigInt(record.remaining_cents));
     adjustments.push({
       id: record.id, orderId: order.id, paymentId: payment.id,
@@ -157,6 +169,7 @@ export function applyPurchasePartialAdjustments(
       cancelledCents: cancelled, freightReductionCents: freight,
       refundedCents: BigInt(record.refund_cents), netCents: BigInt(record.remaining_cents),
       refundedOn: record.refunded_on, reason: record.reason, reference: record.reference,
+      refundEntries: currentPayment.refundEntries,
       createdAt: record.created_at, cancelledLines, freightLines,
     });
   }
