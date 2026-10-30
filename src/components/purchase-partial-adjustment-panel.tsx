@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { FileText, Scale, ShieldCheck } from 'lucide-react';
+import { FileText, Plus, Scale, ShieldCheck, Trash2 } from 'lucide-react';
 import { registerPartialPurchaseAdjustment } from '../data/purchases/purchases-v2-repository';
 import type { PurchaseOrderV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import { moneyToCents } from '../domain/supply-calculations';
 import { moneyBRL, parseRefundBRL, prorateFreightReduction } from '../domain/purchase-freight-proration';
 import './purchase-partial-adjustment-panel.css';
 
+type RefundInput = { id: number; lineId: string; amount: string; date: string };
+const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Fortaleza' });
 type Props = {
   purchase: PurchaseV2;
   order: PurchaseOrderV2;
@@ -23,8 +25,8 @@ export function PurchasePartialAdjustmentPanel({
   const existing = purchase.adjustments?.find((entry) => entry.orderId === order.id);
   const [open, setOpen] = useState(false);
   const [cancelledIds, setCancelledIds] = useState<string[]>([]);
-  const [refundText, setRefundText] = useState('');
-  const [refundDate, setRefundDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [refundInputs, setRefundInputs] = useState<RefundInput[]>([]);
+  const [nextRefundId, setNextRefundId] = useState(1);
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState('');
   const [documentId, setDocumentId] = useState('');
@@ -42,14 +44,24 @@ export function PurchasePartialAdjustmentPanel({
   const cancelledLines = order.lines.filter((line) => cancelledSet.has(line.id));
   const retainedLines = order.lines.filter((line) => !cancelledSet.has(line.id));
   const cancelledTotal = cancelledLines.reduce((sum, line) => sum + moneyToCents(line.lineTotal || '0'), 0n);
-  const refund = parseRefundBRL(refundText);
+  const parsedEntries = refundInputs.map((entry) => ({
+    ...entry, cents: parseRefundBRL(entry.amount),
+  }));
+  const entriesValid = parsedEntries.length > 0 && parsedEntries.every((entry) =>
+    Boolean(entry.lineId && cancelledSet.has(entry.lineId)) &&
+    entry.cents !== null && entry.cents > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(entry.date) && entry.date <= today());
+  const allCancelledHaveRefund = cancelledIds.every((id) =>
+    parsedEntries.some((entry) => entry.lineId === id));
+  const refund = entriesValid && allCancelledHaveRefund
+    ? parsedEntries.reduce((sum, entry) => sum + (entry.cents || 0), 0) : null;
   const difference = refund === null ? null : BigInt(refund) - cancelledTotal;
   const remainingFreight = retainedLines.reduce((sum, line) => sum + moneyToCents(line.shippingAmount || '0'), 0n);
   const validMoney = difference !== null && difference >= 0n && difference <= remainingFreight
     && refund !== null && refund > 0 && BigInt(refund) < original;
   const validInputs = cancelledIds.length > 0 && cancelledIds.length < order.lines.length &&
-    validMoney && confirmFreight && documentId && reference.trim().length >= 4 &&
-    reason.trim().length >= 10 && refundDate.length === 10 && refundDate <= new Date().toISOString().slice(0, 10);
+    validMoney && entriesValid && allCancelledHaveRefund && confirmFreight && documentId &&
+    reference.trim().length >= 4 && reason.trim().length >= 10;
   const distributed = (() => {
     if (!validMoney || difference === null) return [];
     return prorateFreightReduction(retainedLines.map((line) => ({
@@ -71,7 +83,17 @@ export function PurchasePartialAdjustmentPanel({
         <span>Pago líquido <strong>{format(existing.netCents)}</strong></span>
       </div>
       <p>{existing.refundedOn} · {existing.reference} · {existing.reason}</p>
-      <p>Itens cancelados: {existing.cancelledLines.map((line) => `${line.itemCode} — ${line.itemName}`).join('; ')}.</p>
+      <p>Itens cancelados: {existing.cancelledLines.map((line) => line.itemCode + ' — ' + line.itemName).join('; ')}.</p>
+      {existing.refundEntries.length > 0 && <div className="purchase-refund-table-wrap"><table>
+        <thead><tr><th>Item reembolsado</th><th>Data do crédito</th><th>Valor recebido</th></tr></thead>
+        <tbody>{existing.refundEntries.map((entry, index) => {
+          const line = existing.cancelledLines.find((item) => item.id === entry.lineId);
+          return <tr key={entry.lineId + ':' + index}>
+            <td>{line ? line.itemCode + ' — ' + line.itemName : 'Item não identificado'}</td>
+            <td>{entry.refundedOn}</td><td>{format(entry.amountCents)}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>}
       <p>Comprovante do crédito: <strong>{doc?.originalName || existing.refundAttachmentId}</strong>.
         Pagamento e linhas originais preservados no banco e no histórico de auditoria.</p>
     </div>;
@@ -88,7 +110,23 @@ export function PurchasePartialAdjustmentPanel({
     </p>;
   }
   const updateSelection = (id: string) => {
-    setCancelledIds((current) => current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]);
+    const next = cancelledIds.includes(id) ? cancelledIds.filter((entry) => entry !== id) : [...cancelledIds, id];
+    setCancelledIds(next);
+    setRefundInputs((current) => current.filter((entry) => next.includes(entry.lineId)));
+    setError(null);
+  };
+  const addRefund = () => {
+    setRefundInputs((current) => [...current, {
+      id: nextRefundId,
+      lineId: cancelledLines.find((line) => !current.some((entry) => entry.lineId === line.id))?.id || cancelledLines[0]?.id || '',
+      amount: '', date: today(),
+    }]);
+    setNextRefundId((current) => current + 1);
+    setError(null);
+  };
+  const updateRefund = (id: number, patch: Partial<RefundInput>) => {
+    setRefundInputs((current) => current.map((entry) =>
+      entry.id === id ? { ...entry, ...patch } : entry));
     setError(null);
   };
   const submit = async () => {
@@ -105,8 +143,11 @@ export function PurchasePartialAdjustmentPanel({
     try {
       await registerPartialPurchaseAdjustment({
         orderId: order.id, paymentId: payment.id, attachmentId: documentId,
-        refundedOn: refundDate, reference: reference.trim(), reason: reason.trim(),
-        expectedOriginalCents: original, refundCents: BigInt(refund),
+        reference: reference.trim(), reason: reason.trim(),
+        expectedOriginalCents: original,
+        refundEntries: parsedEntries.map((entry) => ({
+          lineId: entry.lineId, amountCents: BigInt(entry.cents!), refundedOn: entry.date,
+        })),
         cancelled: cancelledLines.map((line) => ({
           lineId: line.id, amountCents: moneyToCents(line.lineTotal || '0'),
         })),
@@ -126,42 +167,81 @@ export function PurchasePartialAdjustmentPanel({
       <Scale size={16}/> {open ? 'Recolher ajuste' : 'Ajustar compra / Cancelamento parcial'}
     </button>
     {open && <div className="purchase-refund-body">
-      <h4>Cancelamento parcial com crédito e rateio proporcional do frete</h4>
-      <p>Selecione linhas inteiras canceladas, informe o reembolso recebido e vincule o documento do crédito. O saldo de frete será distribuído entre os itens mantidos, sem alterar preços unitários.</p>
+      <h4>Cancelamento parcial com créditos por item e rateio proporcional do frete</h4>
+      <p>Selecione os itens integralmente cancelados. Clique em + para registrar o valor recebido e a data de cada reembolso. O total é calculado automaticamente.</p>
       <div className="purchase-refund-lines">{order.lines.map((line) =>
         <label key={line.id} className={cancelledSet.has(line.id) ? 'is-cancelled' : ''}>
           <input type="checkbox" checked={cancelledSet.has(line.id)} onChange={() => updateSelection(line.id)}/>
           <span><strong>{line.itemName}</strong><small>{line.itemCode} · {line.quantity} {line.unit}</small></span>
           <strong>{format(moneyToCents(line.lineTotal || '0'))}</strong>
         </label>)}</div>
+      <div className="purchase-refund-credit-heading">
+        <h5>Créditos recebidos por item</h5>
+        <button type="button" className="button button--secondary button--small"
+          onClick={addRefund} disabled={!cancelledIds.length}>
+          <Plus size={16}/> Adicionar reembolso
+        </button>
+      </div>
+      {refundInputs.length === 0 && <p className="purchase-refund-hint">
+        Selecione um item cancelado e clique em “Adicionar reembolso” para registrar seu valor e data.
+      </p>}
+      <div className="purchase-refund-entries">
+        {refundInputs.map((entry, index) => <div className="purchase-refund-entry" key={entry.id}>
+          <label>Item do crédito
+            <select aria-label={'Item do reembolso ' + (index + 1)} value={entry.lineId}
+              onChange={(event) => updateRefund(entry.id, { lineId: event.target.value })}>
+              <option value="">Selecione</option>
+              {cancelledLines.map((line) =>
+                <option key={line.id} value={line.id}>{line.itemCode} — {line.itemName}</option>)}
+            </select>
+          </label>
+          <label>Valor recebido (R$)
+            <input aria-label={'Valor do reembolso ' + (index + 1)} inputMode="decimal" placeholder="0,00"
+              value={entry.amount} onChange={(event) => updateRefund(entry.id, { amount: event.target.value })}/>
+          </label>
+          <label>Data do crédito
+            <input aria-label={'Data do reembolso ' + (index + 1)} type="date" max={today()}
+              value={entry.date} onChange={(event) => updateRefund(entry.id, { date: event.target.value })}/>
+          </label>
+          <button type="button" className="purchase-refund-remove"
+            aria-label={'Remover reembolso ' + (index + 1)}
+            onClick={() => setRefundInputs((current) => current.filter((item) => item.id !== entry.id))}>
+            <Trash2 size={16}/>
+          </button>
+        </div>)}
+      </div>
+      <p className="purchase-refund-total">Total dos créditos informados:
+        <strong>{entriesValid ? format(parsedEntries.reduce((sum, entry) =>
+          sum + BigInt(entry.cents || 0), 0n)) : 'Preencha valores e datas válidos'}</strong>
+      </p>
+      {entriesValid && !allCancelledHaveRefund && <p className="form-error">
+        Cada item cancelado deve ter pelo menos um lançamento de reembolso.
+      </p>}
       <div className="purchase-refund-fields">
-        <label>Reembolso efetivamente recebido (R$)<input placeholder="1.220,40" value={refundText}
-          onChange={(event) => setRefundText(event.target.value)} inputMode="decimal"/></label>
-        <label>Data do crédito<input type="date" max={new Date().toISOString().slice(0, 10)} value={refundDate}
-          onChange={(event) => setRefundDate(event.target.value)}/></label>
-        <label>Referência do crédito<input value={reference} onChange={(event) => setReference(event.target.value)}
-          placeholder="ID Mercado Livre / comprovante"/></label>
+        <label>Referência dos créditos<input value={reference} onChange={(event) => setReference(event.target.value)}
+          placeholder="ID Mercado Livre / referência dos comprovantes"/></label>
         <label>Justificativa<input value={reason} onChange={(event) => setReason(event.target.value)}
-          placeholder="Motivo do cancelamento e confirmação do abatimento de frete"/></label>
+          placeholder="Motivo do cancelamento e abatimento de frete"/></label>
       </div>
       <label className="purchase-refund-proof">Comprovante de reembolso vinculado ao pedido
         <select value={documentId} onChange={(event) => setDocumentId(event.target.value)}>
           <option value="">Selecione o documento de reembolso</option>
           {refundProofs.map((doc) => <option key={doc.id} value={doc.id}>{doc.originalName}</option>)}
         </select>
+        {refundProofs.length === 0 && <small>Nenhum documento de reembolso anexado a este pedido. O comprovante do pagamento original não substitui o documento do crédito recebido.</small>}
         <button type="button" className="button button--secondary button--small" onClick={onAttachRefundProof}>
-          <FileText size={15}/> Anexar comprovante na compra
+          <FileText size={15}/> Anexar comprovante de reembolso
         </button>
       </label>
       <label className="purchase-refund-consent">
         <input type="checkbox" checked={confirmFreight} onChange={(event) => setConfirmFreight(event.target.checked)}/>
-        Confirmo documentalmente que a diferença será classificada como abatimento de frete e autorizo o rateio proporcional.
+        Confirmo documentalmente que a diferença positiva entre o crédito recebido e os itens cancelados corresponde a abatimento de frete, e autorizo o rateio proporcional.
       </label>
       <div className="purchase-refund-numbers">
         <span>Pagamento original<strong>{format(original)}</strong></span>
         <span>Itens cancelados<strong>− {format(cancelledTotal)}</strong></span>
-        <span>Crédito recebido<strong>{refund === null ? 'Inválido' : `− ${moneyBRL(refund)}`}</strong></span>
-        <span>Rateio de frete<strong>{difference === null ? '—' : format(difference)}</strong></span>
+        <span>Créditos recebidos<strong>{refund === null ? 'Pendente' : `− ${moneyBRL(refund)}`}</strong></span>
+        <span>Redução de frete<strong>{difference === null ? '—' : `− ${format(difference)}`}</strong></span>
         <span>Frete restante disponível<strong>{format(remainingFreight)}</strong></span>
         <span>Total líquido<strong>{net === null ? '—' : format(net)}</strong></span>
         <span>Diferença residual<strong>{validMoney ? moneyBRL(0) : 'Não conciliado'}</strong></span>
@@ -178,7 +258,7 @@ export function PurchasePartialAdjustmentPanel({
           <th>{format(net || 0n)}</th></tr></tfoot>
         </table></div>
       </details>}
-      {difference !== null && difference < 0n && <p className="form-error">O crédito é inferior ao valor dos itens. Não é possível reduzir o frete.</p>}
+      {difference !== null && difference < 0n && <p className="form-error" role="alert">Os créditos são {format(-difference)} inferiores à soma dos itens cancelados. Confira a seleção e os valores; não é possível lançar redução de frete negativa.</p>}
       {difference !== null && difference > remainingFreight && <p className="form-error">Crédito excede o frete dos itens mantidos.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="purchase-refund-actions"><button type="button" className="button button--primary"
