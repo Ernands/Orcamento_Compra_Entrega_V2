@@ -29,6 +29,17 @@ function formatDate(value: string): string {
   return `${day}/${month}/${year}`;
 }
 
+function formatAdjustmentDate(value: string): string {
+  // Datas legadas sem horário são datas de calendário, não instantes UTC.
+  if (!value.includes('T')) return formatDate(value);
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return formatDate(value);
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Fortaleza', day: '2-digit', month: '2-digit',
+    year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(timestamp);
+}
+
 function referenceLabel(row: UnifiedFinancePaymentRowWithOccurrences): string {
   return row.referenceCodes.join(' + ') || 'Sem referência';
 }
@@ -167,6 +178,9 @@ export function FinancePaymentOccurrencesModal({
 
   if (!row) return null;
   const occurrences = savedOccurrences || financePaymentOccurrences(row);
+  const adjustments = row.adjustmentEntries || [];
+  const adjustmentSum = adjustments.reduce((sum, entry) => sum + entry.amountCents, 0n);
+  const adjustmentExpected = -(row.refundCents || 0n);
   const official = financePaymentOfficialAmount(row);
   const detailed = occurrences.reduce((sum, occurrence) => sum + occurrence.amountCents, 0n);
   const difference = detailed - official;
@@ -364,6 +378,43 @@ export function FinancePaymentOccurrencesModal({
             </div>
           ) : (
             <EmptyState title="Sem datas detalhadas" detail="Nenhuma ocorrência financeira foi informada para este pagamento." />
+          )}
+
+          {adjustments.length > 0 && (
+            <section className="finance-payment-adjustment-breakdown" aria-label="Ajustes da compra">
+              <header>
+                <div>
+                  <strong>Ajustes registrados em Ajustar compra</strong>
+                  <small>Memória de cálculo auditável — estes lançamentos já estão refletidos nos créditos acima e não são somados novamente ao pagamento.</small>
+                </div>
+                <span className="finance-payment-adjustment-breakdown__count">{adjustments.length} ajuste(s)</span>
+              </header>
+              <div className="finance-payment-occurrence-table-wrap">
+                <table className="finance-payment-occurrence-table">
+                  <thead><tr><th>Registrado em</th><th>Variação</th><th>Lançamento</th><th>Referência</th></tr></thead>
+                  <tbody>
+                    {adjustments.map((entry) => (
+                      <tr key={entry.id}>
+                        <td><strong>{formatAdjustmentDate(entry.adjustedOn)}</strong></td>
+                        <td className="is-money"><strong>{entry.amountCents > 0n ? '+' : ''}{formatBRL(entry.amountCents)}</strong></td>
+                        <td><span className="finance-payment-method-pill">{entry.kind === 'freight' ? 'Ajuste de frete' : 'Item cancelado'}</span>
+                          <small className="finance-payment-adjustment-breakdown__description">{entry.description}</small></td>
+                        <td>{entry.reference}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr><th colSpan={1}>Total dos ajustes</th>
+                    <th className="is-money">{formatBRL(adjustmentSum)}</th>
+                    <td colSpan={2}>Crédito líquido já refletido no pagamento: {formatBRL(row.refundCents || 0n)}</td>
+                  </tr></tfoot>
+                </table>
+              </div>
+              {adjustmentSum !== adjustmentExpected && (
+                <p className="finance-payment-occurrence-warning" role="alert">
+                  <CircleAlert size={17} /> Divergência entre os ajustes e os créditos recebidos. Confira a compra na origem.
+                </p>
+              )}
+            </section>
           )}
 
           {editable && (

@@ -171,6 +171,62 @@
   white-space: nowrap;
 }
 
+.finance-payment-adjustment-breakdown {
+  margin-top: 19px;
+  border: 1px solid #d9e3eb;
+  border-radius: 10px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+.finance-payment-adjustment-breakdown > header {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #dce5ed;
+}
+.finance-payment-adjustment-breakdown > header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.finance-payment-adjustment-breakdown > header strong {
+  color: #263f57;
+  font-size: .89rem;
+}
+.finance-payment-adjustment-breakdown > header small {
+  color: #677d91;
+  line-height: 1.45;
+  font-size: .77rem;
+  max-width: 680px;
+}
+.finance-payment-adjustment-breakdown__count {
+  align-self: flex-start;
+  color: #356886;
+  font-size: .77rem;
+  font-weight: 700;
+}
+.finance-payment-adjustment-breakdown .finance-payment-occurrence-table {
+  min-width: 620px;
+}
+.finance-payment-adjustment-breakdown .finance-payment-occurrence-table tfoot {
+  background: #f0f5fa;
+}
+.finance-payment-adjustment-breakdown .finance-payment-occurrence-table tfoot th,
+.finance-payment-adjustment-breakdown .finance-payment-occurrence-table tfoot td {
+  font-size: .8rem;
+  font-weight: 650;
+  color: #2a5069;
+}
+.finance-payment-adjustment-breakdown__description {
+  display: block;
+  margin-top: 4px;
+  color: #5a6d7f;
+  font-size: .75rem;
+  white-space: normal;
+}
+
 .finance-payment-occurrence-edit-action {
   display: flex;
   align-items: center;

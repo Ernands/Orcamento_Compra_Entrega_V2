@@ -3,7 +3,7 @@ import type { PurchaseV2 } from './purchase-v2-types';
 
 export type PartialAdjustmentLine = {
   line_id: string;
-  kind: 'cancelled' | 'freight';
+  kind: 'cancelled' | 'freight' | 'freight_retained';
   reduction_cents: number;
   original_line_cents: number;
   original_shipping_cents: number;
@@ -89,16 +89,19 @@ export function applyPurchasePartialAdjustments(
     const seen = new Set<string>();
     let cancelled = 0n;
     let freight = 0n;
+    let retainedFreightLineId: string | null = null;
+    let retainedFreightCents = 0n;
     const cancelledLines: PurchasePartialAdjustment['cancelledLines'] = [];
     const freightLines: PurchasePartialAdjustment['freightLines'] = [];
     for (const item of record.line_adjustments) {
       const line = lineMap.get(item.line_id);
-      if (!line || seen.has(line.id) || !Number.isSafeInteger(item.reduction_cents) ||
+      if (!line || (item.kind !== 'freight_retained' && seen.has(line.id)) ||
+        !Number.isSafeInteger(item.reduction_cents) ||
         !Number.isSafeInteger(item.original_line_cents) ||
         !Number.isSafeInteger(item.original_shipping_cents)) {
         throw new Error(`Item inválido no ajuste da compra ${purchase.code}.`);
       }
-      seen.add(line.id);
+      if (item.kind !== 'freight_retained') seen.add(line.id);
       const lineAmount = moneyToCents(line.lineTotal || '');
       const freightAmount = moneyToCents(line.shippingAmount || '');
       if (lineAmount !== BigInt(item.original_line_cents) ||
@@ -127,7 +130,18 @@ export function applyPurchasePartialAdjustments(
           id: line.id, itemCode: line.itemCode, itemName: line.itemName,
           originalShippingCents: freightAmount, reductionCents: BigInt(item.reduction_cents),
         });
+      } else if (item.kind === 'freight_retained') {
+        if (retainedFreightLineId || !cancelledLines.some((cancelledLine) => cancelledLine.id === line.id) ||
+          item.reduction_cents >= 0) {
+          throw new Error('Acerto de frete retido deve estar vinculado a um item cancelado.');
+        }
+        retainedFreightLineId = line.id;
+        retainedFreightCents = -BigInt(item.reduction_cents);
+        freight += BigInt(item.reduction_cents);
       } else throw new Error('Tipo de ajuste desconhecido.');
+    }
+    if (retainedFreightCents > cancelledLines.reduce((sum, line) => sum + line.originalShippingCents, 0n)) {
+      throw new Error('Frete não restituído excede o frete original dos itens cancelados.');
     }
     if (record.refund_entries?.length && (
       record.refund_entries.some((entry) =>
@@ -154,6 +168,27 @@ export function applyPurchasePartialAdjustments(
         lineTotal: toSqlMoney(moneyToCents(line.lineTotal || '0') - reduction),
       };
     });
+    // Terceiro lançamento virtual: custo de frete dos itens cancelados não devolvido.
+    // A origem preservada não é alterada; o lançamento integra o custo por loja,
+    // o orçamento e o financeiro sem duplicar unidades efetivamente compradas.
+    if (retainedFreightLineId && retainedFreightCents > 0n) {
+      const source = lineMap.get(retainedFreightLineId)!;
+      currentOrder.lines.push({
+        ...source,
+        id: `freight-retained:${record.id}`,
+        purchaseDestinationId: null,
+        itemCode: 'AJ-FRETE',
+        itemName: 'Acerto de frete dos itens cancelados',
+        // Item virtual sem quantidade comprada. Para a distribuição financeira
+        // entre lojas, usar peso técnico positivo, sem alterar a quantidade da CMP.
+        stores: source.stores.map((store) => ({ ...store, quantity: '1' })),
+        quantity: '0', unit: 'ajuste', unitPrice: '0.00',
+        discountAmount: '0.00', otherCosts: '0.00',
+        shippingAmount: toSqlMoney(retainedFreightCents),
+        lineTotal: toSqlMoney(retainedFreightCents),
+        notes: 'Frete original não restituído em cancelamento parcial; vinculado ao ajuste ' + record.id,
+      });
+    }
     const currentPayment = purchase.payments.find((entry) => entry.id === payment.id)!;
     currentPayment.grossAmount = payment.amount;
     currentPayment.refundedAmount = toSqlMoney(BigInt(record.refund_cents));

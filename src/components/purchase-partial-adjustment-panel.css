@@ -12,3 +12,34 @@
 .purchase-refund-proof small{font-weight:400;color:#7b5e36;line-height:1.5}
 @media(max-width:760px){.purchase-refund-entry{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px}.purchase-refund-entry label:first-child{grid-column:1/-1}.purchase-refund-entry label:nth-child(3){grid-column:2}.purchase-refund-remove{grid-column:3;grid-row:2}}
 @media(max-width:480px){.purchase-refund-entry{grid-template-columns:minmax(0,1fr) 34px}.purchase-refund-entry label{grid-column:1}.purchase-refund-remove{grid-column:2;grid-row:4}.purchase-refund-total{align-items:flex-start;flex-direction:column}}
+
+/* Consolidação de frete assinada: terceiro lançamento sem sobrepor itens. */
+.purchase-refund-panel, .purchase-refund-body { min-width: 0; width: 100%; }
+.purchase-refund-body { display: grid; gap: 12px; padding: 14px 0 4px; }
+.purchase-refund-body > * { min-width: 0; }
+.purchase-refund-body > p { margin: 0; }
+.purchase-refund-fields { margin: 2px 0; }
+.purchase-refund-numbers { margin: 0; }
+.purchase-refund-numbers span { min-width: 0; }
+.purchase-refund-numbers span strong { text-align: right; }
+.purchase-refund-freight-adjustment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid #cbdceb;
+  border-left: 3px solid #326d98;
+  border-radius: 8px;
+  background: #f5f9fd;
+}
+.purchase-refund-freight-adjustment > div { display: grid; gap: 5px; min-width: 0; }
+.purchase-refund-freight-adjustment > div > strong { color: #254866; font-size: 13px; }
+.purchase-refund-freight-adjustment small { font-size: 12px; line-height: 1.5; color: #526b7f; }
+.purchase-refund-freight-adjustment > strong { flex: none; color: #255875; font-variant-numeric: tabular-nums; }
+.purchase-refund-freight-adjustment__positive { color: #9a6320 !important; }
+.purchase-refund-retained-note { padding: 10px 12px; background: #fff8ed; border-radius: 7px; color: #785725 !important; }
+@media (max-width: 610px) {
+  .purchase-refund-numbers { grid-template-columns: minmax(0,1fr); }
+  .purchase-refund-freight-adjustment { align-items: flex-start; flex-direction: column; gap: 8px; }
+}

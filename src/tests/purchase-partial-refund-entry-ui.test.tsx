@@ -39,7 +39,7 @@ describe('lançamentos de crédito por item', () => {
     expect(screen.getByRole('button',{name:/Confirmar cancelamento/})).toBeDisabled();
   });
 
-  it('bloqueia crédito menor que os itens cancelados sem inventar frete negativo', () => {
+  it('admite frete não restituído dos itens cancelados dentro do frete original', () => {
     setup();
     fireEvent.click(screen.getByLabelText(/Armário baixo com chave/));
     fireEvent.click(screen.getByLabelText(/Mesa de videoatendimento/));
@@ -47,7 +47,10 @@ describe('lançamentos de crédito por item', () => {
     fireEvent.change(screen.getByLabelText('Valor do reembolso 1'),{target:{value:'516,90'}});
     fireEvent.click(screen.getByRole('button',{name:'Adicionar reembolso'}));
     fireEvent.change(screen.getByLabelText('Valor do reembolso 2'),{target:{value:'703,50'}});
-    expect(screen.getByText(/R\$ 63,23 inferiores/)).toBeInTheDocument();
+    expect(screen.getByText(/AJ-FRETE/)).toBeInTheDocument();
+    expect(screen.getAllByText(/R\$ 63,23/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/custo residual de frete dos itens cancelados/)).toBeInTheDocument();
+    // Ainda exige comprovante, referência, justificativa e confirmação documental.
     expect(screen.getByRole('button',{name:/Confirmar cancelamento/})).toBeDisabled();
   });
 });
