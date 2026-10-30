@@ -44,6 +44,7 @@ export function PurchasePartialAdjustmentPanel({
   const cancelledLines = order.lines.filter((line) => cancelledSet.has(line.id));
   const retainedLines = order.lines.filter((line) => !cancelledSet.has(line.id));
   const cancelledTotal = cancelledLines.reduce((sum, line) => sum + moneyToCents(line.lineTotal || '0'), 0n);
+  const cancelledFreight = cancelledLines.reduce((sum, line) => sum + moneyToCents(line.shippingAmount || '0'), 0n);
   const parsedEntries = refundInputs.map((entry) => ({
     ...entry, cents: parseRefundBRL(entry.amount),
   }));
@@ -57,13 +58,15 @@ export function PurchasePartialAdjustmentPanel({
     ? parsedEntries.reduce((sum, entry) => sum + (entry.cents || 0), 0) : null;
   const difference = refund === null ? null : BigInt(refund) - cancelledTotal;
   const remainingFreight = retainedLines.reduce((sum, line) => sum + moneyToCents(line.shippingAmount || '0'), 0n);
-  const validMoney = difference !== null && difference >= 0n && difference <= remainingFreight
+  // Valor negativo = frete dos itens cancelados que não foi restituído.
+  // Nunca permite converter preços dos produtos em frete sem lastro original.
+  const validMoney = difference !== null && difference >= -cancelledFreight && difference <= remainingFreight
     && refund !== null && refund > 0 && BigInt(refund) < original;
   const validInputs = cancelledIds.length > 0 && cancelledIds.length < order.lines.length &&
     validMoney && entriesValid && allCancelledHaveRefund && confirmFreight && documentId &&
     reference.trim().length >= 4 && reason.trim().length >= 10;
   const distributed = (() => {
-    if (!validMoney || difference === null) return [];
+    if (!validMoney || difference === null || difference <= 0n) return [];
     return prorateFreightReduction(retainedLines.map((line) => ({
       id: line.id, code: line.itemCode, description: line.itemName,
       shippingCents: Number(moneyToCents(line.shippingAmount || '0')),
@@ -79,11 +82,16 @@ export function PurchasePartialAdjustmentPanel({
       <div className="purchase-refund-summary">
         <span>Pago originalmente <strong>{format(existing.grossCents)}</strong></span>
         <span>Crédito recebido <strong>− {format(existing.refundedCents)}</strong></span>
-        <span>Rateio de frete <strong>− {format(existing.freightReductionCents)}</strong></span>
+        <span>{existing.freightReductionCents < 0n ? 'Frete não restituído' : 'Redução de frete'}
+          <strong>{existing.freightReductionCents < 0n ? '+ ' + format(-existing.freightReductionCents) : '− ' + format(existing.freightReductionCents)}</strong></span>
         <span>Pago líquido <strong>{format(existing.netCents)}</strong></span>
       </div>
       <p>{existing.refundedOn} · {existing.reference} · {existing.reason}</p>
       <p>Itens cancelados: {existing.cancelledLines.map((line) => line.itemCode + ' — ' + line.itemName).join('; ')}.</p>
+      {existing.freightReductionCents < 0n && <p className="purchase-refund-retained-note">
+        AJ-FRETE — Acerto de frete dos itens cancelados: + {format(-existing.freightReductionCents)}.
+        Custo preservado sem modificar o pagamento original ou os preços unitários.
+      </p>}
       {existing.refundEntries.length > 0 && <div className="purchase-refund-table-wrap"><table>
         <thead><tr><th>Item reembolsado</th><th>Data do crédito</th><th>Valor recebido</th></tr></thead>
         <tbody>{existing.refundEntries.map((entry, index) => {
@@ -134,7 +142,7 @@ export function PurchasePartialAdjustmentPanel({
     if (!window.confirm(
       `Registrar ajuste IRREVERSÍVEL no pedido de ${purchase.code}?\n\n` +
       `Pagamento original: ${format(original)}\nItens cancelados: ${format(cancelledTotal)}\n` +
-      `Crédito recebido: ${moneyBRL(refund)}\nRedução de frete: ${format(difference || 0n)}\n` +
+      `Crédito recebido: ${moneyBRL(refund)}\nAcerto de frete (sinalizado): ${format(difference || 0n)}\n` +
       `Total líquido: ${format(net || 0n)}\n\n` +
       'O banco manterá o pagamento original e os documentos. O ajuste não poderá ser repetido.',
     )) return;
@@ -233,15 +241,31 @@ export function PurchasePartialAdjustmentPanel({
           <FileText size={15}/> Anexar comprovante de reembolso
         </button>
       </label>
+      {difference !== null && <div className="purchase-refund-freight-adjustment">
+        <div>
+          <strong>AJ-FRETE · Acerto de frete dos itens cancelados</strong>
+          <small>{difference < 0n
+            ? 'Parte do frete originalmente atribuído aos itens cancelados não foi devolvida. O custo ficará registrado em uma terceira linha de ajuste, sem aumentar o frete dos itens mantidos.'
+            : difference > 0n
+              ? 'O fornecedor devolveu frete adicional. A redução será rateada somente entre os itens mantidos, respeitando seu frete original.'
+              : 'Sem diferença de frete: o crédito corresponde exatamente ao valor dos itens cancelados.'}</small>
+        </div>
+        <strong className={difference < 0n ? 'purchase-refund-freight-adjustment__positive' : ''}>
+          {difference < 0n ? '+ ' + format(-difference) : difference > 0n ? '− ' + format(difference) : format(0n)}
+        </strong>
+      </div>}
       <label className="purchase-refund-consent">
         <input type="checkbox" checked={confirmFreight} onChange={(event) => setConfirmFreight(event.target.checked)}/>
-        Confirmo documentalmente que a diferença positiva entre o crédito recebido e os itens cancelados corresponde a abatimento de frete, e autorizo o rateio proporcional.
+        {difference !== null && difference < 0n
+          ? 'Confirmo que o valor não restituído está documentado como custo residual de frete dos itens cancelados, limitado ao frete original desses itens.'
+          : 'Confirmo documentalmente que a diferença positiva entre o crédito recebido e os itens cancelados corresponde a abatimento de frete, e autorizo o rateio proporcional.'}
       </label>
       <div className="purchase-refund-numbers">
         <span>Pagamento original<strong>{format(original)}</strong></span>
         <span>Itens cancelados<strong>− {format(cancelledTotal)}</strong></span>
         <span>Créditos recebidos<strong>{refund === null ? 'Pendente' : `− ${moneyBRL(refund)}`}</strong></span>
-        <span>Redução de frete<strong>{difference === null ? '—' : `− ${format(difference)}`}</strong></span>
+        <span>{difference !== null && difference < 0n ? 'Frete não restituído' : 'Redução de frete'}
+          <strong>{difference === null ? '—' : difference < 0n ? '+ ' + format(-difference) : '− ' + format(difference)}</strong></span>
         <span>Frete restante disponível<strong>{format(remainingFreight)}</strong></span>
         <span>Total líquido<strong>{net === null ? '—' : format(net)}</strong></span>
         <span>Diferença residual<strong>{validMoney ? moneyBRL(0) : 'Não conciliado'}</strong></span>
@@ -258,7 +282,10 @@ export function PurchasePartialAdjustmentPanel({
           <th>{format(net || 0n)}</th></tr></tfoot>
         </table></div>
       </details>}
-      {difference !== null && difference < 0n && <p className="form-error" role="alert">Os créditos são {format(-difference)} inferiores à soma dos itens cancelados. Confira a seleção e os valores; não é possível lançar redução de frete negativa.</p>}
+      {difference !== null && difference < -cancelledFreight && <p className="form-error" role="alert">
+        O frete não restituído de {format(-difference)} supera o frete original de {format(cancelledFreight)} dos itens cancelados.
+        Confira os créditos e a documentação antes de registrar.
+      </p>}
       {difference !== null && difference > remainingFreight && <p className="form-error">Crédito excede o frete dos itens mantidos.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="purchase-refund-actions"><button type="button" className="button button--primary"
