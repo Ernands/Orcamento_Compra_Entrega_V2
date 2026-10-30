@@ -29,6 +29,15 @@ function formatDate(value: string): string {
   return `${day}/${month}/${year}`;
 }
 
+function formatAdjustmentDate(value: string): string {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return formatDate(value);
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Fortaleza', day: '2-digit', month: '2-digit',
+    year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(timestamp);
+}
+
 function referenceLabel(row: UnifiedFinancePaymentRowWithOccurrences): string {
   return row.referenceCodes.join(' + ') || 'Sem referência';
 }
@@ -384,7 +393,7 @@ export function FinancePaymentOccurrencesModal({
                   <tbody>
                     {adjustments.map((entry) => (
                       <tr key={entry.id}>
-                        <td><strong>{formatDate(entry.adjustedOn)}</strong></td>
+                        <td><strong>{formatAdjustmentDate(entry.adjustedOn)}</strong></td>
                         <td className="is-money"><strong>{entry.amountCents > 0n ? '+' : ''}{formatBRL(entry.amountCents)}</strong></td>
                         <td><span className="finance-payment-method-pill">{entry.kind === 'freight' ? 'Ajuste de frete' : 'Item cancelado'}</span>
                           <small className="finance-payment-adjustment-breakdown__description">{entry.description}</small></td>
