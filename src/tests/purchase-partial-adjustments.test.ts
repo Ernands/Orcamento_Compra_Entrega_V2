@@ -177,11 +177,60 @@ describe('cancelamento parcial auditável: invariantes e integração entre mód
     expect(adjusted.payments[0].amount).toBe('205.00');
     expect(adjusted.payments[0].grossAmount).toBe('320.00');
     const rows=buildUnifiedFinancePayments([adjusted],[]);
+    expect(rows[0].adjustmentEntries?.map((entry)=>entry.amountCents)).toEqual([-12000n,500n]);
+    expect(rows[0].adjustmentEntries?.map((entry)=>entry.kind)).toEqual(['cancelled','freight']);
+    expect(rows[0].adjustmentEntries?.reduce((sum, entry)=>sum+entry.amountCents,0n)).toBe(-11500n);
+    const detailed = decorateFinancePaymentsWithOccurrences(rows,[{
+      id:'occur-original',paymentId:'paid-synthetic',occurredOn:'2026-01-02',
+      amount:'320.00',source:'proof_backfill',position:0,attachmentId:null,
+      paymentMethod:'boleto',referenceLabel:'Boleto',notes:null,
+    }]);
+    // Eventos: pagamento bruto + crédito líquido. Ajustes aparecem como
+    // memória de cálculo e não entram novamente na soma das ocorrências.
+    expect(detailed[0].paymentOccurrences.map((entry)=>entry.amountCents)).toEqual([32000n,-11500n]);
+    expect(detailed[0].occurrenceDifferenceCents).toBe(0n);
     expect(financePaymentTotals(rows).paidCents).toBe(20500n);
     const stores=buildFinanceStoreRows([adjusted],[]);
     expect(stores[0].realizedCents).toBe(20500n);
     const reimbursement=buildStoreReimbursement(rows,[adjusted],[],'store-one');
     expect(reimbursement.totals.paidCents).toBe(20500n);
+  });
+
+  it('exibe dois itens cancelados e um terceiro ajuste de frete em Pagamentos → Ocorrências', () => {
+    const r = record();
+    r.cancelled_cents = 22000;
+    r.freight_reduction_cents = -500;
+    r.refund_cents = 21500;
+    r.remaining_cents = 10500;
+    r.line_adjustments = [
+      {line_id:'line-cancel',kind:'cancelled',reduction_cents:12000,
+        original_line_cents:12000,original_shipping_cents:2000},
+      {line_id:'line-keep1',kind:'cancelled',reduction_cents:10000,
+        original_line_cents:10000,original_shipping_cents:1000},
+      {line_id:'line-cancel',kind:'freight_retained',reduction_cents:-500,
+        original_line_cents:12000,original_shipping_cents:2000},
+    ];
+    r.refund_entries = [
+      {line_id:'line-cancel',amount_cents:12000,refunded_on:'2026-01-03'},
+      {line_id:'line-keep1',amount_cents:9500,refunded_on:'2026-01-04'},
+    ];
+    const purchase = applyPurchasePartialAdjustments(fixture(),[r]);
+    const rows=buildUnifiedFinancePayments([purchase],[]);
+    const entries=rows[0].adjustmentEntries || [];
+    expect(entries).toHaveLength(3);
+    expect(entries.map((entry)=>entry.amountCents)).toEqual([-12000n,-10000n,500n]);
+    expect(entries.map((entry)=>entry.description)).toEqual([
+      'SYN-01 — Item sintético cancelado',
+      'SYN-02 — Item sintético A',
+      'AJ-FRETE — Frete não restituído dos itens cancelados',
+    ]);
+    expect(entries.reduce((sum, entry)=>sum+entry.amountCents,0n)).toBe(-21500n);
+    const detail=decorateFinancePaymentsWithOccurrences(rows,[]);
+    expect(detail[0].occurrenceDifferenceCents).toBe(0n);
+    expect(detail[0].paymentOccurrences.filter(event=>event.source==='refund')
+      .map(event=>event.amountCents)).toEqual([-12000n,-9500n]);
+    expect(purchase.orders[0].lines.reduce((sum,line)=>sum+moneyToCents(line.lineTotal||'0'),0n)).toBe(10500n);
+    expect(rows[0].amountCents).toBe(10500n);
   });
 
   it('rejeita frete não restituído maior do que o frete de itens cancelados', () => {
