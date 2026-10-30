@@ -449,7 +449,7 @@
 .purchase-v2-bulk-purchase-lines { display: grid; gap: 8px; }
 .purchase-v2-bulk-purchase-line {
   display: grid;
-  grid-template-columns: minmax(260px,1.7fr) minmax(105px,.55fr) minmax(120px,.65fr) minmax(105px,.55fr) minmax(105px,.55fr);
+  grid-template-columns: minmax(250px,1.7fr) minmax(95px,.5fr) minmax(110px,.6fr) minmax(115px,.6fr) minmax(95px,.5fr) minmax(105px,.55fr);
   gap: 9px;
   align-items: end;
   padding: 10px;
