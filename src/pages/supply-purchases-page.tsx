@@ -2503,6 +2503,10 @@ function PurchaseManagementModal({
   const [error, setError] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [openingQuoteId, setOpeningQuoteId] = useState<string | null>(null);
+  const documentEditorRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (editor?.kind === 'documents') documentEditorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [editor]);
   useEffect(() => {
     if (!purchase) return;
     const firstPending = purchase.items.find((item) => remainingItemQuantity(item, purchase) > 0n);
@@ -2632,7 +2636,7 @@ function PurchaseManagementModal({
     </details>}
 
     {editor?.kind === 'payment' && <section className="purchase-v2-inline-editor"><PaymentModal embedded purchase={purchase} lockedPurchaseOrderId={editor.orderId} editingPayment={editor.payment} onClose={() => setEditor(null)} onSaved={onSaved} canEdit={canEdit}/></section>}
-    {editor?.kind === 'documents' && <section className="purchase-v2-inline-editor"><DocumentsModal embedded purchase={purchase} lockedPurchaseOrderId={editor.orderId} initialDocumentType={editor.initialDocumentType} onClose={() => setEditor(null)} onSaved={onSaved} canEdit={canAddDocuments} canDeleteDocuments={canEdit}/></section>}
+    {editor?.kind === 'documents' && <section ref={documentEditorRef} className="purchase-v2-inline-editor"><DocumentsModal embedded purchase={purchase} lockedPurchaseOrderId={editor.orderId} initialDocumentType={editor.initialDocumentType} onClose={() => setEditor(null)} onSaved={onSaved} canEdit={canAddDocuments} canDeleteDocuments={canEdit}/></section>}
   </Modal>;
 }
 
