@@ -374,11 +374,10 @@ export interface RegisterPartialPurchaseAdjustmentInput {
   orderId: string;
   paymentId: string;
   attachmentId: string;
-  refundedOn: string;
+  refundEntries: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
   reference: string;
   reason: string;
   expectedOriginalCents: bigint;
-  refundCents: bigint;
   cancelled: Array<{ lineId: string; amountCents: bigint }>;
 }
 
@@ -390,20 +389,23 @@ export async function registerPartialPurchaseAdjustment(
   input: RegisterPartialPurchaseAdjustmentInput,
 ): Promise<string> {
   const { data, error } = await supabase.rpc(
-    'register_supply_purchase_partial_adjustment_v1' as never,
+    'register_supply_purchase_partial_adjustment_v2' as never,
     {
       p_order_id: input.orderId,
       p_payment_id: input.paymentId,
       p_refund_attachment_id: input.attachmentId,
-      p_refunded_on: input.refundedOn,
       p_reference: input.reference,
       p_reason: input.reason,
       p_expected_original_cents: Number(input.expectedOriginalCents),
-      p_refund_cents: Number(input.refundCents),
       p_adjustments: input.cancelled.map((line) => ({
         line_id: line.lineId,
         kind: 'cancelled',
         reduction_cents: Number(line.amountCents),
+      })),
+      p_refund_entries: input.refundEntries.map((entry) => ({
+        line_id: entry.lineId,
+        amount_cents: Number(entry.amountCents),
+        refunded_on: entry.refundedOn,
       })),
     } as never,
   );

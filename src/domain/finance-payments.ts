@@ -41,6 +41,7 @@ export interface UnifiedFinancePaymentRow {
   amountCents: bigint;
   refundCents?: bigint; // crédito referente a pagamento originalmente maior
   refundDate?: string | null;
+  refundEntries?: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
   storeIds: string[];
   storeCodes: string[];
   states: string[];
@@ -365,6 +366,7 @@ function purchasePaymentRow(
     amountCents: event.amountCents,
     refundCents,
     refundDate: originalPayment?.refundedOn || null,
+    refundEntries: originalPayment?.refundEntries,
     storeIds: unique(storeIds),
     storeCodes,
     states: unique(states),
@@ -424,6 +426,7 @@ function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
     amountCents: rows.reduce((sum, row) => sum + row.amountCents, 0n),
     refundCents: rows.reduce((sum, row) => sum + (row.refundCents || 0n), 0n),
     refundDate: rows.find((row) => row.refundDate)?.refundDate || null,
+    refundEntries: rows.flatMap((row) => row.refundEntries || []),
     storeIds: unique(rows.flatMap((row) => row.storeIds)),
     storeCodes: unique(rows.flatMap((row) => row.storeCodes)).sort(),
     states: unique(rows.flatMap((row) => row.states)).sort(),

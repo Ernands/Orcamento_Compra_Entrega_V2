@@ -2334,6 +2334,7 @@ function DocumentsModal({
   purchase,
   initialPurchaseOrderId,
   lockedPurchaseOrderId,
+  initialDocumentType,
   onClose,
   onSaved,
   canEdit,
@@ -2343,6 +2344,7 @@ function DocumentsModal({
   purchase: PurchaseV2 | null;
   initialPurchaseOrderId?: string;
   lockedPurchaseOrderId?: string;
+  initialDocumentType?: PurchaseDocumentType;
   onClose: () => void;
   onSaved: () => Promise<void>;
   canEdit: boolean;
@@ -2379,10 +2381,11 @@ function DocumentsModal({
     const requestedOrderId = lockedPurchaseOrderId || initialPurchaseOrderId || '';
     const order = purchase.orders.find((entry) => entry.id === requestedOrderId);
     setPurchaseOrderId(order?.id || '');
+    setDocumentType(initialDocumentType || 'invoice');
     setDocumentNumber(''); setDocumentDate(''); setDocumentAmount(''); setDescription('');
     setStoreIds(order ? [...new Set(order.lines.flatMap((line) => line.stores.map((store) => store.storeId)))] : []);
     setFiles([]); setUploadProgress(null); setUploadSummary(null); setError(null);
-  }, [initialPurchaseOrderId, lockedPurchaseOrderId, purchase]);
+  }, [initialDocumentType, initialPurchaseOrderId, lockedPurchaseOrderId, purchase]);
   const toggleStore = (storeId: string) => setStoreIds((current) => current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId]);
   const upload = async () => {
     if (!purchase || !files.length || saving) return;
@@ -2473,7 +2476,7 @@ function DocumentsModal({
 type PurchaseManagementTab = 'purchase' | 'payment' | 'documents';
 type PurchaseOperationEditor =
   | { kind: 'payment'; orderId?: string; payment?: PurchasePaymentV2 }
-  | { kind: 'documents'; orderId: string }
+  | { kind: 'documents'; orderId: string; initialDocumentType?: PurchaseDocumentType }
   | null;
 
 function PurchaseManagementModal({
@@ -2500,6 +2503,10 @@ function PurchaseManagementModal({
   const [error, setError] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [openingQuoteId, setOpeningQuoteId] = useState<string | null>(null);
+  const documentEditorRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (editor?.kind === 'documents') documentEditorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [editor]);
   useEffect(() => {
     if (!purchase) return;
     const firstPending = purchase.items.find((item) => remainingItemQuantity(item, purchase) > 0n);
@@ -2606,7 +2613,7 @@ function PurchaseManagementModal({
               order={order}
               canEdit={canEdit}
               onSaved={onSaved}
-              onAttachRefundProof={() => setEditor({ kind: 'documents', orderId: order.id })}
+              onAttachRefundProof={() => setEditor({ kind: 'documents', orderId: order.id, initialDocumentType: 'reimbursement' })}
             />
             <section><h4>Itens e destino</h4>{order.lines.map((line) => <div className="purchase-v2-operation-line" key={line.id}><span><strong>{line.itemName}</strong><small>{line.itemCode} · {line.destinationLabel || 'Destino por loja'}</small></span><span>{formatQuantityV2(line.quantity)} {line.unit}</span><strong>{lineTotalCents(line) === null ? 'Pendente' : formatBRL(lineTotalCents(line)!)}</strong></div>)}</section>
             <section><h4>Custo final por loja</h4><small className="purchase-v2-muted">Itens e custos compartilhados sao rateados pela quantidade; todos os centavos permanecem fechados.</small>{costs.rows.length ? costs.rows.map((store) => <div className="purchase-v2-operation-line" key={store.storeId}><span><strong>{store.code} · {store.name}</strong><small>{store.city}/{store.state} · {store.lines.map((line) => `${formatQuantityV2(line.quantity)} ${line.unit} ${line.itemName}`).join(' + ')}</small></span><strong>{formatBRL(store.costCents)}</strong></div>) : <span className="purchase-v2-inline-warning">Defina as lojas para concluir o custo.</span>}{costs.unallocatedCents !== 0n && <div className="purchase-v2-inline-warning">Ainda sem loja: {formatBRL(costs.unallocatedCents)}</div>}</section>
@@ -2629,7 +2636,7 @@ function PurchaseManagementModal({
     </details>}
 
     {editor?.kind === 'payment' && <section className="purchase-v2-inline-editor"><PaymentModal embedded purchase={purchase} lockedPurchaseOrderId={editor.orderId} editingPayment={editor.payment} onClose={() => setEditor(null)} onSaved={onSaved} canEdit={canEdit}/></section>}
-    {editor?.kind === 'documents' && <section className="purchase-v2-inline-editor"><DocumentsModal embedded purchase={purchase} lockedPurchaseOrderId={editor.orderId} onClose={() => setEditor(null)} onSaved={onSaved} canEdit={canAddDocuments} canDeleteDocuments={canEdit}/></section>}
+    {editor?.kind === 'documents' && <section ref={documentEditorRef} className="purchase-v2-inline-editor"><DocumentsModal embedded purchase={purchase} lockedPurchaseOrderId={editor.orderId} initialDocumentType={editor.initialDocumentType} onClose={() => setEditor(null)} onSaved={onSaved} canEdit={canAddDocuments} canDeleteDocuments={canEdit}/></section>}
   </Modal>;
 }
 

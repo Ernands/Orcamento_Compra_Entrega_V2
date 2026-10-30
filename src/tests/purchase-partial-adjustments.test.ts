@@ -132,6 +132,27 @@ describe('cancelamento parcial auditável: invariantes e integração entre mód
     expect(scopeFinancePaymentToOccurrenceDateRange(enriched[0],'2026-01-02','2026-01-02').amountCents).toBe(19500n);
   });
 
+  it('registra vários créditos por item, com datas distintas, preservando o líquido', () => {
+    const recordWithEntries=record();
+    recordWithEntries.refund_entries=[
+      {line_id:'line-cancel',amount_cents:5000,refunded_on:'2026-01-03'},
+      {line_id:'line-cancel',amount_cents:7500,refunded_on:'2026-01-04'},
+    ];
+    recordWithEntries.refunded_on='2026-01-04';
+    const purchase=applyPurchasePartialAdjustments(fixture(),[recordWithEntries]);
+    expect(purchase.adjustments?.[0].refundEntries).toHaveLength(2);
+    expect(purchase.adjustments?.[0].refundedCents).toBe(12500n);
+    const rows=buildUnifiedFinancePayments([purchase],[]);
+    const decorated=decorateFinancePaymentsWithOccurrences(rows,[]);
+    const refundEvents=decorated[0].paymentOccurrences.filter((event)=>event.source==='refund');
+    expect(refundEvents.map((event)=>event.amountCents)).toEqual([-5000n,-7500n]);
+    expect(refundEvents.map((event)=>event.date)).toEqual(['2026-01-03','2026-01-04']);
+    expect(decorated[0].occurrenceDifferenceCents).toBe(0n);
+    const invalid=record();
+    invalid.refund_entries=[{line_id:'line-cancel',amount_cents:12499,refunded_on:'2026-01-04'}];
+    expect(()=>applyPurchasePartialAdjustments(fixture(),[invalid])).toThrow('não conciliados');
+  });
+
   it('falha fechado quando o bruto diverge ou os componentes do crédito não fecham',()=>{
     const original=fixture();
     original.payments[0].amount='319.00';

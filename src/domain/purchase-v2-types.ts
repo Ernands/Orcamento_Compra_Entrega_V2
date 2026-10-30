@@ -188,6 +188,7 @@ export interface PurchasePaymentV2 {
   grossAmount?: string; // pagamento histórico original, preservado no banco
   refundedAmount?: string;
   refundedOn?: string;
+  refundEntries?: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
   entryAmount: string | null;
   installmentCount: number | null;
   firstDueDate: string | null;
