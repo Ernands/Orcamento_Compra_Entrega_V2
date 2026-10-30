@@ -113,12 +113,24 @@ export function decorateFinancePaymentsWithOccurrences(
           }]
         : [];
 
+    const detailedRefunds: FinancePaymentOccurrenceDisplay[] = (row.refundEntries || []).map((entry, index) => ({
+      id: 'refund:' + row.id + ':' + index,
+      paymentId: row.paymentIds[0] || null,
+      attachmentId: null,
+      date: entry.refundedOn,
+      amountCents: -entry.amountCents,
+      paymentMethod: 'credito_de_reembolso',
+      referenceLabel: 'Crédito por item cancelado',
+      source: 'refund',
+      notes: 'Reembolso vinculado ao item ' + entry.lineId,
+    }));
+
     // Os pagamentos originais seguem intactos no banco/ocorrências.
     // O crédito é exibido como evento negativo rastreável; não é nova despesa.
     const paymentOccurrences = [
       ...(structured.length ? structured : fallback),
       ...(row.status === 'paid' && (row.refundCents || 0n) > 0n
-        ? [{
+        ? (detailedRefunds.length ? detailedRefunds : [{
             id: `refund:${row.id}`,
             paymentId: row.paymentIds[0] || null,
             attachmentId: null,
@@ -128,7 +140,7 @@ export function decorateFinancePaymentsWithOccurrences(
             referenceLabel: 'Crédito por cancelamento parcial',
             source: 'refund' as const,
             notes: 'Valor devolvido; o comprovante do pagamento original permanece preservado.',
-          }]
+          }])
         : []),
     ];
     const officialAmountCents = row.amountCents;
