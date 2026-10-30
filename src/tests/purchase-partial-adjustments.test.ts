@@ -153,6 +153,51 @@ describe('cancelamento parcial auditável: invariantes e integração entre mód
     expect(()=>applyPurchasePartialAdjustments(fixture(),[invalid])).toThrow('não conciliados');
   });
 
+  it('preserva frete retido como terceira linha de custo sem adulterar itens nem pagamentos brutos', () => {
+    const purchase = fixture();
+    const originalJson = JSON.stringify(purchase);
+    const retained = record();
+    retained.freight_reduction_cents = -500;
+    retained.refund_cents = 11500;
+    retained.remaining_cents = 20500;
+    retained.line_adjustments = [
+      {line_id:'line-cancel',kind:'cancelled',reduction_cents:12000,
+        original_line_cents:12000,original_shipping_cents:2000},
+      {line_id:'line-cancel',kind:'freight_retained',reduction_cents:-500,
+        original_line_cents:12000,original_shipping_cents:2000},
+    ];
+    retained.refund_entries = [{line_id:'line-cancel',amount_cents:11500,refunded_on:'2026-01-03'}];
+    const adjusted = applyPurchasePartialAdjustments(purchase,[retained]);
+    expect(originalJson).not.toContain('freight-retained:');
+    const third = adjusted.orders[0].lines.find(line => line.itemCode==='AJ-FRETE');
+    expect(third?.lineTotal).toBe('5.00');
+    expect(third?.shippingAmount).toBe('5.00');
+    expect(third?.quantity).toBe('0');
+    expect(adjusted.orders[0].lines.reduce((sum, line)=>sum+moneyToCents(line.lineTotal||'0'),0n)).toBe(20500n);
+    expect(adjusted.payments[0].amount).toBe('205.00');
+    expect(adjusted.payments[0].grossAmount).toBe('320.00');
+    const rows=buildUnifiedFinancePayments([adjusted],[]);
+    expect(financePaymentTotals(rows).paidCents).toBe(20500n);
+    const stores=buildFinanceStoreRows([adjusted],[]);
+    expect(stores[0].realizedCents).toBe(20500n);
+    const reimbursement=buildStoreReimbursement(rows,[adjusted],[],'store-one');
+    expect(reimbursement.totals.paidCents).toBe(20500n);
+  });
+
+  it('rejeita frete não restituído maior do que o frete de itens cancelados', () => {
+    const retained = record();
+    retained.freight_reduction_cents = -2100;
+    retained.refund_cents = 9900;
+    retained.remaining_cents = 22100;
+    retained.line_adjustments = [
+      {line_id:'line-cancel',kind:'cancelled',reduction_cents:12000,
+        original_line_cents:12000,original_shipping_cents:2000},
+      {line_id:'line-cancel',kind:'freight_retained',reduction_cents:-2100,
+        original_line_cents:12000,original_shipping_cents:2000},
+    ];
+    expect(()=>applyPurchasePartialAdjustments(fixture(),[retained])).toThrow('excede o frete original');
+  });
+
   it('falha fechado quando o bruto diverge ou os componentes do crédito não fecham',()=>{
     const original=fixture();
     original.payments[0].amount='319.00';
