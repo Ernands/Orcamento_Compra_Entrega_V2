@@ -42,6 +42,10 @@ export interface UnifiedFinancePaymentRow {
   refundCents?: bigint; // crédito referente a pagamento originalmente maior
   refundDate?: string | null;
   refundEntries?: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
+  adjustmentEntries?: Array<{
+    id: string; adjustedOn: string; description: string; amountCents: bigint;
+    reference: string; kind: 'cancelled' | 'freight';
+  }>;
   storeIds: string[];
   storeCodes: string[];
   states: string[];
@@ -335,6 +339,31 @@ function purchasePaymentRow(
   const originalPayment = purchase.payments.find((payment) => payment.id === event.paymentId);
   const refundCents = originalPayment?.refundedAmount
     ? moneyToCents(originalPayment.refundedAmount) : 0n;
+  const adjustmentEntries = (purchase.adjustments || [])
+    .filter((adjustment) => adjustment.paymentId === event.paymentId)
+    .flatMap((adjustment) => {
+      const adjustedOn = adjustment.createdAt;
+      const cancelledEntries = adjustment.cancelledLines.map((line) => ({
+        id: adjustment.id + ':cancelled:' + line.id,
+        adjustedOn,
+        description: line.itemCode + ' — ' + line.itemName,
+        amountCents: -line.originalTotalCents,
+        reference: adjustment.reference,
+        kind: 'cancelled' as const,
+      }));
+      const freight = adjustment.freightReductionCents;
+      const freightEntry = freight !== 0n ? [{
+        id: adjustment.id + ':freight',
+        adjustedOn,
+        description: freight < 0n
+          ? 'AJ-FRETE — Frete não restituído dos itens cancelados'
+          : 'AJ-FRETE — Frete adicional reembolsado',
+        amountCents: -freight,
+        reference: adjustment.reference,
+        kind: 'freight' as const,
+      }] : [];
+      return [...cancelledEntries, ...freightEntry];
+    });
   const fallbackStores = purchase.stores;
   const storeIds = event.storeIds.length ? event.storeIds : fallbackStores.map((store) => store.storeId);
   const states = event.states.length ? event.states : unique(fallbackStores.map((store) => store.state));
@@ -367,6 +396,7 @@ function purchasePaymentRow(
     refundCents,
     refundDate: originalPayment?.refundedOn || null,
     refundEntries: originalPayment?.refundEntries,
+    adjustmentEntries,
     storeIds: unique(storeIds),
     storeCodes,
     states: unique(states),
@@ -427,6 +457,7 @@ function mergeRows(rows: UnifiedFinancePaymentRow[]): UnifiedFinancePaymentRow {
     refundCents: rows.reduce((sum, row) => sum + (row.refundCents || 0n), 0n),
     refundDate: rows.find((row) => row.refundDate)?.refundDate || null,
     refundEntries: rows.flatMap((row) => row.refundEntries || []),
+    adjustmentEntries: rows.flatMap((row) => row.adjustmentEntries || []),
     storeIds: unique(rows.flatMap((row) => row.storeIds)),
     storeCodes: unique(rows.flatMap((row) => row.storeCodes)).sort(),
     states: unique(rows.flatMap((row) => row.states)).sort(),
