@@ -29,7 +29,9 @@ export function PurchasePartialAdjustmentPanel({
   const [nextRefundId, setNextRefundId] = useState(1);
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState('');
-  const [documentId, setDocumentId] = useState('');
+  // null: ainda não selecionado manualmente. Com um único comprovante
+  // válido do pedido, a seleção é automática após o upload e atualização.
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [confirmFreight, setConfirmFreight] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +41,9 @@ export function PurchasePartialAdjustmentPanel({
     ? activePayments[0] : null;
   const refundProofs = purchase.attachments.filter((doc) =>
     doc.purchaseOrderId === order.id && doc.documentType === 'reimbursement');
+  const selectedDocumentId = documentId === null
+    ? (refundProofs.length === 1 ? refundProofs[0].id : '')
+    : refundProofs.some((doc) => doc.id === documentId) ? documentId : '';
   const original = originalTotal(order);
   const cancelledSet = new Set(cancelledIds);
   const cancelledLines = order.lines.filter((line) => cancelledSet.has(line.id));
@@ -62,9 +67,33 @@ export function PurchasePartialAdjustmentPanel({
   // Nunca permite converter preços dos produtos em frete sem lastro original.
   const validMoney = difference !== null && difference >= -cancelledFreight && difference <= remainingFreight
     && refund !== null && refund > 0 && BigInt(refund) < original;
-  const validInputs = cancelledIds.length > 0 && cancelledIds.length < order.lines.length &&
-    validMoney && entriesValid && allCancelledHaveRefund && confirmFreight && documentId &&
-    reference.trim().length >= 4 && reason.trim().length >= 10;
+  const pendingRequirements: string[] = [];
+  if (cancelledIds.length === 0 || cancelledIds.length >= order.lines.length) {
+    pendingRequirements.push('Selecione os itens cancelados e mantenha pelo menos um item na compra.');
+  }
+  if (!entriesValid) {
+    pendingRequirements.push('Informe os valores e as datas válidas de todos os créditos recebidos.');
+  } else if (!allCancelledHaveRefund) {
+    pendingRequirements.push('Vincule pelo menos um crédito a cada item cancelado.');
+  }
+  if (entriesValid && allCancelledHaveRefund && !validMoney) {
+    pendingRequirements.push('Concilie o crédito com os valores dos itens e os limites do frete.');
+  }
+  if (!selectedDocumentId) {
+    pendingRequirements.push(refundProofs.length > 1
+      ? 'Selecione qual comprovante de reembolso corresponde a este ajuste.'
+      : 'Anexe e selecione um comprovante de reembolso vinculado a esta compra.');
+  }
+  if (reference.trim().length < 4 || reference.trim().length > 180) {
+    pendingRequirements.push('Informe a referência dos créditos (4 a 180 caracteres).');
+  }
+  if (reason.trim().length < 10 || reason.trim().length > 1500) {
+    pendingRequirements.push('Informe a justificativa do cancelamento (10 a 1.500 caracteres).');
+  }
+  if (!confirmFreight) {
+    pendingRequirements.push('Confirme documentalmente o ajuste de frete.');
+  }
+  const validInputs = pendingRequirements.length === 0;
   const distributed = (() => {
     if (!validMoney || difference === null || difference <= 0n) return [];
     return prorateFreightReduction(retainedLines.map((line) => ({
@@ -150,7 +179,7 @@ export function PurchasePartialAdjustmentPanel({
     setError(null);
     try {
       await registerPartialPurchaseAdjustment({
-        orderId: order.id, paymentId: payment.id, attachmentId: documentId,
+        orderId: order.id, paymentId: payment.id, attachmentId: selectedDocumentId,
         reference: reference.trim(), reason: reason.trim(),
         expectedOriginalCents: original,
         refundEntries: parsedEntries.map((entry) => ({
@@ -232,11 +261,16 @@ export function PurchasePartialAdjustmentPanel({
           placeholder="Motivo do cancelamento e abatimento de frete"/></label>
       </div>
       <label className="purchase-refund-proof">Comprovante de reembolso vinculado ao pedido
-        <select value={documentId} onChange={(event) => setDocumentId(event.target.value)}>
+        <select value={selectedDocumentId} onChange={(event) => setDocumentId(event.target.value)}
+          aria-label="Comprovante de reembolso" aria-invalid={!selectedDocumentId}>
           <option value="">Selecione o documento de reembolso</option>
           {refundProofs.map((doc) => <option key={doc.id} value={doc.id}>{doc.originalName}</option>)}
         </select>
         {refundProofs.length === 0 && <small>Nenhum documento de reembolso anexado a este pedido. O comprovante do pagamento original não substitui o documento do crédito recebido.</small>}
+        {documentId === null && refundProofs.length === 1 && <small className="purchase-refund-proof-autoselected">
+          Comprovante único vinculado ao pedido selecionado automaticamente: {refundProofs[0].originalName}.
+        </small>}
+        {refundProofs.length > 1 && !selectedDocumentId && <small>Há vários comprovantes: selecione o arquivo correspondente a este cancelamento.</small>}
         <button type="button" className="button button--secondary button--small" onClick={onAttachRefundProof}>
           <FileText size={15}/> Anexar comprovante de reembolso
         </button>
@@ -288,6 +322,16 @@ export function PurchasePartialAdjustmentPanel({
       </p>}
       {difference !== null && difference > remainingFreight && <p className="form-error">Crédito excede o frete dos itens mantidos.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
+      {pendingRequirements.length > 0 ? (
+        <div className="purchase-refund-validation" role="status" aria-live="polite">
+          <strong>Para liberar a confirmação, falta:</strong>
+          <ul>{pendingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul>
+        </div>
+      ) : (
+        <div className="purchase-refund-validation purchase-refund-validation--ready" role="status">
+          Requisitos conferidos. Você já pode confirmar o cancelamento parcial e o reembolso.
+        </div>
+      )}
       <div className="purchase-refund-actions"><button type="button" className="button button--primary"
         disabled={!validInputs || saving} onClick={() => void submit()}>
           {saving ? 'Registrando e validando...' : 'Confirmar cancelamento parcial e reembolso'}
