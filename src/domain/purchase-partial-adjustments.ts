@@ -179,6 +179,9 @@ export function applyPurchasePartialAdjustments(
         purchaseDestinationId: null,
         itemCode: 'AJ-FRETE',
         itemName: 'Acerto de frete dos itens cancelados',
+        // Item virtual sem quantidade comprada. Para a distribuição financeira
+        // entre lojas, usar peso técnico positivo, sem alterar a quantidade da CMP.
+        stores: source.stores.map((store) => ({ ...store, quantity: '1' })),
         quantity: '0', unit: 'ajuste', unitPrice: '0.00',
         discountAmount: '0.00', otherCosts: '0.00',
         shippingAmount: toSqlMoney(retainedFreightCents),
