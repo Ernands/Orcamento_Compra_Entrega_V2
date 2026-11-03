@@ -3,7 +3,7 @@ import type { PurchaseV2 } from './purchase-v2-types';
 
 export type PartialAdjustmentLine = {
   line_id: string;
-  kind: 'cancelled' | 'freight' | 'freight_retained';
+  kind: 'cancelled' | 'freight' | 'freight_retained' | 'residual_retained' | 'residual_credit';
   reduction_cents: number;
   original_line_cents: number;
   original_shipping_cents: number;
@@ -35,6 +35,8 @@ export type PurchasePartialAdjustment = {
   grossCents: bigint;
   cancelledCents: bigint;
   freightReductionCents: bigint;
+  /** Excesso assinado, sem comprovação como frete específico do fornecedor. */
+  residualCents: bigint;
   refundedCents: bigint;
   netCents: bigint;
   refundedOn: string;
@@ -91,17 +93,23 @@ export function applyPurchasePartialAdjustments(
     let freight = 0n;
     let retainedFreightLineId: string | null = null;
     let retainedFreightCents = 0n;
+    let residualRetainedLineId: string | null = null;
+    let residualRetainedCents = 0n;
+    let residualCreditLineId: string | null = null;
+    let residualCreditCents = 0n;
     const cancelledLines: PurchasePartialAdjustment['cancelledLines'] = [];
     const freightLines: PurchasePartialAdjustment['freightLines'] = [];
     for (const item of record.line_adjustments) {
       const line = lineMap.get(item.line_id);
-      if (!line || (item.kind !== 'freight_retained' && seen.has(line.id)) ||
+      const virtual = item.kind === 'freight_retained' ||
+        item.kind === 'residual_retained' || item.kind === 'residual_credit';
+      if (!line || (!virtual && seen.has(line.id)) ||
         !Number.isSafeInteger(item.reduction_cents) ||
         !Number.isSafeInteger(item.original_line_cents) ||
         !Number.isSafeInteger(item.original_shipping_cents)) {
         throw new Error(`Item inválido no ajuste da compra ${purchase.code}.`);
       }
-      if (item.kind !== 'freight_retained') seen.add(line.id);
+      if (!virtual) seen.add(line.id);
       const lineAmount = moneyToCents(line.lineTotal || '');
       const freightAmount = moneyToCents(line.shippingAmount || '');
       if (lineAmount !== BigInt(item.original_line_cents) ||
@@ -131,17 +139,45 @@ export function applyPurchasePartialAdjustments(
           originalShippingCents: freightAmount, reductionCents: BigInt(item.reduction_cents),
         });
       } else if (item.kind === 'freight_retained') {
-        if (retainedFreightLineId || !cancelledLines.some((cancelledLine) => cancelledLine.id === line.id) ||
+        if (retainedFreightLineId || !cancelledLines.some((entry) => entry.id === line.id) ||
           item.reduction_cents >= 0) {
           throw new Error('Acerto de frete retido deve estar vinculado a um item cancelado.');
         }
         retainedFreightLineId = line.id;
         retainedFreightCents = -BigInt(item.reduction_cents);
         freight += BigInt(item.reduction_cents);
+      } else if (item.kind === 'residual_retained') {
+        if (residualRetainedLineId || !cancelledLines.some((entry) => entry.id === line.id) ||
+          item.reduction_cents >= 0) {
+          throw new Error('Resíduo não restituído deve estar vinculado a um item cancelado.');
+        }
+        residualRetainedLineId = line.id;
+        residualRetainedCents = -BigInt(item.reduction_cents);
+        freight += BigInt(item.reduction_cents);
+      } else if (item.kind === 'residual_credit') {
+        if (residualCreditLineId || cancelledLines.some((entry) => entry.id === line.id) ||
+          item.reduction_cents <= 0) {
+          throw new Error('Crédito residual deve estar vinculado a um item mantido.');
+        }
+        residualCreditLineId = line.id;
+        residualCreditCents = BigInt(item.reduction_cents);
+        freight += residualCreditCents;
       } else throw new Error('Tipo de ajuste desconhecido.');
     }
-    if (retainedFreightCents > cancelledLines.reduce((sum, line) => sum + line.originalShippingCents, 0n)) {
+    const originalCancelledFreight = cancelledLines.reduce((sum, line) => sum + line.originalShippingCents, 0n);
+    if (retainedFreightCents > originalCancelledFreight) {
       throw new Error('Frete não restituído excede o frete original dos itens cancelados.');
+    }
+    // Importante: nunca alegar que o excesso gerencial é frete do fornecedor.
+    if (residualRetainedCents > 0n && retainedFreightCents !== originalCancelledFreight) {
+      throw new Error('O excedente retido requer esgotar primeiro o frete original.');
+    }
+    const originalRetainedFreight = order.lines
+      .filter((line) => !cancelledLines.some((entry) => entry.id === line.id))
+      .reduce((sum, line) => sum + moneyToCents(line.shippingAmount || '0'), 0n);
+    if (residualCreditCents > 0n &&
+      freightLines.reduce((sum, line) => sum + line.reductionCents, 0n) !== originalRetainedFreight) {
+      throw new Error('O crédito residual requer esgotar primeiro o frete dos itens mantidos.');
     }
     if (record.refund_entries?.length && (
       record.refund_entries.some((entry) =>
@@ -159,6 +195,8 @@ export function applyPurchasePartialAdjustments(
     const cancelledIds = new Set(cancelledLines.map((line) => line.id));
     const reductions = new Map(freightLines.map((line) => [line.id, line.reductionCents]));
     const currentOrder = purchase.orders.find((entry) => entry.id === order.id)!;
+    // Linhas canceladas continuam visíveis no histórico, sem integrar o custo líquido.
+    currentOrder.cancelledLines = order.lines.filter((line) => cancelledIds.has(line.id));
     currentOrder.lines = currentOrder.lines.filter((line) => !cancelledIds.has(line.id)).map((line) => {
       const reduction = reductions.get(line.id) || 0n;
       if (!reduction) return line;
@@ -189,6 +227,34 @@ export function applyPurchasePartialAdjustments(
         notes: 'Frete original não restituído em cancelamento parcial; vinculado ao ajuste ' + record.id,
       });
     }
+    const makeVirtualAdjustment = (
+      sourceId: string, kind: string, code: string, name: string,
+      amountCents: bigint, retained: boolean,
+    ) => {
+      const source = lineMap.get(sourceId)!;
+      currentOrder.lines.push({
+        ...source,
+        id: kind + ':' + record.id,
+        purchaseDestinationId: null,
+        itemCode: code,
+        itemName: name,
+        stores: source.stores.map((store) => ({ ...store, quantity: '1' })),
+        quantity: '0', unit: 'ajuste', unitPrice: '0.00',
+        discountAmount: retained ? '0.00' : toSqlMoney(amountCents),
+        shippingAmount: '0.00',
+        otherCosts: retained ? toSqlMoney(amountCents) : '0.00',
+        lineTotal: retained ? toSqlMoney(amountCents) : toSqlMoney(-amountCents),
+        notes: 'Ajuste gerencial sem classificação fiscal de frete; reembolso ' + record.id,
+      });
+    };
+    if (residualRetainedLineId && residualRetainedCents > 0n) {
+      makeVirtualAdjustment(residualRetainedLineId, 'residual-retained',
+        'AJ-RESIDUAL', 'Diferença retida sem frete comprovado', residualRetainedCents, true);
+    }
+    if (residualCreditLineId && residualCreditCents > 0n) {
+      makeVirtualAdjustment(residualCreditLineId, 'residual-credit',
+        'AJ-CREDITO', 'Crédito excedente sem frete comprovado', residualCreditCents, false);
+    }
     const currentPayment = purchase.payments.find((entry) => entry.id === payment.id)!;
     currentPayment.grossAmount = payment.amount;
     currentPayment.refundedAmount = toSqlMoney(BigInt(record.refund_cents));
@@ -202,6 +268,7 @@ export function applyPurchasePartialAdjustments(
       refundAttachmentId: record.refund_attachment_id,
       grossCents: BigInt(record.original_cents),
       cancelledCents: cancelled, freightReductionCents: freight,
+      residualCents: residualCreditCents - residualRetainedCents,
       refundedCents: BigInt(record.refund_cents), netCents: BigInt(record.remaining_cents),
       refundedOn: record.refunded_on, reason: record.reason, reference: record.reference,
       refundEntries: currentPayment.refundEntries,
