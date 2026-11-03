@@ -178,7 +178,8 @@ export function PurchasePartialAdjustmentPanel({
     if (!window.confirm(
       `Registrar ajuste IRREVERSÍVEL no pedido de ${purchase.code}?\n\n` +
       `Pagamento original: ${format(original)}\nItens cancelados: ${format(cancelledTotal)}\n` +
-      `Crédito recebido: ${moneyBRL(refund)}\nAcerto de frete (sinalizado): ${format(difference || 0n)}\n` +
+      `Crédito recebido: ${moneyBRL(refund)}\nFrete compensado: ${format(coveredFreight)}\n` +
+      `Diferença gerencial separada (não comprovada como frete): ${format(managerialResidual)}\n` +
       `Total líquido: ${format(net || 0n)}\n\n` +
       'O banco manterá o pagamento original e os documentos. O ajuste não poderá ser repetido.',
     )) return;
@@ -284,7 +285,7 @@ export function PurchasePartialAdjustmentPanel({
       </label>
       {difference !== null && <div className="purchase-refund-freight-adjustment">
         <div>
-          <strong>AJ-FRETE · Acerto de frete dos itens cancelados</strong>
+          <strong>AJ-FRETE · Parcela de frete conciliada automaticamente</strong>
           <small>{difference < 0n
             ? 'Frete retido até o valor original, com excedente separado como AJ-RESIDUAL, sem modificar o histórico.'
             : difference > 0n
@@ -292,7 +293,7 @@ export function PurchasePartialAdjustmentPanel({
               : 'Sem diferença: o crédito corresponde exatamente ao valor dos itens cancelados.'}</small>
         </div>
         <strong className={difference < 0n ? 'purchase-refund-freight-adjustment__positive' : ''}>
-          {difference < 0n ? '+ ' + format(-difference) : difference > 0n ? '− ' + format(difference) : format(0n)}
+          {difference < 0n ? '+ ' + format(coveredFreight) : difference > 0n ? '− ' + format(coveredFreight) : format(0n)}
         </strong>
       </div>}
       {managerialResidual > 0n && <p className="purchase-refund-residual-warning" role="note">
@@ -310,8 +311,8 @@ export function PurchasePartialAdjustmentPanel({
         <span>Pagamento original<strong>{format(original)}</strong></span>
         <span>Itens cancelados<strong>− {format(cancelledTotal)}</strong></span>
         <span>Créditos recebidos<strong>{refund === null ? 'Pendente' : `− ${moneyBRL(refund)}`}</strong></span>
-        <span>{difference !== null && difference < 0n ? 'Frete não restituído' : 'Redução de frete'}
-          <strong>{difference === null ? '—' : difference < 0n ? '+ ' + format(-difference) : '− ' + format(difference)}</strong></span>
+        <span>{difference !== null && difference < 0n ? 'Frete não restituído (até limite original)' : 'Redução de frete'}
+          <strong>{difference === null ? '—' : difference < 0n ? '+ ' + format(coveredFreight) : '− ' + format(coveredFreight)}</strong></span>
         <span>Frete original disponível<strong>{format(freightCapacity)}</strong></span>
         {managerialResidual > 0n && <span>AJ-RESIDUAL / AJ-CREDITO (não comprovado como frete)
           <strong>{format(managerialResidual)}</strong></span>
