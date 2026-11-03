@@ -44,7 +44,7 @@ export interface UnifiedFinancePaymentRow {
   refundEntries?: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
   adjustmentEntries?: Array<{
     id: string; adjustedOn: string; description: string; amountCents: bigint;
-    reference: string; kind: 'cancelled' | 'freight';
+    reference: string; kind: 'cancelled' | 'freight' | 'residual';
   }>;
   storeIds: string[];
   storeCodes: string[];
@@ -351,7 +351,7 @@ function purchasePaymentRow(
         reference: adjustment.reference,
         kind: 'cancelled' as const,
       }));
-      const freight = adjustment.freightReductionCents;
+      const freight = adjustment.freightReductionCents - adjustment.residualCents;
       const freightEntry = freight !== 0n ? [{
         id: adjustment.id + ':freight',
         adjustedOn,
@@ -362,7 +362,18 @@ function purchasePaymentRow(
         reference: adjustment.reference,
         kind: 'freight' as const,
       }] : [];
-      return [...cancelledEntries, ...freightEntry];
+      const residual = adjustment.residualCents;
+      const residualEntry = residual !== 0n ? [{
+        id: adjustment.id + ':residual',
+        adjustedOn,
+        description: residual < 0n
+          ? 'AJ-RESIDUAL — Valor retido sem comprovação de frete'
+          : 'AJ-CREDITO — Crédito adicional sem comprovação de frete',
+        amountCents: -residual,
+        reference: adjustment.reference,
+        kind: 'residual' as const,
+      }] : [];
+      return [...cancelledEntries, ...freightEntry, ...residualEntry];
     });
   const fallbackStores = purchase.stores;
   const storeIds = event.storeIds.length ? event.storeIds : fallbackStores.map((store) => store.storeId);
