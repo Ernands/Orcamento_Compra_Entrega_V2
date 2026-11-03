@@ -43,3 +43,6 @@
   .purchase-refund-numbers { grid-template-columns: minmax(0,1fr); }
   .purchase-refund-freight-adjustment { align-items: flex-start; flex-direction: column; gap: 8px; }
 }
+
+/* Diferenças sem lastro de frete: visíveis sem impedir conciliação matemática. */
+.purchase-refund-residual-warning{padding:12px 14px;border:1px solid #e9ca86;border-left:3px solid #bf8426;border-radius:8px;background:#fffaf0;color:#73511e;font-size:12px;line-height:1.6}
