@@ -397,7 +397,7 @@ export function FinancePaymentOccurrencesModal({
                       <tr key={entry.id}>
                         <td><strong>{formatAdjustmentDate(entry.adjustedOn)}</strong></td>
                         <td className="is-money"><strong>{entry.amountCents > 0n ? '+' : ''}{formatBRL(entry.amountCents)}</strong></td>
-                        <td><span className="finance-payment-method-pill">{entry.kind === 'freight' ? 'Ajuste de frete' : 'Item cancelado'}</span>
+                        <td><span className="finance-payment-method-pill">{entry.kind === 'freight' ? 'Ajuste de frete' : entry.kind === 'residual' ? 'Ajuste gerencial' : 'Item cancelado'}</span>
                           <small className="finance-payment-adjustment-breakdown__description">{entry.description}</small></td>
                         <td>{entry.reference}</td>
                       </tr>
