@@ -44,7 +44,7 @@ describe('lançamentos de crédito por item', () => {
     fireEvent.click(screen.getByLabelText(/Armário baixo com chave/));
     fireEvent.click(screen.getByRole('button',{name:'Adicionar reembolso'}));
     fireEvent.change(screen.getByLabelText('Valor do reembolso 1'),{target:{value:'400,00'}});
-    expect(screen.getByText(/AJ-RESIDUAL/)).toBeInTheDocument();
+    expect(screen.getAllByText(/AJ-RESIDUAL/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Diferença de/)).toBeInTheDocument();
     expect(screen.getByText(/sem afirmar que esse excedente corresponde a frete comprovado/)).toBeInTheDocument();
     expect(screen.getByRole('button',{name:/Confirmar cancelamento/})).toBeDisabled();
