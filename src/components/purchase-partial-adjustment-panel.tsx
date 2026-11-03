@@ -63,10 +63,12 @@ export function PurchasePartialAdjustmentPanel({
     ? parsedEntries.reduce((sum, entry) => sum + (entry.cents || 0), 0) : null;
   const difference = refund === null ? null : BigInt(refund) - cancelledTotal;
   const remainingFreight = retainedLines.reduce((sum, line) => sum + moneyToCents(line.shippingAmount || '0'), 0n);
-  // Valor negativo = frete dos itens cancelados que não foi restituído.
-  // Nunca permite converter preços dos produtos em frete sem lastro original.
-  const validMoney = difference !== null && difference >= -cancelledFreight && difference <= remainingFreight
-    && refund !== null && refund > 0 && BigInt(refund) < original;
+  // O excedente ao frete original é ajuste gerencial, não frete de fornecedor comprovado.
+  const freightCapacity = difference === null ? 0n : difference < 0n ? cancelledFreight : remainingFreight;
+  const absoluteDifference = difference === null ? 0n : difference < 0n ? -difference : difference;
+  const coveredFreight = absoluteDifference < freightCapacity ? absoluteDifference : freightCapacity;
+  const managerialResidual = absoluteDifference - coveredFreight;
+  const validMoney = difference !== null && refund !== null && refund > 0 && BigInt(refund) < original;
   const pendingRequirements: string[] = [];
   if (cancelledIds.length === 0 || cancelledIds.length >= order.lines.length) {
     pendingRequirements.push('Selecione os itens cancelados e mantenha pelo menos um item na compra.');
@@ -77,7 +79,7 @@ export function PurchasePartialAdjustmentPanel({
     pendingRequirements.push('Vincule pelo menos um crédito a cada item cancelado.');
   }
   if (entriesValid && allCancelledHaveRefund && !validMoney) {
-    pendingRequirements.push('Concilie o crédito com os valores dos itens e os limites do frete.');
+    pendingRequirements.push('O crédito deve ser positivo e inferior ao pagamento original.');
   }
   if (!selectedDocumentId) {
     pendingRequirements.push(refundProofs.length > 1
@@ -91,16 +93,16 @@ export function PurchasePartialAdjustmentPanel({
     pendingRequirements.push('Informe a justificativa do cancelamento (10 a 1.500 caracteres).');
   }
   if (!confirmFreight) {
-    pendingRequirements.push('Confirme documentalmente o ajuste de frete.');
+    pendingRequirements.push('Confirme a classificação gerencial do ajuste.');
   }
   const validInputs = pendingRequirements.length === 0;
   const distributed = (() => {
-    if (!validMoney || difference === null || difference <= 0n) return [];
+    if (!validMoney || difference === null || difference <= 0n || coveredFreight <= 0n) return [];
     return prorateFreightReduction(retainedLines.map((line) => ({
       id: line.id, code: line.itemCode, description: line.itemName,
       shippingCents: Number(moneyToCents(line.shippingAmount || '0')),
       totalCents: Number(moneyToCents(line.lineTotal || '0')),
-    })), Number(difference));
+    })), Number(coveredFreight));
   })();
   const net = refund === null ? null : original - BigInt(refund);
 
@@ -111,15 +113,20 @@ export function PurchasePartialAdjustmentPanel({
       <div className="purchase-refund-summary">
         <span>Pago originalmente <strong>{format(existing.grossCents)}</strong></span>
         <span>Crédito recebido <strong>− {format(existing.refundedCents)}</strong></span>
-        <span>{existing.freightReductionCents < 0n ? 'Frete não restituído' : 'Redução de frete'}
-          <strong>{existing.freightReductionCents < 0n ? '+ ' + format(-existing.freightReductionCents) : '− ' + format(existing.freightReductionCents)}</strong></span>
+        <span>AJ-FRETE — Frete compensado
+          <strong>{existing.freightReductionCents - existing.residualCents < 0n
+            ? '+ ' + format(-(existing.freightReductionCents - existing.residualCents))
+            : '− ' + format(existing.freightReductionCents - existing.residualCents)}</strong></span>
+        {existing.residualCents !== 0n && <span>Ajuste gerencial não comprovado como frete
+          <strong>{existing.residualCents < 0n ? '+ ' + format(-existing.residualCents)
+            : '− ' + format(existing.residualCents)}</strong></span>}
         <span>Pago líquido <strong>{format(existing.netCents)}</strong></span>
       </div>
       <p>{existing.refundedOn} · {existing.reference} · {existing.reason}</p>
       <p>Itens cancelados: {existing.cancelledLines.map((line) => line.itemCode + ' — ' + line.itemName).join('; ')}.</p>
       {existing.freightReductionCents < 0n && <p className="purchase-refund-retained-note">
-        AJ-FRETE — Acerto de frete dos itens cancelados: + {format(-existing.freightReductionCents)}.
-        Custo preservado sem modificar o pagamento original ou os preços unitários.
+        Ajuste líquido assinado: + {format(-existing.freightReductionCents)}.
+        Pagamento bruto e preços originais preservados. Eventual resíduo não é frete comprovado.
       </p>}
       {existing.refundEntries.length > 0 && <div className="purchase-refund-table-wrap"><table>
         <thead><tr><th>Item reembolsado</th><th>Data do crédito</th><th>Valor recebido</th></tr></thead>
@@ -171,7 +178,8 @@ export function PurchasePartialAdjustmentPanel({
     if (!window.confirm(
       `Registrar ajuste IRREVERSÍVEL no pedido de ${purchase.code}?\n\n` +
       `Pagamento original: ${format(original)}\nItens cancelados: ${format(cancelledTotal)}\n` +
-      `Crédito recebido: ${moneyBRL(refund)}\nAcerto de frete (sinalizado): ${format(difference || 0n)}\n` +
+      `Crédito recebido: ${moneyBRL(refund)}\nFrete compensado: ${format(coveredFreight)}\n` +
+      `Diferença gerencial separada (não comprovada como frete): ${format(managerialResidual)}\n` +
       `Total líquido: ${format(net || 0n)}\n\n` +
       'O banco manterá o pagamento original e os documentos. O ajuste não poderá ser repetido.',
     )) return;
@@ -277,30 +285,37 @@ export function PurchasePartialAdjustmentPanel({
       </label>
       {difference !== null && <div className="purchase-refund-freight-adjustment">
         <div>
-          <strong>AJ-FRETE · Acerto de frete dos itens cancelados</strong>
+          <strong>AJ-FRETE · Parcela de frete conciliada automaticamente</strong>
           <small>{difference < 0n
-            ? 'Parte do frete originalmente atribuído aos itens cancelados não foi devolvida. O custo ficará registrado em uma terceira linha de ajuste, sem aumentar o frete dos itens mantidos.'
+            ? 'Frete retido até o valor original, com excedente separado como AJ-RESIDUAL, sem modificar o histórico.'
             : difference > 0n
-              ? 'O fornecedor devolveu frete adicional. A redução será rateada somente entre os itens mantidos, respeitando seu frete original.'
-              : 'Sem diferença de frete: o crédito corresponde exatamente ao valor dos itens cancelados.'}</small>
+              ? 'Abatimento de frete até o saldo disponível; excesso identificado como AJ-CREDITO.'
+              : 'Sem diferença: o crédito corresponde exatamente ao valor dos itens cancelados.'}</small>
         </div>
         <strong className={difference < 0n ? 'purchase-refund-freight-adjustment__positive' : ''}>
-          {difference < 0n ? '+ ' + format(-difference) : difference > 0n ? '− ' + format(difference) : format(0n)}
+          {difference < 0n ? '+ ' + format(coveredFreight) : difference > 0n ? '− ' + format(coveredFreight) : format(0n)}
         </strong>
       </div>}
+      {managerialResidual > 0n && <p className="purchase-refund-residual-warning" role="note">
+        Diferença de {format(managerialResidual)} além do frete original. Será registrada em
+        <strong> {difference !== null && difference < 0n ? 'AJ-RESIDUAL' : 'AJ-CREDITO'}</strong>,
+        sem afirmar que esse excedente corresponde a frete comprovado pelo fornecedor.
+        Descreva a causa na justificativa.
+      </p>}
       <label className="purchase-refund-consent">
         <input type="checkbox" checked={confirmFreight} onChange={(event) => setConfirmFreight(event.target.checked)}/>
-        {difference !== null && difference < 0n
-          ? 'Confirmo que o valor não restituído está documentado como custo residual de frete dos itens cancelados, limitado ao frete original desses itens.'
-          : 'Confirmo documentalmente que a diferença positiva entre o crédito recebido e os itens cancelados corresponde a abatimento de frete, e autorizo o rateio proporcional.'}
+        Confirmo os créditos e autorizo a conciliação automática: frete até o limite original,
+        excedente em ajuste gerencial identificado, sem alterar o pagamento original.
       </label>
       <div className="purchase-refund-numbers">
         <span>Pagamento original<strong>{format(original)}</strong></span>
         <span>Itens cancelados<strong>− {format(cancelledTotal)}</strong></span>
         <span>Créditos recebidos<strong>{refund === null ? 'Pendente' : `− ${moneyBRL(refund)}`}</strong></span>
-        <span>{difference !== null && difference < 0n ? 'Frete não restituído' : 'Redução de frete'}
-          <strong>{difference === null ? '—' : difference < 0n ? '+ ' + format(-difference) : '− ' + format(difference)}</strong></span>
-        <span>Frete restante disponível<strong>{format(remainingFreight)}</strong></span>
+        <span>{difference !== null && difference < 0n ? 'Frete não restituído (até limite original)' : 'Redução de frete'}
+          <strong>{difference === null ? '—' : difference < 0n ? '+ ' + format(coveredFreight) : '− ' + format(coveredFreight)}</strong></span>
+        <span>Frete original disponível<strong>{format(freightCapacity)}</strong></span>
+        {managerialResidual > 0n && <span>AJ-RESIDUAL / AJ-CREDITO (não comprovado como frete)
+          <strong>{format(managerialResidual)}</strong></span>}
         <span>Total líquido<strong>{net === null ? '—' : format(net)}</strong></span>
         <span>Diferença residual<strong>{validMoney ? moneyBRL(0) : 'Não conciliado'}</strong></span>
       </div>
@@ -312,15 +327,10 @@ export function PurchasePartialAdjustmentPanel({
           <td>{moneyBRL(line.originalFreightCents)}</td><td>− {moneyBRL(line.reductionCents)}</td>
           <td>{moneyBRL(line.adjustedFreightCents)}</td><td>{moneyBRL(line.adjustedTotalCents)}</td></tr>)}</tbody>
           <tfoot><tr><th>Total</th><th>{format(remainingFreight)}</th>
-          <th>− {format(difference || 0n)}</th><th>{format(remainingFreight - (difference || 0n))}</th>
+          <th>− {format(coveredFreight)}</th><th>{format(remainingFreight - coveredFreight)}</th>
           <th>{format(net || 0n)}</th></tr></tfoot>
         </table></div>
       </details>}
-      {difference !== null && difference < -cancelledFreight && <p className="form-error" role="alert">
-        O frete não restituído de {format(-difference)} supera o frete original de {format(cancelledFreight)} dos itens cancelados.
-        Confira os créditos e a documentação antes de registrar.
-      </p>}
-      {difference !== null && difference > remainingFreight && <p className="form-error">Crédito excede o frete dos itens mantidos.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       {pendingRequirements.length > 0 ? (
         <div className="purchase-refund-validation" role="status" aria-live="polite">

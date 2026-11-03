@@ -176,6 +176,8 @@ export interface PurchaseOrderV2 {
   cancelledAt: string | null;
   cancellationReason: string | null;
   lines: PurchaseOrderLineV2[];
+  /** Linhas originais canceladas por reembolso, somente para exibição/auditoria. */
+  cancelledLines?: PurchaseOrderLineV2[];
 }
 
 export interface PurchasePaymentV2 {

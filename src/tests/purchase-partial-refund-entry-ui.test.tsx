@@ -39,6 +39,17 @@ describe('lançamentos de crédito por item', () => {
     expect(screen.getByRole('button',{name:/Confirmar cancelamento/})).toBeDisabled();
   });
 
+  it('exibe ajuste gerencial quando a devolução é menor do que o frete original', () => {
+    setup();
+    fireEvent.click(screen.getByLabelText(/Armário baixo com chave/));
+    fireEvent.click(screen.getByRole('button',{name:'Adicionar reembolso'}));
+    fireEvent.change(screen.getByLabelText('Valor do reembolso 1'),{target:{value:'400,00'}});
+    expect(screen.getAllByText(/AJ-RESIDUAL/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Diferença de/)).toBeInTheDocument();
+    expect(screen.getByText(/sem afirmar que esse excedente corresponde a frete comprovado/)).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:/Confirmar cancelamento/})).toBeDisabled();
+  });
+
   it('admite frete não restituído dos itens cancelados dentro do frete original', () => {
     setup();
     fireEvent.click(screen.getByLabelText(/Armário baixo com chave/));
@@ -49,7 +60,7 @@ describe('lançamentos de crédito por item', () => {
     fireEvent.change(screen.getByLabelText('Valor do reembolso 2'),{target:{value:'703,50'}});
     expect(screen.getByText(/AJ-FRETE/)).toBeInTheDocument();
     expect(screen.getAllByText(/R\$ 63,23/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/custo residual de frete dos itens cancelados/)).toBeInTheDocument();
+    expect(screen.getByText(/Frete retido até o valor original/)).toBeInTheDocument();
     // Ainda exige comprovante, referência, justificativa e confirmação documental.
     expect(screen.getByRole('button',{name:/Confirmar cancelamento/})).toBeDisabled();
   });

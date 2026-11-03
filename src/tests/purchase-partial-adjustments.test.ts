@@ -233,6 +233,65 @@ describe('cancelamento parcial auditável: invariantes e integração entre mód
     expect(rows[0].amountCents).toBe(10500n);
   });
 
+  it('automaticamente separa o excedente retido do frete original e sinaliza os cancelados no histórico', () => {
+    const r = record();
+    r.freight_reduction_cents = -2100;
+    r.refund_cents = 9900;
+    r.remaining_cents = 22100;
+    r.line_adjustments = [
+      {line_id:'line-cancel',kind:'cancelled',reduction_cents:12000,
+        original_line_cents:12000,original_shipping_cents:2000},
+      {line_id:'line-cancel',kind:'freight_retained',reduction_cents:-2000,
+        original_line_cents:12000,original_shipping_cents:2000},
+      {line_id:'line-cancel',kind:'residual_retained',reduction_cents:-100,
+        original_line_cents:12000,original_shipping_cents:2000},
+    ];
+    const original = fixture();
+    const before = JSON.stringify(original);
+    const purchase = applyPurchasePartialAdjustments(original, [r]);
+    expect(before).not.toContain('AJ-RESIDUAL');
+    expect(purchase.orders[0].cancelledLines?.map(x=>x.id)).toEqual(['line-cancel']);
+    expect(purchase.items.find(x=>x.id==='line-cancel')?.cancelledQuantity).toBe('1');
+    const codes = purchase.orders[0].lines.map(x=>x.itemCode);
+    expect(codes).toContain('AJ-FRETE');
+    expect(codes).toContain('AJ-RESIDUAL');
+    expect(purchase.orders[0].lines.reduce((s,x)=>s+moneyToCents(x.lineTotal||'0'),0n)).toBe(22100n);
+    expect(purchase.adjustments?.[0].residualCents).toBe(-100n);
+    expect(purchase.payments[0].amount).toBe('221.00');
+    expect(purchase.payments[0].grossAmount).toBe('320.00');
+    const finance = buildUnifiedFinancePayments([purchase], []);
+    expect(finance[0].adjustmentEntries?.map(x=>x.amountCents)).toEqual([-12000n, 2000n, 100n]);
+    expect(finance[0].adjustmentEntries?.map(x=>x.kind)).toEqual(['cancelled','freight','residual']);
+    expect(finance[0].amountCents).toBe(22100n);
+  });
+
+  it('registra crédito além do frete remanescente sem frete negativo nem alterar pagamento original', () => {
+    const r = record();
+    r.freight_reduction_cents = 3500;
+    r.refund_cents = 15500;
+    r.remaining_cents = 16500;
+    r.line_adjustments = [
+      {line_id:'line-cancel',kind:'cancelled',reduction_cents:12000,
+        original_line_cents:12000,original_shipping_cents:2000},
+      {line_id:'line-keep1',kind:'freight',reduction_cents:1000,
+        original_line_cents:10000,original_shipping_cents:1000},
+      {line_id:'line-keep2',kind:'freight',reduction_cents:2000,
+        original_line_cents:10000,original_shipping_cents:2000},
+      {line_id:'line-keep1',kind:'residual_credit',reduction_cents:500,
+        original_line_cents:10000,original_shipping_cents:1000},
+    ];
+    const purchase = applyPurchasePartialAdjustments(fixture(), [r]);
+    expect(purchase.orders[0].lines.find(x=>x.itemCode==='AJ-CREDITO')?.lineTotal).toBe('-5.00');
+    expect(purchase.orders[0].lines.find(x=>x.itemCode==='AJ-CREDITO')?.shippingAmount).toBe('0.00');
+    expect(purchase.orders[0].lines.reduce((s,x)=>s+moneyToCents(x.lineTotal||'0'),0n)).toBe(16500n);
+    expect(purchase.payments[0].grossAmount).toBe('320.00');
+    expect(purchase.payments[0].amount).toBe('165.00');
+    expect(purchase.adjustments?.[0].residualCents).toBe(500n);
+    const finance = buildUnifiedFinancePayments([purchase],[]);
+    expect(finance[0].adjustmentEntries?.map(x=>x.amountCents)).toEqual([-12000n,-3000n,-500n]);
+    expect(finance[0].amountCents).toBe(16500n);
+  });
+
   it('rejeita frete não restituído maior do que o frete de itens cancelados', () => {
     const retained = record();
     retained.freight_reduction_cents = -2100;
