@@ -119,7 +119,7 @@ export function PurchasePartialAdjustmentPanel({
             : '− ' + format(existing.freightReductionCents - existing.residualCents)}</strong></span>
         {existing.residualCents !== 0n && <span>Ajuste gerencial não comprovado como frete
           <strong>{existing.residualCents < 0n ? '+ ' + format(-existing.residualCents)
-            : '− ' + format(existing.residualCents)}</strong></span>
+            : '− ' + format(existing.residualCents)}</strong></span>}
         <span>Pago líquido <strong>{format(existing.netCents)}</strong></span>
       </div>
       <p>{existing.refundedOn} · {existing.reference} · {existing.reason}</p>
