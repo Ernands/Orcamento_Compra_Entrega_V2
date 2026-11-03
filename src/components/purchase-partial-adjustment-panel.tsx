@@ -315,7 +315,7 @@ export function PurchasePartialAdjustmentPanel({
           <strong>{difference === null ? '—' : difference < 0n ? '+ ' + format(coveredFreight) : '− ' + format(coveredFreight)}</strong></span>
         <span>Frete original disponível<strong>{format(freightCapacity)}</strong></span>
         {managerialResidual > 0n && <span>AJ-RESIDUAL / AJ-CREDITO (não comprovado como frete)
-          <strong>{format(managerialResidual)}</strong></span>
+          <strong>{format(managerialResidual)}</strong></span>}
         <span>Total líquido<strong>{net === null ? '—' : format(net)}</strong></span>
         <span>Diferença residual<strong>{validMoney ? moneyBRL(0) : 'Não conciliado'}</strong></span>
       </div>
