@@ -696,3 +696,9 @@
   .purchase-v2-operation-body { grid-template-columns: minmax(0,1fr); }
   .purchase-v2-operation-row > .purchase-refund-panel { margin: 9px; padding: 12px; }
 }
+
+/* Cancelamento parcial: indicador histórico, sem compor os totais ativos. */
+.purchase-v2-pill--cancelled-item{display:inline-flex;width:fit-content;margin-top:5px;background:#fff1eb!important;border:1px solid #edbeae;color:#954533!important;font-size:11px;font-weight:700}
+.purchase-v2-cancelled-row{background:#fff8f4;color:#88625a}
+.purchase-v2-cancelled-row td,.purchase-v2-cancelled-row strong{color:#765e56}
+.purchase-v2-cancelled-row s{color:#996356}
