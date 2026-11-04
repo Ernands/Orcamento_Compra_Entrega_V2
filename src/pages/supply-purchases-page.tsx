@@ -418,7 +418,7 @@ function RegisterPurchaseModal({
       setOtherCosts(centsToInput(remainingQuotedOtherCostsCents(purchase, item)));
     }
     setDestinationStoreAllocations(allocations);
-  }, [defaultAllocationsForDestination, destinationShippings, destinationsWithBalance, purchase]);
+  }, [defaultAllocationsForDestination, destinationShippings, destinationsWithBalance, item, purchase]);
 
   useEffect(() => {
     if (!item || !purchase || savedOrderId) return;
