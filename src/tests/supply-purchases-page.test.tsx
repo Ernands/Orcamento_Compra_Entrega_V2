@@ -478,7 +478,7 @@ describe('SupplyPurchasesPage V2', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
     expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
       lines: [expect.objectContaining({
-        purchaseItemId: item.id, otherCosts: '31,99', discountAmount: '10,00',
+        purchaseItemId: item.id, otherCosts: '31,99', discountAmount: '10',
       })],
       payments: [expect.objectContaining({ amount: '1021,99' })],
     }));
@@ -495,13 +495,13 @@ describe('SupplyPurchasesPage V2', () => {
     const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
     await user.click(within(dialog).getByText('Compra em lote'));
     await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos disponiveis' }));
-    expect(within(dialog).getByLabelText('Outros custos de ITM-0101')).toHaveValue('31,99');
+    expect(within(dialog).getByLabelText('Outros custos de ITM-0001')).toHaveValue('31,99');
     expect(within(dialog).getAllByText('R$ 381,99').length).toBeGreaterThan(0);
     await user.click(within(dialog).getByRole('button', { name: 'Salvar compra em lote (2 itens/destinos)' }));
     expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
       lines: [
         expect.objectContaining({ purchaseItemId: 'item-1', otherCosts: '31,99' }),
-        expect.objectContaining({ purchaseItemId: 'item-2', otherCosts: '0,00' }),
+        expect.objectContaining({ purchaseItemId: 'item-2', otherCosts: '0' }),
       ],
       payments: [expect.objectContaining({ amount: '381,99' })],
     }));
@@ -529,7 +529,7 @@ describe('SupplyPurchasesPage V2', () => {
       }),
       expect.objectContaining({
         purchaseId: 'purchase-2',
-        lines: [expect.objectContaining({ purchaseItemId: 'item-batch-2', otherCosts: '0,00' })],
+        lines: [expect.objectContaining({ purchaseItemId: 'item-batch-2', otherCosts: '0' })],
         payments: [expect.objectContaining({ amount: '150' })],
       }),
     ]);
