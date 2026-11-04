@@ -456,6 +456,104 @@ describe('SupplyPurchasesPage V2', () => {
     }));
   });
 
+  it('transfere outros custos aprovados para a compra individual e o pagamento sem perder centavos', async () => {
+    const user = userEvent.setup();
+    const item: PurchaseItemV2 = {
+      ...baseItem, storeId: 'store-1', storeCode: 'LOJ-001',
+      quantityApproved: '10', purchasedQuantity: '0', actualTotal: '0',
+      quotedOtherCosts: '31.99', quotedDiscountAmount: '10',
+      approvedLineTotal: '1021.99', quotedShippingType: 'free',
+    };
+    renderPage({
+      ...purchase, status: 'approved', stores: [purchase.stores[0]],
+      approvedTotal: '1021.99', items: [item], orders: [], payments: [],
+    });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    expect(within(dialog).getByLabelText('Outros custos')).toHaveValue('31,99');
+    await user.type(within(dialog).getByLabelText('Frete realizado'), '0');
+    await waitFor(() => expect(within(dialog).getByLabelText('Valor total')).toHaveValue('1021,99'));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [expect.objectContaining({
+        purchaseItemId: item.id, otherCosts: '31,99', discountAmount: '10',
+      })],
+      payments: [expect.objectContaining({ amount: '1021,99' })],
+    }));
+  });
+
+  it('preserva outros custos da COT no lote da CMP, inclusive no total de pagamento', async () => {
+    const user = userEvent.setup();
+    const current = bulkItemsPurchase();
+    const item = { ...current.items[0], quotedOtherCosts: '31.99', approvedLineTotal: '231.99' };
+    renderPage({ ...current, approvedTotal: '381.99', items: [item, current.items[1]] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Gerenciar compra CMP-00001' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    await user.click(within(dialog).getByText('Compra em lote'));
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos disponiveis' }));
+    expect(within(dialog).getByLabelText('Outros custos de ITM-0001')).toHaveValue('31,99');
+    expect(within(dialog).getAllByText('R$ 381,99').length).toBeGreaterThan(0);
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra em lote (2 itens/destinos)' }));
+    expect(createSupplyPurchaseOperationV2).toHaveBeenCalledWith(expect.objectContaining({
+      lines: [
+        expect.objectContaining({ purchaseItemId: 'item-1', otherCosts: '31,99' }),
+        expect.objectContaining({ purchaseItemId: 'item-2', otherCosts: '0' }),
+      ],
+      payments: [expect.objectContaining({ amount: '381,99' })],
+    }));
+  });
+
+  it('preserva os outros custos no lote entre CMPs distintas', async () => {
+    const user = userEvent.setup();
+    const current = portfolioBatchPurchases();
+    const item = { ...current[0].items[0], quotedOtherCosts: '31.99', approvedLineTotal: '231.99' };
+    const first = { ...current[0], approvedTotal: '231.99', items: [item] };
+    renderPage([first, current[1]]);
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Compra em lote' }));
+    const dialog = screen.getByRole('dialog', { name: 'Compra em lote' });
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos disponiveis' }));
+    expect(within(dialog).getByLabelText('Outros custos de CMP-00001 ITM-0101')).toHaveValue('31,99');
+    expect(within(dialog).getAllByText('R$ 381,99').length).toBeGreaterThan(0);
+    await user.type(within(dialog).getByLabelText('Pedido / referencia do lote'), 'ML-CMP90');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra em lote · 2 CMPs' }));
+    expect(createSupplyPurchaseBatchOperationV2).toHaveBeenCalledWith([
+      expect.objectContaining({
+        purchaseId: 'purchase-1',
+        lines: [expect.objectContaining({ purchaseItemId: 'item-batch-1', otherCosts: '31,99' })],
+        payments: [expect.objectContaining({ amount: '231,99' })],
+      }),
+      expect.objectContaining({
+        purchaseId: 'purchase-2',
+        lines: [expect.objectContaining({ purchaseItemId: 'item-batch-2', otherCosts: '0' })],
+        payments: [expect.objectContaining({ amount: '150' })],
+      }),
+    ]);
+  });
+
+  it('ao selecionar todos os destinos, herda o custo extra cotado uma unica vez', async () => {
+    const user = userEvent.setup();
+    const current = multiDestinationPurchase();
+    const item = { ...current.items[0], quotedOtherCosts: '1.01', approvedLineTotal: '301.01' };
+    renderPage({ ...current, approvedTotal: '301.01', items: [item] });
+    await screen.findByText('CMP-00001');
+    await user.click(screen.getByRole('button', { name: 'Detalhar CMP-00001' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar compra' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gerenciar compra · CMP-00001' });
+    await user.click(within(dialog).getByRole('button', { name: 'Selecionar todos os destinos com saldo' }));
+    await user.type(within(dialog).getByLabelText('Frete total realizado'), '0');
+    expect(within(dialog).getByLabelText('Outros custos totais')).toHaveValue('1,01');
+    await waitFor(() => expect(within(dialog).getByLabelText('Valor total')).toHaveValue('301,01'));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar compra completa' }));
+    const call = vi.mocked(createSupplyPurchaseOperationV2).mock.calls.at(-1)?.[0];
+    expect(call?.lines).toHaveLength(3);
+    expect(call?.lines.map((x) => x.otherCosts)).toEqual(['0,34', '0,34', '0,33']);
+  });
+
   it('registra varios itens em uma unica operacao de compra', async () => {
     const user = userEvent.setup();
     renderPage(bulkItemsPurchase());
