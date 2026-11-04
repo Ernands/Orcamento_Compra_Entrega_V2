@@ -413,6 +413,10 @@ function RegisterPurchaseModal({
     setSelectedDestinationIds(ids);
     setDestinationQuantities(quantities);
     setDestinationShippings(shippings);
+    if (item && purchase && ids.length === destinationsWithBalance.length && ids.length > 0) {
+      setDiscount(centsToInput(remainingQuotedDiscountCents(purchase, item)));
+      setOtherCosts(centsToInput(remainingQuotedOtherCostsCents(purchase, item)));
+    }
     setDestinationStoreAllocations(allocations);
   }, [defaultAllocationsForDestination, destinationShippings, destinationsWithBalance, purchase]);
 
@@ -431,7 +435,7 @@ function RegisterPurchaseModal({
     setUnitPrice(item.quotedUnitPrice);
     setDiscount(item.destinations.length > 1 ? '0' : centsToInput(remainingQuotedDiscountCents(purchase, item)));
     setShipping('');
-    setOtherCosts('0');
+    setOtherCosts(item.destinations.length > 1 ? '0' : centsToInput(remainingQuotedOtherCostsCents(purchase, item)));
     setSupplierOrderRef('');
     setExpectedDeliveryDate(suggestedDeliveryDate(todayInput(), firstDestination ? firstDestination.quotedDeliveryDays : item.quotedDeliveryDays));
     deliveryTouchedRef.current = false;
@@ -1082,6 +1086,7 @@ type BulkPurchaseDraftLine = {
   unitPrice: string;
   discount: string;
   shipping: string;
+  otherCosts: string;
   selected: boolean;
   disabledReason: string | null;
 };
@@ -1137,6 +1142,14 @@ function remainingQuotedDiscountCents(purchase: PurchaseV2, item: PurchaseItemV2
   return quoted > used ? quoted - used : 0n;
 }
 
+function remainingQuotedOtherCostsCents(purchase: PurchaseV2, item: PurchaseItemV2): bigint {
+  const quoted = moneyToCents(item.quotedOtherCosts || '0');
+  const used = purchase.orders.filter((order) => order.status === 'active')
+    .flatMap((order) => order.lines).filter((line) => line.purchaseItemId === item.id)
+    .reduce((sum, line) => sum + moneyToCents(line.otherCosts || '0'), 0n);
+  return quoted > used ? quoted - used : 0n;
+}
+
 function initialBulkLines(purchase: PurchaseV2): BulkPurchaseDraftLine[] {
   return purchase.items.flatMap<BulkPurchaseDraftLine>((item) => {
     const itemRemaining = remainingItemQuantity(item, purchase);
@@ -1166,6 +1179,7 @@ function initialBulkLines(purchase: PurchaseV2): BulkPurchaseDraftLine[] {
           unitPrice: item.quotedUnitPrice,
           discount: '0',
           shipping: quotedShipping,
+          otherCosts: '0',
           selected: false,
           disabledReason,
         }];
@@ -1174,8 +1188,13 @@ function initialBulkLines(purchase: PurchaseV2): BulkPurchaseDraftLine[] {
         remainingQuotedDiscountCents(purchase, item),
         destinationLines.map((line) => line.remaining),
       );
+      const otherCostPortions = allocateCentsByWeights(
+        remainingQuotedOtherCostsCents(purchase, item),
+        destinationLines.map((line) => line.remaining),
+      );
       return destinationLines.map((line, index) => ({
         ...line, discount: centsToInput(portions[index] || 0n),
+        otherCosts: centsToInput(otherCostPortions[index] || 0n),
       }));
     }
     const weights = bulkLineStoreWeights(purchase, item, null);
@@ -1193,6 +1212,7 @@ function initialBulkLines(purchase: PurchaseV2): BulkPurchaseDraftLine[] {
       unitPrice: item.quotedUnitPrice,
       discount: centsToInput(remainingQuotedDiscountCents(purchase, item)),
       shipping: quotedShipping,
+      otherCosts: centsToInput(remainingQuotedOtherCostsCents(purchase, item)),
       selected: false,
       disabledReason: weights.length ? null : 'Defina o destino/loja deste item pela compra individual.',
     }];
@@ -1288,8 +1308,9 @@ function BulkRegisterPurchaseModal({
     const shippingCents = effectiveShipping(line);
     try {
       const coupon = moneyToCents(line.discount || '0');
-      if (subtotal === null || shippingCents === null || coupon < 0n || coupon > subtotal) return null;
-      return subtotal - coupon + shippingCents;
+      const extra = moneyToCents(line.otherCosts || '0');
+      if (subtotal === null || shippingCents === null || coupon < 0n || coupon > subtotal || extra < 0n) return null;
+      return subtotal - coupon + shippingCents + extra;
     } catch {
       return null;
     }
@@ -1380,7 +1401,7 @@ function BulkRegisterPurchaseModal({
       const rpcLines = selectedLines.map((line) => {
         const qty = quantityToThousandths(line.quantity);
         if (qty <= 0n || qty > line.remaining) throw new Error(`Revise a quantidade de ${line.item.itemName}.`);
-        if (moneyToCents(line.unitPrice) < 0n || moneyToCents(line.discount || '0') < 0n) {
+        if (moneyToCents(line.unitPrice) < 0n || moneyToCents(line.discount || '0') < 0n || moneyToCents(line.otherCosts || '0') < 0n) {
           throw new Error('Preco e desconto nao podem ser negativos.');
         }
         if (bulkShippingMode === 'individual' && moneyToCents(line.shipping) < 0n) throw new Error('Valores negativos nao sao permitidos.');
@@ -1396,7 +1417,7 @@ function BulkRegisterPurchaseModal({
           unitPrice: line.unitPrice,
           discountAmount: line.discount,
           shippingAmount: centsToInput(effectiveShipping(line) || 0n),
-          otherCosts: '0',
+          otherCosts: line.otherCosts,
           expectedDeliveryDate,
           notes: '',
           storeAllocations: allocations,
@@ -1484,6 +1505,7 @@ function BulkRegisterPurchaseModal({
           <label className="field">Quantidade<input value={line.quantity} disabled={!line.selected} onChange={(event) => updateLine(line.key, { quantity: event.target.value })}/></label>
           <label className="field">Preco unitario<input value={line.unitPrice} disabled={!line.selected} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })}/></label>
             <label className="field">Desconto / cupom<input value={line.discount} disabled={!line.selected} onChange={(event) => updateLine(line.key, { discount: event.target.value })} placeholder="0,00"/></label>
+          <label className="field">Outros custos<input aria-label={`Outros custos de ${line.item.itemCode}`} value={line.otherCosts} disabled={!line.selected} onChange={(event) => updateLine(line.key, { otherCosts: event.target.value })} placeholder="0,00"/></label>
           <label className="field">Frete{bulkShippingMode === 'total'
             ? <input value={line.selected && effectiveShipping(line) !== null ? centsToInput(effectiveShipping(line) || 0n) : ''} disabled placeholder="Rateado do frete total"/>
             : <input value={line.shipping} disabled={!line.selected} onChange={(event) => updateLine(line.key, { shipping: event.target.value })} placeholder="0 para gratis"/>}</label>
@@ -1659,7 +1681,7 @@ function PortfolioBulkRegisterPurchaseModal({
         unitPrice: line.unitPrice,
         discountAmount: line.discount,
         shippingAmount: line.shipping,
-        otherCosts: '0',
+        otherCosts: line.otherCosts,
       });
     } catch {
       return null;
@@ -1788,7 +1810,7 @@ function PortfolioBulkRegisterPurchaseModal({
           throw new Error(`Revise a quantidade de ${line.purchase.code} · ${line.item.itemName}.`);
         }
         if (moneyToCents(line.unitPrice) < 0n || moneyToCents(line.shipping) < 0n
-          || moneyToCents(line.discount || '0') < 0n) {
+          || moneyToCents(line.discount || '0') < 0n || moneyToCents(line.otherCosts || '0') < 0n) {
           throw new Error('Valores negativos nao sao permitidos.');
         }
         const currentLineTotal = lineTotal(line);
@@ -1818,7 +1840,7 @@ function PortfolioBulkRegisterPurchaseModal({
           unitPrice: line.unitPrice,
           discountAmount: line.discount,
           shippingAmount: line.shipping,
-          otherCosts: '0',
+          otherCosts: line.otherCosts,
           expectedDeliveryDate,
           notes: '',
           storeAllocations: allocations,
@@ -1899,6 +1921,7 @@ function PortfolioBulkRegisterPurchaseModal({
             <label className="field">Quantidade<input value={line.quantity} disabled={!line.selected} onChange={(event) => updateLine(line.key, { quantity: event.target.value })}/></label>
             <label className="field">Preco unitario<input value={line.unitPrice} disabled={!line.selected} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })}/></label>
             <label className="field">Desconto / cupom<input value={line.discount} disabled={!line.selected} onChange={(event) => updateLine(line.key, { discount: event.target.value })} placeholder="0,00"/></label>
+            <label className="field">Outros custos<input aria-label={`Outros custos de ${line.purchase.code} ${line.item.itemCode}`} value={line.otherCosts} disabled={!line.selected} onChange={(event) => updateLine(line.key, { otherCosts: event.target.value })} placeholder="0,00"/></label>
             <label className="field">Frete<input value={line.shipping} disabled={!line.selected} onChange={(event) => updateLine(line.key, { shipping: event.target.value })} placeholder="0 para gratis"/></label>
             <div className="purchase-v2-bulk-line-total"><small>Total</small><strong>{line.selected && lineTotal(line) !== null ? formatBRL(lineTotal(line)!) : '—'}</strong></div>
           </div>)}
