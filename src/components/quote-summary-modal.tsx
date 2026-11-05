@@ -16,6 +16,7 @@ import {
   downloadQuoteSummaryPdf,
   type QuoteSummaryFilters,
 } from '../data/exports/quote-summary-exports';
+import { exportErrorMessage } from '../data/exports/export-errors';
 import { formatBRL } from '../domain/supply-calculations';
 import { selectLowestPriceQuotesByItem } from '../domain/supply-quote-lowest-price';
 import { buildProspectorDisplayRows } from '../domain/quote-summary-prospector-view';
@@ -139,8 +140,8 @@ export function QuoteSummaryModal({
     try {
       if (format === 'excel') await downloadQuoteSummaryExcel(input);
       else await downloadQuoteSummaryPdf(input);
-    } catch {
-      setError(`Nao foi possivel gerar o arquivo ${format === 'excel' ? 'Excel' : 'PDF'}.`);
+    } catch (exportError) {
+      setError(exportErrorMessage(exportError, `Nao foi possivel gerar o arquivo ${format === 'excel' ? 'Excel' : 'PDF'}.`));
     } finally {
       setExporting(null);
     }
