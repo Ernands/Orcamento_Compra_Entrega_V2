@@ -152,13 +152,13 @@ export function BudgetForecastDashboardPage() {
       bb: { key: 'bb', label: 'Verba BB Reembolsável', icon: <Coins size={18} />,
         value: forecast.bbCents,
         note: considerReimbursements
-          ? `Verba original: ${formatBRL(forecast.originalBbCents)}. Descontados recebimentos e perdas finalizadas.`
+          ? `Verba original das lojas ativas: ${formatBRL(forecast.originalBbCents)}. Descontados recebimentos e perdas finalizadas.`
           : forecast.inactiveStoresWithBudget > 0
-            ? `Inclui ${formatBRL(forecast.inactiveBudgetCents)} de ${forecast.inactiveStoresWithBudget} ${forecast.inactiveStoresWithBudget === 1 ? 'loja inativa' : 'lojas inativas'}.`
-            : 'Total da verba BB atribuída às lojas.',
+            ? `Excluídos ${formatBRL(forecast.inactiveBudgetCents)} de ${forecast.inactiveStoresWithBudget} ${forecast.inactiveStoresWithBudget === 1 ? 'loja inativa' : 'lojas inativas'}.`
+            : 'Verba BB somente das lojas ativas com verba.',
         description: considerReimbursements
-          ? 'Verba BB original menos valores recebidos e perdas absorvidas em reembolsos finalizados.'
-          : 'Total de verba BB atribuído às lojas selecionadas, inclusive inativas com verba registrada.' },
+          ? 'Verba BB das lojas ativas com verba positiva, menos recebimentos e perdas absorvidas em reembolsos finalizados.'
+          : 'Verba BB somente das lojas operacionais ativas com verba positiva, exatamente as mesmas de Lojas Ativas com Verba.' },
       reimbursed: { key:'reimbursed', label:'Já reembolsado',icon:<Banknote size={18}/>,
         value:forecast.reimbursedCents,
         note:`Perda absorvida: ${formatBRL(forecast.absorbedCents)}`,
@@ -169,9 +169,9 @@ export function BudgetForecastDashboardPage() {
       activeStores: { key: 'activeStores', label: 'Lojas Ativas com Verba', icon: <Building2 size={18} />,
         isCount: true, value: forecast.activeStores,
         note: forecast.inactiveStoresWithBudget > 0
-          ? `${forecast.storesWithBudget} lojas com verba no total; ${forecast.inactiveStoresWithBudget} ${forecast.inactiveStoresWithBudget === 1 ? 'inativa' : 'inativas'}.`
-          : 'Contagem somente das lojas ativas com verba.',
-        description: 'Quantidade única de lojas operacionais ativas com verba BB, inclusive lojas finalizadas. O total da verba pode incluir lojas inativas com valores cadastrados.' },
+          ? `${forecast.inactiveStoresWithBudget} ${forecast.inactiveStoresWithBudget === 1 ? 'loja inativa excluída' : 'lojas inativas excluídas'} da verba BB.`
+          : 'Mesmas lojas incluídas na Verba BB Reembolsável.',
+        description: 'Quantidade única de lojas operacionais ativas com verba BB positiva, inclusive lojas finalizadas. Mesma lista da composição Verba BB Reembolsável.' },
       planned: { key: 'planned', label: 'Orçamento Previsto', icon: <ClipboardList size={18}/>,
         value: forecast.plannedCents, note: 'Total planejado para implantação.',
         description: 'Orçamento previsto de itens e obras, conforme Financeiro → Visão Geral.' },
