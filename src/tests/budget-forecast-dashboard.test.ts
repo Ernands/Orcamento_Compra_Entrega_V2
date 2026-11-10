@@ -137,8 +137,11 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
      expect(sum(snapshot.details.forecastBalance)).toBe(snapshot.forecastBalanceCents);
      expect(sum(snapshot.details.bbBalance)).toBe(snapshot.bbBalanceCents);
    };
-   for(const filter of [all,{...all,state:'MG'},{...all,implantation:'closed'},
-     {...all,operation:'inactive'},{...all,storeId:'v'}]){
+   const filtersToCheck: ForecastFilters[]=[
+     all,{...all,state:'MG'},{...all,implantation:'closed'},
+     {...all,operation:'inactive'},{...all,storeId:'v'},
+   ];
+   for(const filter of filtersToCheck){
      for(const reimbursements of [undefined,settlements]){
        sameMembership(buildBudgetForecast(candidates,values,[],filter,
          undefined,undefined,reimbursements));
