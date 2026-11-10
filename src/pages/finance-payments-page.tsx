@@ -696,7 +696,10 @@ export function FinancePaymentsPage() {
                 className={`finance-payments-tab finance-payments-tab--${key} ${view === key ? 'is-active' : ''}`}
                 onClick={() => setView(key)}
               >
-                {VIEW_LABELS[key]}
+                {key === 'paid' ? <CheckCircle2 size={18} aria-hidden="true" />
+                  : key === 'planned' ? <CalendarDays size={18} aria-hidden="true" />
+                    : <CircleAlert size={18} aria-hidden="true" />}
+                <span>{VIEW_LABELS[key]}</span>
               </button>
             ))}
           </div>
