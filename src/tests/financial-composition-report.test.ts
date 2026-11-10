@@ -174,7 +174,8 @@ function compositionPurchase(orders: FixtureOrder[], selectedStores = stores.sli
       unit: 'un', destinations: [],
     })),
     orders: orders.map((order) => ({
-      id: order.id, status: 'active', lines: order.lines.map((line, index) => {
+      id: order.id, status: 'active', purchasedOn: '2026-10-19',
+      lines: order.lines.map((line, index) => {
         const targetStores = line.stores || [selectedStores[0].id];
         return {
           id: `${order.id}-line-${index}`, orderId: order.id,
