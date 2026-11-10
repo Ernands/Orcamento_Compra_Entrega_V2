@@ -6,9 +6,12 @@ import { PurchasePartialAdjustmentPanel } from '../components/purchase-partial-a
 
 // Reproduces the Supabase/PostgREST 1000-row response limit in the regular
 // Compras V2 screen, not just in the finance-only allRows mode.
-const testDatabase = vi.hoisted(() => ({
-  tables: {} as Record<string, Record<string, unknown>[]>,
-  reads: [] as Array<{ table: string; from: number; to: number }>,
+const testDatabase = vi.hoisted<{
+  tables: Record<string, Record<string, unknown>[]>;
+  reads: Array<{ table: string; from: number; to: number }>;
+}>(() => ({
+  tables: {},
+  reads: [],
 }));
 
 vi.mock('../data/supabase/client', () => ({
