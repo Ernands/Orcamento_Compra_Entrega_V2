@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildImplementationDashboard,
+  buildImplementationDashboardFromMetrics,
   buildSupplyDashboard,
 } from '../data/dashboard/dashboard-repository';
 import type { Store, SupplyItem, SupplyNeed, SupplyQuote, SupplyQuoteItem } from '../domain/types';
@@ -238,4 +239,48 @@ describe('dashboard metrics', () => {
     });
     expect(dashboard.quotesByItem[0]).toMatchObject({ count: 2 });
   });
+  it('preserva os indicadores ao receber linhas agregadas do banco', () => {
+    const legacy = buildImplementationDashboard(
+      stores,
+      [
+        { id: 'old-1', storeId: 'store-1', status: 'completed', createdAt: '2026-07-01' },
+        { id: 'impl-1', storeId: 'store-1', status: 'in_progress', createdAt: '2026-08-01' },
+        { id: 'impl-3', storeId: 'store-3', status: 'completed', createdAt: '2026-08-02' },
+      ],
+      [
+        {
+          implementationId: 'impl-1',
+          title: 'Concluida',
+          status: 'completed',
+          priority: 'normal',
+          dueDate: '2026-08-10',
+        },
+        {
+          implementationId: 'impl-1',
+          title: 'Atrasada',
+          status: 'pending',
+          priority: 'critical',
+          dueDate: '2026-08-15',
+        },
+        {
+          implementationId: 'impl-1',
+          title: 'Futura',
+          status: 'in_progress',
+          priority: 'high',
+          dueDate: '2026-08-25',
+        },
+        {
+          implementationId: 'impl-3',
+          title: 'Finalizada',
+          status: 'completed',
+          priority: 'normal',
+          dueDate: null,
+        },
+      ],
+      '2026-08-17',
+    );
+
+    expect(buildImplementationDashboardFromMetrics(legacy.stores, '2026-08-17')).toEqual(legacy);
+  });
+
 });

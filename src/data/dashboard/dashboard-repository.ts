@@ -14,7 +14,6 @@ import type {
   SupplyQuote,
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
-import { listStores } from '../stores/stores-repository';
 import {
   listSupplyItems,
   listSupplyNeeds,
@@ -60,6 +59,38 @@ function groupImplementationStores(
       pendingActivities: groupedStores.reduce((sum, store) => sum + store.pendingCount, 0),
     }))
     .sort((a, b) => b.storeCount - a.storeCount || a.label.localeCompare(b.label, 'pt-BR'));
+}
+
+export function buildImplementationDashboardFromMetrics(
+  stores: ImplementationDashboardStore[],
+  today: string,
+): ImplementationDashboard {
+  const dashboardStores = [...stores].sort(
+    (a, b) =>
+      Number(b.overdueCount > 0) - Number(a.overdueCount > 0) ||
+      b.pendingCount - a.pendingCount ||
+      a.name.localeCompare(b.name, 'pt-BR'),
+  );
+
+  return {
+    totalStores: dashboardStores.length,
+    notStartedStores: dashboardStores.filter((store) => store.status === 'not_started').length,
+    inProgressStores: dashboardStores.filter((store) => store.status === 'in_progress').length,
+    readyStores: dashboardStores.filter((store) => store.status === 'completed').length,
+    overdueStores: dashboardStores.filter((store) => store.overdueCount > 0).length,
+    pendingActivities: dashboardStores.reduce((sum, store) => sum + store.pendingCount, 0),
+    criticalActivities: dashboardStores.reduce((sum, store) => sum + store.criticalCount, 0),
+    stores: dashboardStores,
+    byState: groupImplementationStores(dashboardStores, (store) => store.state),
+    byResponsible: groupImplementationStores(
+      dashboardStores,
+      (store) => store.responsibleName || 'Nao definido',
+    ),
+    upcomingOpenings: dashboardStores
+      .filter((store) => store.plannedOpeningDate && store.plannedOpeningDate >= today)
+      .sort((a, b) => String(a.plannedOpeningDate).localeCompare(String(b.plannedOpeningDate)))
+      .slice(0, 6),
+  };
 }
 
 export function buildImplementationDashboard(
@@ -120,32 +151,7 @@ export function buildImplementationDashboard(
     };
   });
 
-  dashboardStores.sort(
-    (a, b) =>
-      Number(b.overdueCount > 0) - Number(a.overdueCount > 0) ||
-      b.pendingCount - a.pendingCount ||
-      a.name.localeCompare(b.name, 'pt-BR'),
-  );
-
-  return {
-    totalStores: dashboardStores.length,
-    notStartedStores: dashboardStores.filter((store) => store.status === 'not_started').length,
-    inProgressStores: dashboardStores.filter((store) => store.status === 'in_progress').length,
-    readyStores: dashboardStores.filter((store) => store.status === 'completed').length,
-    overdueStores: dashboardStores.filter((store) => store.overdueCount > 0).length,
-    pendingActivities: dashboardStores.reduce((sum, store) => sum + store.pendingCount, 0),
-    criticalActivities: dashboardStores.reduce((sum, store) => sum + store.criticalCount, 0),
-    stores: dashboardStores,
-    byState: groupImplementationStores(dashboardStores, (store) => store.state),
-    byResponsible: groupImplementationStores(
-      dashboardStores,
-      (store) => store.responsibleName || 'Nao definido',
-    ),
-    upcomingOpenings: dashboardStores
-      .filter((store) => store.plannedOpeningDate && store.plannedOpeningDate >= today)
-      .sort((a, b) => String(a.plannedOpeningDate).localeCompare(String(b.plannedOpeningDate)))
-      .slice(0, 6),
-  };
+  return buildImplementationDashboardFromMetrics(dashboardStores, today);
 }
 
 function topBreakdown(groups: Map<string, { count: number; secondaryValue: number }>) {
@@ -247,33 +253,50 @@ function localDate() {
   return `${year}-${month}-${day}`;
 }
 
-export async function loadImplementationDashboard(): Promise<ImplementationDashboard> {
-  const [stores, implementationsResult, itemsResult] = await Promise.all([
-    listStores(),
-    supabase.from('store_implementations').select('id, store_id, status, created_at'),
-    supabase
-      .from('store_implementation_items')
-      .select('implementation_id, title_snapshot, status, priority_snapshot, due_date'),
-  ]);
-  if (implementationsResult.error) throw implementationsResult.error;
-  if (itemsResult.error) throw itemsResult.error;
+type DashboardImplementationMetricRow = {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  state: string;
+  responsible_name: string | null;
+  planned_opening_date: string | null;
+  status: ImplementationStatus;
+  progress: number;
+  pending_count: number;
+  overdue_count: number;
+  critical_count: number;
+  next_due_date: string | null;
+  next_due_title: string | null;
+};
 
-  return buildImplementationDashboard(
-    stores,
-    implementationsResult.data.map((row) => ({
+export async function loadImplementationDashboard(): Promise<ImplementationDashboard> {
+  const today = localDate();
+  const { data, error } = await supabase.rpc(
+    'dashboard_implementation_store_metrics_v1' as never,
+    { p_today: today } as never,
+  );
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as DashboardImplementationMetricRow[];
+  return buildImplementationDashboardFromMetrics(
+    rows.map((row) => ({
       id: row.id,
-      storeId: row.store_id,
+      code: row.code,
+      name: row.name,
+      city: row.city,
+      state: row.state,
+      responsibleName: row.responsible_name,
+      plannedOpeningDate: row.planned_opening_date,
       status: row.status,
-      createdAt: row.created_at,
+      progress: row.progress,
+      pendingCount: row.pending_count,
+      overdueCount: row.overdue_count,
+      criticalCount: row.critical_count,
+      nextDueDate: row.next_due_date,
+      nextDueTitle: row.next_due_title,
     })),
-    itemsResult.data.map((row) => ({
-      implementationId: row.implementation_id,
-      title: row.title_snapshot,
-      status: row.status,
-      priority: row.priority_snapshot,
-      dueDate: row.due_date,
-    })),
-    localDate(),
+    today,
   );
 }
 
