@@ -99,3 +99,23 @@ Os planos confirmam a redução de avaliações repetidas de RLS por linha. Aind
 - Cotações e Obras e Serviços não apresentaram HTTP 500/504 nos endpoints observados, mas seus repositórios ainda têm consultas integrais que serão tratadas na fase de carregamento seletivo/paginação.
 - O carregamento de dados por módulo, as agregações de Dashboard e os anexos sob demanda permanecem como trabalho seguinte.
 - **PROD não foi alterado.** As migrations foram aplicadas somente ao projeto DEV; nenhuma migration foi aplicada ao projeto de produção.
+
+
+## Primeira entrega da Fase C — carregadores por módulo
+
+Além da otimização compartilhada de RLS, a Preview #85 passou a restringir as consultas filhas aos registros-pai que a tela realmente carregou:
+
+- **Obras e Serviços:** lista de serviços com paginação estável; pagamentos, documentos e componentes são buscados por `service_id`, em lotes de até 100 IDs e páginas de 500.
+- **Cotações:** cotações paginadas; lojas e itens por `quote_id`; destinos por `quote_item_id`; vínculos por `quote_destination_id`; catálogo, necessidades e lojas somente pelos IDs referenciados.
+- **Fornecedores:** fornecedores paginados; canais e datas de cotação filtrados pelos fornecedores visíveis.
+- **Catálogo e Necessidades:** itens e necessidades paginados; lojas somente para as necessidades retornadas.
+- **Detalhe do item:** necessidades e usos em cotações filtrados pelo próprio `supply_item_id`, sem carregar a lista completa de necessidades para depois descartá-la no navegador.
+- Novo utilitário `fetchAllPagesForIds`: deduplica IDs, consulta lotes sequenciais de até 100 IDs e pagina cada lote, evitando URLs excessivas e rajadas de requisições.
+
+Foram adicionados testes unitários para paginação por IDs, deduplicação, lotes, páginas, listas vazias e validação do tamanho de lote.
+
+### Próxima parte da Fase C
+- Paginação visual no servidor nas tabelas com grande volume, mantendo filtros e totais.
+- Agregações SQL específicas para Dashboard e indicadores financeiros, sem reconstruir todos os registros operacionais no cliente.
+- Carregamento por aba e anexos sob demanda em Pagamentos, Conciliação, Cotações e Obras.
+- Revisão das leituras de lojas, implantação e administração que ainda carregam coleções completas.
