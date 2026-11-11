@@ -152,27 +152,34 @@ export async function updateSupplyItem(
 }
 
 export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDetail> {
-  const [itemResult, needsResult, quoteItemsResult] = await Promise.all([
+  const [itemResult, needRows, quoteItemRows] = await Promise.all([
     supabase.from('supply_items').select('*').eq('id', itemId).single(),
-    supabase
-      .from('store_needs')
-      .select('*')
-      .eq('supply_item_id', itemId)
-      .order('created_at', { ascending: false })
-      .order('id'),
-    supabase
-      .from('supply_quote_items')
-      .select('id, quote_id, quantity, unit, unit_price')
-      .eq('supply_item_id', itemId)
-      .order('created_at', { ascending: false })
-      .order('id'),
+    fetchAllPages<StoreNeedRow>((from, to) =>
+      supabase
+        .from('store_needs')
+        .select('*')
+        .eq('supply_item_id', itemId)
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAllPages<Pick<
+      Database['public']['Tables']['supply_quote_items']['Row'],
+      'id' | 'quote_id' | 'quantity' | 'unit' | 'unit_price'
+    >>((from, to) =>
+      supabase
+        .from('supply_quote_items')
+        .select('id, quote_id, quantity, unit, unit_price')
+        .eq('supply_item_id', itemId)
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, to),
+    ),
   ]);
 
   if (itemResult.error) throw itemResult.error;
-  if (needsResult.error) throw needsResult.error;
-  if (quoteItemsResult.error) throw quoteItemsResult.error;
 
-  const needStoreIds = [...new Set(needsResult.data.map((need) => need.store_id))];
+  const needStoreIds = [...new Set(needRows.map((need) => need.store_id))];
   const needStoreRows = await fetchAllPagesForIds<StoreLookupRow>(
     needStoreIds,
     (ids, from, to) => supabase
@@ -183,7 +190,7 @@ export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDet
       .range(from, to),
   );
   const needStores = new Map(needStoreRows.map((store) => [store.id, store]));
-  const needs = needsResult.data.flatMap((need) => {
+  const needs = needRows.flatMap((need) => {
     const store = needStores.get(need.store_id);
     if (!store) return [];
     return [{
@@ -208,36 +215,38 @@ export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDet
     }];
   });
 
-  const quoteIds = [...new Set(quoteItemsResult.data.map((usage) => usage.quote_id))];
-  const quotesResult = quoteIds.length
-    ? await supabase
-        .from('supply_quotes')
-        .select('id, codigo_negocio, supplier_name_snapshot, status, quote_date')
-        .in('id', quoteIds)
-    : { data: [], error: null };
-
-  if (quotesResult.error) throw quotesResult.error;
-  const quotes = new Map(quotesResult.data.map((quote) => [quote.id, quote]));
+  const quoteIds = [...new Set(quoteItemRows.map((usage) => usage.quote_id))];
+  const quoteRows = await fetchAllPagesForIds<Pick<
+    Database['public']['Tables']['supply_quotes']['Row'],
+    'id' | 'codigo_negocio' | 'supplier_name_snapshot' | 'status' | 'quote_date'
+  >>(
+    quoteIds,
+    (ids, from, to) => supabase
+      .from('supply_quotes')
+      .select('id, codigo_negocio, supplier_name_snapshot, status, quote_date')
+      .in('id', ids)
+      .order('id')
+      .range(from, to),
+  );
+  const quotes = new Map(quoteRows.map((quote) => [quote.id, quote]));
 
   return {
     item: mapItem(itemResult.data),
-    needs: needs.filter((need) => need.supplyItemId === itemId),
-    quoteUsages: quoteItemsResult.data.flatMap((usage) => {
+    needs,
+    quoteUsages: quoteItemRows.flatMap((usage) => {
       const quote = quotes.get(usage.quote_id);
       if (!quote) return [];
-      return [
-        {
-          id: usage.id,
-          quoteId: quote.id,
-          quoteCode: quote.codigo_negocio,
-          supplierName: quote.supplier_name_snapshot,
-          status: quote.status,
-          quoteDate: quote.quote_date,
-          quantity: Number(usage.quantity),
-          unit: usage.unit,
-          unitPrice: Number(usage.unit_price),
-        },
-      ];
+      return [{
+        id: usage.id,
+        quoteId: quote.id,
+        quoteCode: quote.codigo_negocio,
+        supplierName: quote.supplier_name_snapshot,
+        status: quote.status,
+        quoteDate: quote.quote_date,
+        quantity: Number(usage.quantity),
+        unit: usage.unit,
+        unitPrice: Number(usage.unit_price),
+      }];
     }),
   };
 }
