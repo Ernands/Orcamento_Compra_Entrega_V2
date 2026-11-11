@@ -24,7 +24,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { IconButton } from '../components/ui';
 import { useSession } from './session-provider';
@@ -437,7 +437,9 @@ export function AppShell() {
           <Menu size={21} />
         </button>
         <main className="page-content">
-          <Outlet />
+          <Suspense fallback={<div className="page-stack" role="status" aria-live="polite">Carregando módulo...</div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
