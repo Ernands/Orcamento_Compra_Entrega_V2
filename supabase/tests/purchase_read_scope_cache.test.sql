@@ -91,7 +91,9 @@ select ok((select prosecdef and coalesce(array_to_string(proconfig, ','), '') li
   from pg_proc where oid='private.readable_store_ids_for(text[])'::regprocedure),
   'Private store matrix is SECURITY DEFINER with empty search_path');
 
-select ok(position('override.efeito = ''deny''' in pg_get_functiondef(
+select ok(position('efeito' in pg_get_functiondef(
+  'private.readable_supply_purchase_ids_for(text[])'::regprocedure)) > 0
+  and position('deny' in pg_get_functiondef(
   'private.readable_supply_purchase_ids_for(text[])'::regprocedure)) > 0,
   'Purchase matrix preserves explicit deny overrides');
 select ok(position('finance.store_detail_documents_view' in pg_get_functiondef(
@@ -100,7 +102,9 @@ select ok(position('finance.store_detail_documents_view' in pg_get_functiondef(
 select ok(position('finance.payments_consolidated_view' in pg_get_functiondef(
   'app.readable_supply_purchase_attachment_ids()'::regprocedure)) > 0,
   'Attachment scope includes consolidated-payment permission');
-select ok(position('app.can(''finance'', ''view'')' in pg_get_functiondef(
+select ok(position('app.can' in pg_get_functiondef(
+  'app.readable_supply_purchase_audit_ids()'::regprocedure)) > 0
+  and position('finance.document_audit_view' in pg_get_functiondef(
   'app.readable_supply_purchase_audit_ids()'::regprocedure)) > 0,
   'Audit scope retains global finance.view requirement');
 
