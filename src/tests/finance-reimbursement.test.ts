@@ -4,6 +4,7 @@ import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { WorkService } from '../domain/works-types';
 
+const textCell = (value: unknown): string => typeof value === 'string' ? value : '';
 const storeA = 'store-a';
 const storeB = 'store-b';
 const orig = (value: bigint) => ({ equipment: value, furniture: 0n, works: 0n });
@@ -103,6 +104,138 @@ describe('solicitação de reembolso por loja', () => {
     const workRow = { ...row('w', 'unscheduled', 100n), workServiceId: 'work-1', purchaseIds: [] };
     expect(fiscalStateForPayment(workRow, [], works, storeA)).toBe('present');
   });
+
+  it('lista exatamente as pendências das OBR-00381 e OBR-00308 de Cabrobó antes de gerar o ZIP', async () => {
+    const workRow = (
+      id: string,
+      workId: string,
+      reference: string,
+      status: UnifiedFinancePaymentRow['status'],
+      amount: bigint,
+      paymentId?: string,
+    ): UnifiedFinancePaymentRow => ({
+      ...row(id, status, amount),
+      workServiceId: workId,
+      referenceCodes: [reference],
+      purchaseIds: [],
+      purchaseOrderIds: [],
+      paymentIds: paymentId ? [paymentId] : [],
+      status,
+      amountCents: amount,
+      originAllocations: { equipment: 0n, furniture: 0n, works: amount },
+      storeIds: [storeA],
+      storeCodes: ['LOJ-015'],
+      states: ['PE'],
+      storeAllocations: [{
+        storeId: storeA, storeCode: 'LOJ-015', state: 'PE',
+        amountCents: amount,
+        originAllocations: { equipment: 0n, furniture: 0n, works: amount },
+      }],
+      unallocatedCents: 0n,
+    });
+    const documents381 = [
+      { id: 'rec381', documentType: 'receipt', paymentId: null,
+        documentAmount: '60.00', storagePath: 'obras/rec381.pdf',
+        originalName: 'Recibo R$ 60,00.pdf' },
+    ];
+    const documents308 = [
+      { id: 'rec308', documentType: 'receipt', paymentId: null,
+        documentAmount: '1511.00', storagePath: 'obras/rec308.pdf',
+        originalName: 'Recibo R$ 1.511,00.pdf' },
+      { id: 'proof308', documentType: 'payment_proof', paymentId: 'payment308',
+        documentAmount: '755.50', storagePath: 'obras/proof308.pdf',
+        originalName: 'Comprovante entrada.pdf' },
+    ];
+    const works = [
+      {
+        id: 'work381', code: 'OBR-00381', storeId: storeA, status: 'contracted',
+        contractedAmount: '60.00', budgetAmount: '60.00',
+        payments: [], documents: documents381,
+      },
+      {
+        id: 'work308', code: 'OBR-00308', storeId: storeA, status: 'contracted',
+        contractedAmount: '1511.00', budgetAmount: '1511.00',
+        payments: [{
+          id: 'payment308', serviceId: 'work308', storeId: storeA, amount: '755.50',
+          status: 'paid', paymentMethod: 'pix', paidAt: '2026-10-23',
+        }],
+        documents: documents308,
+      },
+    ] as unknown as WorkService[];
+    const paymentRows = [
+      workRow('unpaid381', 'work381', 'OBR-00381', 'unscheduled', 6000n),
+      workRow('paid308', 'work308', 'OBR-00308', 'paid', 75550n, 'payment308'),
+      workRow('balance308', 'work308', 'OBR-00308', 'unscheduled', 75550n),
+    ];
+    const report = buildStoreReimbursement(paymentRows, [], works, storeA);
+
+    expect(report.pendingWorks).toHaveLength(2);
+    const byCode = new Map(report.pendingWorks.map((entry) => [entry.reference, entry]));
+    expect(byCode.get('OBR-00381')?.issues).toEqual([
+      'Comprovante de pagamento não anexado.',
+      'Pagamento não registrado; saldo a pagar de R$ 60,00.',
+    ]);
+    expect(byCode.get('OBR-00308')?.issues).toEqual([
+      'Pagamento parcial; saldo a pagar de R$ 755,50.',
+    ]);
+    expect(report.lines).toHaveLength(3);
+    expect(report.lines.every((line) => line.fiscalState === 'present')).toBe(true);
+    expect(report.pendingLines).toHaveLength(3);
+    expect(report.totals.paidCents).toBe(75550n);
+    expect(report.totals.unscheduledCents).toBe(81550n);
+    expect(report.totals.commitmentCents).toBe(157100n);
+    expect(report.sumMatches).toBe(true);
+
+    const { planReimbursementZipFileNames, createStoreReimbursementWorkbook } =
+      await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const workbookBuffer = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-015', name: 'Cabrobó', city: 'Cabrobó' } as never,
+      report, generatedAt: new Date('2026-11-11T12:00:00Z'),
+      zipNames: planReimbursementZipFileNames(report), unavailable: new Set(),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(Buffer.from(workbookBuffer) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const summary = workbook.getWorksheet('Resumo');
+    expect(summary?.getCell('B7').value).toBe(1571);
+    const pending = workbook.getWorksheet('Pendências Documentais');
+    expect(pending?.rowCount).toBe(3); // 2 unique OBRs + heading, not 3 instalments
+    const pendingRows = [pending?.getRow(2), pending?.getRow(3)];
+    const pendingByCode = new Map(pendingRows.map((value) =>
+      [textCell(value?.getCell(2).value), textCell(value?.getCell(3).value)]));
+    expect(pendingByCode.get('OBR-00381')).toContain('Comprovante de pagamento não anexado.');
+    expect(pendingByCode.get('OBR-00381')).toContain('Pagamento não registrado; saldo a pagar de R$ 60,00.');
+    expect(pendingByCode.get('OBR-00308')).toContain('Pagamento parcial; saldo a pagar de R$ 755,50.');
+    expect(pendingByCode.get('OBR-00308')?.match(/Pagamento parcial/g)).toHaveLength(1);
+    const main = workbook.getWorksheet('Solicitação de Reembolso');
+    const mainByCode = new Map([main?.getRow(5),main?.getRow(6)].map((r) =>
+      [textCell(r?.getCell(3).value), textCell(r?.getCell(10).value)]));
+    expect(mainByCode.get('OBR-00381')).toContain('Pagamento não registrado');
+    expect(mainByCode.get('OBR-00308')).toContain('Pagamento parcial');
+  });
+
+  it('não sinaliza obra quitada com recibo e comprovante suficientes', () => {
+    const works = [{
+      id: 'work-ok', code: 'OBR-OK', storeId: storeA, contractedAmount: '60.00', budgetAmount: '60.00',
+      payments: [{ id: 'p-ok', status: 'paid', amount: '60.00' }],
+      documents: [
+        { id: 'f-ok', documentType: 'receipt', storagePath: 'obras/rec.pdf', documentAmount: '60.00' },
+        { id: 'c-ok', documentType: 'payment_proof', storagePath: 'obras/proof.pdf',
+          paymentId: 'p-ok', documentAmount: '60.00' },
+      ],
+    }] as unknown as WorkService[];
+    const candidate = {
+      ...row('payment-ok','paid',6000n),
+      workServiceId: 'work-ok', purchaseIds: [],
+      referenceCodes: ['OBR-OK'], paymentIds: ['p-ok'],
+    };
+    const report = buildStoreReimbursement([candidate], [], works, storeA);
+    expect(report.pendingWorks).toHaveLength(0);
+    expect(report.pendingLines).toHaveLength(0);
+    expect(report.lines[0].workDocumentationIssues).toHaveLength(0);
+    expect(report.totals.commitmentCents).toBe(6000n);
+  });
+
   it('nomeia notas e recibos no ZIP a partir de tipo, fornecedor e referência, sem sobrescrever homônimos', async () => {
     const { planReimbursementZipFileNames, createStoreReimbursementWorkbook } =
       await import('../data/exports/finance-reimbursement-export');
@@ -497,8 +630,13 @@ describe('solicitação de reembolso por loja', () => {
     expect(book.getWorksheet('Resumo')?.getCell('B8').value).toBe(5);
     expect(book.getWorksheet('Resumo')?.getCell('B9').value).toBe(2);
     const pending = book.getWorksheet('Pendências Documentais');
-    expect(pending?.rowCount).toBe(2);
+    // The historical fixture only supplies a work receipt, without its
+    // financial contract/payments. Conservatively flag that unverified OBR
+    // instead of declaring it complete merely because a receipt exists.
+    expect(pending?.rowCount).toBe(3);
     expect(pending?.getCell('B2').value).toBe('CMP-00002 + CMP-00003');
+    expect(pending?.getCell('B3').value).toBe('OBR-00019');
+    expect(textCell(pending?.getCell('C3').value)).toContain('Não foi possível conferir');
     expect(pending?.getCell('D2').value).toBe(6638);
     expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(3);
   });

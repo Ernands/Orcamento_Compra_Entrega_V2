@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildFinancialCompositionReport } from '../domain/finance-composition-report';
+import { buildFinanceStoreRows } from '../domain/finance-calculations';
+import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
 import type { Store } from '../domain/types';
 import type { WorkService } from '../domain/works-types';
@@ -145,4 +147,173 @@ describe('Dashboard / Composição Financeira',()=>{
   expect(page).toContain('financial-composition__record');
   expect(page).toContain('Exportar CSV');
  });
+});
+
+
+type FixtureOrder = {
+  id: string;
+  lines: Array<{ item: 'a' | 'b'; priceCents: number; stores?: string[] }>;
+  paidCents?: number;
+  plannedCents?: number;
+};
+const money = (cents: number): string =>
+  `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+
+function compositionPurchase(orders: FixtureOrder[], selectedStores = stores.slice(0, 1)): PurchaseV2 {
+  return {
+    id: 'p1', code: 'CMP-01000', status: 'purchased', supplierName: 'Mercado Livre',
+    stores: selectedStores.map((store) => ({
+      id: `ps-${store.id}`, storeId: store.id, code: store.code, name: store.name,
+      city: store.city, state: store.state,
+    })),
+    items: (['a', 'b'] as const).map((key) => ({
+      id: `pi-${key}`, purchaseId: 'p1', supplyItemId: `catalog-${key}`,
+      itemCode: key === 'a' ? 'ITM-101' : 'ITM-102',
+      itemName: key === 'a' ? 'Impressora' : 'Monitor',
+      itemCategory: 'Equipamentos', itemFinancialGroup: 'equipment',
+      unit: 'un', destinations: [],
+    })),
+    orders: orders.map((order) => ({
+      id: order.id, status: 'active', purchasedOn: '2026-10-19',
+      lines: order.lines.map((line, index) => {
+        const targetStores = line.stores || [selectedStores[0].id];
+        return {
+          id: `${order.id}-line-${index}`, orderId: order.id,
+          purchaseItemId: `pi-${line.item}`, itemCode: line.item === 'a' ? 'ITM-101' : 'ITM-102',
+          itemName: line.item === 'a' ? 'Impressora' : 'Monitor',
+          quantity: String(targetStores.length), unit: 'un',
+          unitPrice: money(line.priceCents), discountAmount: '0',
+          shippingType: 'free', actualShippingType: 'free', shippingAmount: '0',
+          otherCosts: '0', lineTotal: money(line.priceCents * targetStores.length),
+          storeDistributionStatus: 'confirmed',
+          stores: targetStores.map((storeId) => {
+            const store = selectedStores.find((entry) => entry.id === storeId);
+            if (!store) throw new Error(`Unknown fixture store ${storeId}`);
+            return {
+              id: `alloc-${order.id}-${index}-${storeId}`, storeId,
+              code: store.code, name: store.name, city: store.city,
+              state: store.state, quantity: '1', allocationSource: 'direct',
+            };
+          }),
+        };
+      }),
+    })),
+    payments: orders.flatMap((order) => [
+      ...(order.paidCents === undefined ? [] : [{
+        id: `paid-${order.id}`, purchaseId: 'p1', purchaseOrderId: order.id,
+        amount: money(order.paidCents), status: 'paid',
+      }]),
+      ...(order.plannedCents === undefined ? [] : [{
+        id: `planned-${order.id}`, purchaseId: 'p1', purchaseOrderId: order.id,
+        amount: money(order.plannedCents), status: 'planned',
+      }]),
+    ]),
+    attachments: [], quoteAttachments: [],
+  } as unknown as PurchaseV2;
+}
+
+function financialFixtureReport(orders: FixtureOrder[], selectedStores = stores.slice(0, 1)) {
+  const purchases = [compositionPurchase(orders, selectedStores)];
+  const purchaseStoreRows = buildFinanceStoreRows(purchases, []);
+  const overviewRows = selectedStores.map((store) => {
+    const row = purchaseStoreRows.find((current) => current.storeId === store.id);
+    const realized = row?.realizedCents || 0n;
+    const paid = row?.paidCents || 0n;
+    return {
+      storeId: store.id, code: store.code,
+      budgetBbCents: 0n, budgetTotalCents: 0n,
+      realizedTotalCents: realized, realizedVarianceToBbCents: -realized,
+      paidCents: paid, payableCents: realized > paid ? realized - paid : 0n,
+    };
+  }) as FinanceOverviewStoreRow[];
+  return buildFinancialCompositionReport({
+    stores: selectedStores, selectedStoreId: '', overviewRows,
+    purchaseStoreRows, purchases, plannedBudgetItems: [], works: [],
+  });
+}
+
+describe('Composição financeira — individualização segura dos pagamentos', () => {
+  it('marca dois itens como Pago quando o pedido da loja está integralmente quitado', () => {
+    const report = financialFixtureReport([{
+      id: 'order-1', lines: [{item: 'a',priceCents: 6000},{item: 'b',priceCents: 4000}],
+      paidCents: 10000,
+    }]);
+    expect(report.lines.map((line) => [line.reference, line.status, line.paidCents, line.payableCents]))
+      .toEqual([['ITM-101','Pago',6000n,0n],['ITM-102','Pago',4000n,0n]]);
+    expect(report.totals.paidCents).toBe(10000n);
+    expect(report.groups[0].paidCents).toBe(10000n);
+    expect(report.reconciliation).toEqual({ budget:true,realized:true,paid:true,payable:true });
+  });
+
+  it('marca itens comprados sem nenhum pagamento realizado como A pagar, mesmo havendo boleto programado', () => {
+    const report = financialFixtureReport([{
+      id: 'order-1', lines: [{item:'a',priceCents:6000},{item:'b',priceCents:4000}],
+      plannedCents:10000,
+    }]);
+    expect(report.lines.map((line) => [line.status,line.paidCents,line.payableCents]))
+      .toEqual([['A pagar',0n,6000n],['A pagar',0n,4000n]]);
+    expect(report.totals.paidCents).toBe(0n);
+    expect(report.totals.payableCents).toBe(10000n);
+  });
+
+  it('não divide arbitrariamente o pagamento parcial de um pedido com vários itens', () => {
+    const report = financialFixtureReport([{
+      id: 'order-1', lines: [{item:'a',priceCents:6000},{item:'b',priceCents:4000}],
+      paidCents:3000,
+    }]);
+    expect(report.lines.map((line) => [line.status,line.paidCents,line.payableCents]))
+      .toEqual([['Não individualizado',null,null],['Não individualizado',null,null]]);
+    expect(report.totals.paidCents).toBe(3000n);
+    expect(report.groups[0].paidCents).toBe(3000n);
+  });
+
+  it('preserva a individualização de pagamento parcial com item único', () => {
+    const report = financialFixtureReport([{
+      id: 'order-1', lines: [{item:'a',priceCents:6000}],paidCents:3000,
+    }]);
+    expect(report.lines.find((line) => line.reference==='ITM-101'))
+      .toMatchObject({ status:'Parcialmente pago',paidCents:3000n,payableCents:3000n });
+  });
+
+  it('não mascara pagamento parcial ambíguo de um item que também consta de um pedido totalmente pago', () => {
+    const report = financialFixtureReport([
+      {id:'order-full',lines:[{item:'a',priceCents:1000}],paidCents:1000},
+      {id:'order-partial',lines:[{item:'a',priceCents:2000},{item:'b',priceCents:1000}],paidCents:1000},
+    ]);
+    expect(report.lines.map((line) => [line.reference,line.status]))
+      .toEqual([['ITM-101','Não individualizado'],['ITM-102','Não individualizado']]);
+    expect(report.totals.paidCents).toBe(2000n);
+    expect(report.groups[0].paidCents).toBe(2000n);
+  });
+
+  it('avalia cada loja individualmente em pedido compartilhado e totalmente pago', () => {
+    const report = financialFixtureReport([{
+      id:'order-shared',
+      lines:[
+        {item:'a',priceCents:6000,stores:['s1','s2']},
+        {item:'b',priceCents:4000,stores:['s1','s2']},
+      ],
+      paidCents:20000,
+    }],stores);
+    expect(report.lines).toHaveLength(4);
+    expect(report.lines.every((line) => line.status==='Pago')).toBe(true);
+    expect(report.lines.reduce((total,line) => total+(line.paidCents||0n),0n)).toBe(20000n);
+    expect(report.totals.paidCents).toBe(20000n);
+    expect(report.reconciliation.paid).toBe(true);
+  });
+
+  it('não classifica pagamento parcial de pedido compartilhado com vários itens como quitado', () => {
+    const report = financialFixtureReport([{
+      id:'order-shared',
+      lines:[
+        {item:'a',priceCents:6000,stores:['s1','s2']},
+        {item:'b',priceCents:4000,stores:['s1','s2']},
+      ],
+      paidCents:10000,
+    }],stores);
+    expect(report.lines).toHaveLength(4);
+    expect(report.lines.every((line) => line.status==='Não individualizado')).toBe(true);
+    expect(report.totals.paidCents).toBe(10000n);
+    expect(report.groups[0].paidCents).toBe(10000n);
+  });
 });

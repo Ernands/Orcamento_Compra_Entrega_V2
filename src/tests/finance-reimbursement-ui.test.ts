@@ -35,6 +35,18 @@ describe('integração UI reembolso', () => {
     expect(paymentsCss).toContain('@media (max-width: 980px)');
     expect(paymentsCss).not.toContain('min-width: 1350px');
   });
+  it('expõe as pendências por OBR antes de gerar e mantém o botão de exportação independente delas', () => {
+    expect(modal).toContain('report.pendingWorks.map((pending)');
+    expect(modal).toContain('pending.issues.map((issue, index)');
+    expect(modal).toContain('Pendências identificadas em Obras e Serviços');
+    expect(modal).toContain('<th>Pendência identificada</th>');
+    expect(modal).toContain('line.workDocumentationIssues.join');
+    expect(modal).toContain('disabled={generating || !report.lines.length || !report.sumMatches}');
+    expect(paymentsCss).toContain('.finance-reimbursement-work-pendencies__list');
+    expect(exporter).toContain('const workIssues = new Map<string, string[]>();');
+    expect(exporter).toContain('OBRs com pendências documentais');
+    expect(exporter).toContain("Obras/serviços com documentação incompleta:");
+  });
   it('gera ZIP com documentos disponíveis e registra arquivos ausentes', () => {
     expect(exporter).toContain("await import('jszip')");
     expect(exporter).toContain("compression: 'DEFLATE'");

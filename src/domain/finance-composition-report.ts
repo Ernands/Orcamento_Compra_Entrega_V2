@@ -127,11 +127,14 @@ export function buildFinancialCompositionReport(input: {
       target.payableCents += row.payableCents;
     });
 
-    // Paid amounts in multi-item purchase orders have a store-level allocation,
-    // but no directly recorded per-item split. Only attribute a payment to an
-    // item if that store/order contains exactly one uniquely identified item.
+    // Payment is recorded at purchase/order level. Never infer a partial
+    // payment split between multiple catalog items, even if every invoice
+    // and product description is available. A completely settled store/order,
+    // however, proves that every confirmed non-negative item cost is covered.
+    // An unpaid store/order also proves that none of its items were paid.
     const exactPaidByItem = new Map<string, bigint>();
     const exactRealizedByItem = new Map<string, bigint>();
+    const ambiguousItemIds = new Set<string>();
     financialStore?.purchases.forEach((purchaseRow) => {
       const order = purchaseRow.purchase.orders.find((candidate) =>
         candidate.id === purchaseRow.purchaseOrderId && candidate.status === 'active');
@@ -139,15 +142,47 @@ export function buildFinancialCompositionReport(input: {
       const storeCosts = purchaseOrderStoreCosts(order).rows.find((cost) =>
         cost.storeId === store.id);
       if (!storeCosts || !storeCosts.lines.length) return;
-      const candidateIds = storeCosts.lines.map((costLine) => {
+      const lineItems = storeCosts.lines.map((costLine) => {
         const orderLine = order.lines.find((line) => line.id === costLine.lineId);
-        return purchaseRow.purchase.items.find((item) => item.id === orderLine?.purchaseItemId)?.supplyItemId;
+        const itemId = purchaseRow.purchase.items.find((item) =>
+          item.id === orderLine?.purchaseItemId)?.supplyItemId;
+        return { itemId, costCents: costLine.costCents };
       });
-      if (candidateIds.some((candidate) => !candidate)) return;
-      const only = [...new Set(candidateIds)][0];
-      if (!only || new Set(candidateIds).size !== 1) return;
-      exactPaidByItem.set(only, (exactPaidByItem.get(only) || 0n) + purchaseRow.paidCents);
-      exactRealizedByItem.set(only, (exactRealizedByItem.get(only) || 0n) + purchaseRow.realizedCents);
+      const knownIds = lineItems.flatMap(({ itemId }) => itemId ? [itemId] : []);
+      if (lineItems.some(({ itemId }) => !itemId)) {
+        knownIds.forEach((itemId) => ambiguousItemIds.add(itemId));
+        return;
+      }
+      const candidateIds = [...new Set(knownIds)];
+      if (!candidateIds.length) return;
+      const hasNegativeLines = lineItems.some(({ costCents }) => costCents < 0n);
+      const storeCostsMatch = storeCosts.costCents === purchaseRow.realizedCents &&
+        storeCosts.lines.reduce((total, line) => total + line.costCents, 0n) === storeCosts.costCents;
+      if (!storeCostsMatch || hasNegativeLines) {
+        candidateIds.forEach((itemId) => ambiguousItemIds.add(itemId));
+        return;
+      }
+
+      const settled = purchaseRow.realizedCents > 0n &&
+        purchaseRow.paidCents >= purchaseRow.realizedCents;
+      const unpaid = purchaseRow.paidCents === 0n;
+      const singleItem = candidateIds.length === 1;
+      if (!settled && !unpaid && !singleItem) {
+        candidateIds.forEach((itemId) => ambiguousItemIds.add(itemId));
+        return;
+      }
+
+      const itemCosts = new Map<string, bigint>();
+      lineItems.forEach(({ itemId, costCents }) => {
+        if (!itemId) return;
+        itemCosts.set(itemId, (itemCosts.get(itemId) || 0n) + costCents);
+      });
+      itemCosts.forEach((costCents, itemId) => {
+        const paidCents = settled ? costCents
+          : unpaid ? 0n : purchaseRow.paidCents;
+        exactRealizedByItem.set(itemId, (exactRealizedByItem.get(itemId) || 0n) + costCents);
+        exactPaidByItem.set(itemId, (exactPaidByItem.get(itemId) || 0n) + paidCents);
+      });
     });
 
     buildFinanceStoreItemRows(input.purchases, input.plannedBudgetItems, store.id)
@@ -155,7 +190,8 @@ export function buildFinancialCompositionReport(input: {
         const group = financeItemCompositionGroup(item.itemCategory, item.itemSubcategory,
           item.itemGroupName, item.itemName, item.itemFinancialGroup || null);
         const uniquelyAttributed = item.realizedCents === 0n ||
-          (exactRealizedByItem.get(item.supplyItemId) || 0n) === item.realizedCents;
+          (!ambiguousItemIds.has(item.supplyItemId) &&
+            (exactRealizedByItem.get(item.supplyItemId) || 0n) === item.realizedCents);
         const paidCents = item.realizedCents === 0n ? 0n :
           uniquelyAttributed ? exactPaidByItem.get(item.supplyItemId) || 0n : null;
         const payableCents = paidCents === null ? null :
@@ -172,8 +208,14 @@ export function buildFinancialCompositionReport(input: {
           paidCents, payableCents,
           status: paidCents === null ? 'Não individualizado' : payableStatus(item.realizedCents, paidCents),
           paymentAllocationNote: paidCents === null
-            ? 'Pagamento registrado por compra/pedido com vários itens, sem divisão individual comprovada.'
-            : 'Pagamento identificado sem divisão presumida entre itens.',
+            ? 'Há pagamento parcial ou vínculo insuficiente no pedido; não é possível atribuir o valor pago a cada item sem rateio presumido.'
+            : item.realizedCents === 0n
+              ? 'Item previsto sem valor de compra realizado.'
+              : paidCents === 0n
+                ? 'Não há pagamento realizado atribuível a este item.'
+                : paidCents >= item.realizedCents
+                  ? 'Item coberto por pedido/loja integralmente quitado ou por pagamento de item único; sem rateio presumido de parcelas.'
+                  : 'Pagamento atribuído apenas quando o pedido/loja identifica um único tipo de item, sem rateio presumido.',
           purchaseCode: item.purchaseCode, supplierName: item.supplierName,
           quantityApproved: item.approvedQuantity, quantityPurchased: item.purchasedQuantity,
           unit: item.unit, documentCount: 0, supplyItemId: item.supplyItemId,

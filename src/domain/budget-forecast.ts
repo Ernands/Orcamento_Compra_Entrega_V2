@@ -115,13 +115,18 @@ export function buildBudgetForecast(
     const settlement=settlementByStore?.get(row.storeId);
     const received=settlement?.receivedCents||0n;
     const absorbed=settlement?.absorbedCents||0n;
-    const remainingBb=row.budgetBbCents-received-absorbed;
-    details.bb.push({
-      ...perStore(row, store, 'bb', remainingBb,
-        settlementByStore?'Verba BB restante':'Verba BB', basis),
-      status: store.status === 'active' ? 'Ativa' : 'Inativa',
-    });
-    if (store.status === 'active' && row.budgetBbCents > 0n) {
+    // BB is available only to operationally active stores with a positive
+    // assigned budget. Keep the same set of stores for both BB and the
+    // "Lojas Ativas com Verba" detail, regardless of financial closure.
+    // Inactive/zero-budget stores remain in the other financial indicators.
+    const hasActiveBb=store.status === 'active' && row.budgetBbCents > 0n;
+    const remainingBb=hasActiveBb ? row.budgetBbCents-received-absorbed : 0n;
+    if (hasActiveBb) {
+      details.bb.push({
+        ...perStore(row, store, 'bb', remainingBb,
+          settlementByStore?'Verba BB restante':'Verba BB', basis),
+        status: 'Ativa',
+      });
       details.activeStores.push({
         ...perStore(row, store, 'activeStores', 1n, 'Loja ativa com verba', basis),
         status: 'Ativa',
@@ -226,7 +231,9 @@ export function buildBudgetForecast(
   });
 
   const bbCents = sum(details.bb);
-  const originalBbCents = chosenRows.reduce((total,row)=>total+row.budgetBbCents,0n);
+  const originalBbCents = chosenRows.reduce((total,row)=>
+    total+(byStoreId.get(row.storeId)?.status === 'active' && row.budgetBbCents > 0n
+      ? row.budgetBbCents : 0n),0n);
   const reimbursedCents = sum(details.reimbursed);
   const absorbedCents = sum(details.absorbed);
   const withBudget = chosenRows.filter((row) => row.budgetBbCents > 0n);

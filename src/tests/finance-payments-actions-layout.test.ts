@@ -77,3 +77,38 @@ describe('layout compacto das ações de Pagamentos', () => {
     expect(styles).toContain('.finance-payment-meta-bar .finance-payment-actions {');
   });
 });
+
+
+describe('padrão executivo do Dashboard aplicado somente à apresentação de Pagamentos', () => {
+  it('mantém intactos os indicadores calculados, filtros e os eventos de alternância das abas', () => {
+    expect(page).toContain('{formatBRL(totals.paidCents)}');
+    expect(page).toContain('{formatBRL(totals.plannedCents)}');
+    expect(page).toContain('{formatBRL(totals.unscheduledCents)}');
+    expect(page).toContain('{formatBRL(totals.commitmentCents)}');
+    expect(page).toContain('onClick={() => setView(key)}');
+    expect(page).toContain('aria-selected={view === key}');
+    expect(page).toContain('FinanceUnifiedPaymentsExportActions');
+    expect(page).toContain('buildUnifiedFinancePayments(purchases, works)');
+    expect(page).toContain('<span>{VIEW_LABELS[key]}</span>');
+  });
+
+  it('usa faixas superiores de cor, superfícies neutras, ícones e foco acessível nos cartões e abas', () => {
+    expect(styles).toContain('.finance-payments-page .finance-payments-kpi {');
+    expect(styles).toContain('border-top: 7px solid var(--payment-accent)');
+    expect(styles).toContain('background: var(--payment-soft)');
+    expect(styles).toContain('.finance-payments-page .finance-payments-tabs .finance-payments-tab {');
+    expect(styles).toContain('border-top: 6px solid var(--tab-accent) !important');
+    expect(styles).toContain('.finance-payments-tabs .finance-payments-tab.is-active');
+    expect(styles).toContain('.finance-payments-tabs .finance-payments-tab:focus-visible');
+    expect(page).toContain('<CheckCircle2 size={18} aria-hidden="true" />');
+    expect(page).toContain('<CalendarDays size={18} aria-hidden="true" />');
+    expect(page).toContain('<CircleAlert size={18} aria-hidden="true" />');
+  });
+
+  it('mantém adaptação a tablet e celular sem exigir rolagem horizontal para os indicadores', () => {
+    expect(styles).toContain('@media (max-width: 980px)');
+    expect(styles).toContain('@media (max-width: 680px)');
+    expect(styles).toContain('@media (max-width: 430px)');
+    expect(styles).toContain('grid-template-columns: 1fr;');
+  });
+});

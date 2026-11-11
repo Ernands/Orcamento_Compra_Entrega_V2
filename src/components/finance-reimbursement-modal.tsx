@@ -92,6 +92,8 @@ export function FinanceReimbursementModal({
           Notas e recibos fiscais ficam na pasta Notas_e_Recibos. Comprovantes de compras (CMP)
           e obras e serviços (OBR) ficam juntos em Comprovantes_Pagamentos, diferenciados
           pelos sufixos _CMP e _OBR. A planilha apresenta os nomes e links dos comprovantes.
+          As pendências das obras identificam falta de nota/recibo, comprovantes insuficientes
+          e pagamentos não quitados, conforme a mesma regra de Obras e Serviços.
           Arquivos indisponíveis ou sem vínculo claro são sinalizados sem reduzir o valor solicitado.
         </p>
         {report && selected ? (
@@ -109,12 +111,31 @@ export function FinanceReimbursementModal({
               <span><FileText size={15} /> {report.lines.length} lançamentos</span>
               <span><FileArchive size={15} /> {report.documents.length} notas/recibos fiscais · {report.paymentProofs.length} comprovantes de pagamento (CMP/OBR)</span>
               {report.pendingLines.length > 0 && (
-                <span className="finance-reimbursement-warning"><AlertTriangle size={15} /> {report.pendingLines.length} pendências ou vínculos a conferir</span>
+                <span className="finance-reimbursement-warning"><AlertTriangle size={15} /> {report.pendingLines.length} lançamento(s) com pendências ou vínculos a conferir</span>
+              )}
+              {report.pendingWorks.length > 0 && (
+                <span className="finance-reimbursement-warning"><AlertTriangle size={15} /> {report.pendingWorks.length} obra(s) com documentação incompleta</span>
               )}
             </div>
+            {report.pendingWorks.length > 0 && (
+              <section className="finance-reimbursement-work-pendencies" aria-label="Pendências de Obras e Serviços">
+                <h3><AlertTriangle size={17} aria-hidden="true" /> Pendências identificadas em Obras e Serviços</h3>
+                <p>Confira cada OBR antes de solicitar o reembolso. Os avisos não alteram nem reduzem o valor solicitado.</p>
+                <div className="finance-reimbursement-work-pendencies__list">
+                  {report.pendingWorks.map((pending) => (
+                    <article key={pending.workId}>
+                      <strong>{pending.reference}</strong>
+                      <ul>
+                        {pending.issues.map((issue, index) => <li key={index}>{issue}</li>)}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
             <div className="finance-reimbursement-preview">
               <table>
-                <thead><tr><th>Referência</th><th>Situação</th><th>Valor da loja</th><th>Nota/Recibo</th></tr></thead>
+                <thead><tr><th>Referência</th><th>Situação</th><th>Valor da loja</th><th>Nota/Recibo</th><th>Pendência identificada</th></tr></thead>
                 <tbody>
                   {report.lines.map((line) => (
                     <tr key={line.row.id}>
@@ -128,6 +149,13 @@ export function FinanceReimbursementModal({
                         <span className={`finance-fiscal-state finance-fiscal-state--${line.fiscalState}`}>
                           {line.fiscalState === 'missing' ? 'Pendente' : line.fiscalState === 'review' ? 'Conferir vínculo' : 'Anexado'}
                         </span>
+                      </td>
+                      <td className="finance-reimbursement-pendency-cell">
+                        {line.workDocumentationIssues.length
+                          ? line.workDocumentationIssues.join(' • ')
+                          : line.fiscalState === 'missing' ? 'Nota fiscal ou recibo não anexado.'
+                            : line.fiscalState === 'review' ? 'Conferir vínculo do documento à loja.'
+                              : '—'}
                       </td>
                     </tr>
                   ))}

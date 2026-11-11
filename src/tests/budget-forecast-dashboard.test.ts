@@ -48,16 +48,16 @@ const sum = (items:{amountCents:bigint}[]) => items.reduce((total,item)=>total+i
 describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
  it('mantém somas e detalhamentos exatamente reconciliados',()=>{
   const forecast=buildBudgetForecast(stores,overview,payments,all);
-  expect(forecast.bbCents).toBe(95000n);
+  expect(forecast.bbCents).toBe(85000n);
   expect(forecast.activeStores).toBe(2);
   expect(forecast.storesWithBudget).toBe(3);
   expect(forecast.inactiveStoresWithBudget).toBe(1);
   expect(forecast.inactiveBudgetCents).toBe(10000n);
   expect(forecast.plannedCents).toBe(76000n);
   expect(forecast.contractedCents).toBe(80000n);
-  expect(forecast.forecastBalanceCents).toBe(19000n);
+  expect(forecast.forecastBalanceCents).toBe(9000n);
   expect(forecast.contractBalanceCents).toBe(-4000n);
-  expect(forecast.bbBalanceCents).toBe(15000n);
+  expect(forecast.bbBalanceCents).toBe(5000n);
   expect(forecast.paidCents).toBe(30000n);
   expect(forecast.payableCents).toBe(16000n);
   expect(forecast.executionPercent).toBe(105.26);
@@ -77,12 +77,12 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
     ['b',{receivedCents:3000n,absorbedCents:0n}],
   ]);
   const full=buildBudgetForecast(stores,overview,payments,all,undefined,undefined,settlement);
-  expect(full.originalBbCents).toBe(95000n);
+  expect(full.originalBbCents).toBe(85000n);
   expect(full.reimbursedCents).toBe(7000n);
   expect(full.absorbedCents).toBe(1000n);
-  expect(full.bbCents).toBe(87000n);
-  expect(full.forecastBalanceCents).toBe(11000n);
-  expect(full.bbBalanceCents).toBe(7000n);
+  expect(full.bbCents).toBe(77000n);
+  expect(full.forecastBalanceCents).toBe(1000n);
+  expect(full.bbBalanceCents).toBe(-3000n);
   expect(full.plannedCents).toBe(76000n);
   expect(full.contractedCents).toBe(80000n);
   expect(full.paidCents).toBe(30000n);
@@ -100,9 +100,71 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(scoped.absorbedCents).toBe(1000n);
   expect(scoped.activeStores).toBe(1);
   const unaffected=buildBudgetForecast(stores,overview,payments,all);
-  expect(unaffected.bbCents).toBe(95000n);
+  expect(unaffected.bbCents).toBe(85000n);
   expect(unaffected.reimbursedCents).toBe(0n);
   expect(unaffected.absorbedCents).toBe(0n);
+ });
+ it('usa exatamente as mesmas lojas ativas com verba nos dois detalhamentos, excluindo LOJ-028 e LOJ-022',()=>{
+   const candidates=[
+     stores[0], stores[1],
+     {id:'v',code:'LOJ-028',name:'Valter Leandro - PE',city:'Recife',state:'PE',
+       status:'inactive',financialClosure:{state:'open'}},
+     {id:'s',code:'LOJ-022',name:'SANTA MARGARIDA - MG',city:'SANTA MARGARIDA',state:'MG',
+       status:'inactive',financialClosure:{state:'closed'}},
+     {id:'z',code:'LOJ-099',name:'ATIVA SEM VERBA',city:'OUTRA',state:'CE',
+       status:'active',financialClosure:{state:'open'}},
+   ] as Store[];
+   const budgetRow=(store:Store,bb:bigint):FinanceOverviewStoreRow=>({
+     storeId:store.id,code:store.code,budgetBbCents:bb,
+     budgetTotalCents:0n,realizedTotalCents:0n,
+   } as FinanceOverviewStoreRow);
+   const values=[budgetRow(candidates[0],50000n),budgetRow(candidates[1],35000n),
+     budgetRow(candidates[2],12500n),budgetRow(candidates[3],7500n),budgetRow(candidates[4],0n)];
+   const settlements=new Map([
+     ['a',{receivedCents:4000n,absorbedCents:1000n}],
+     ['v',{receivedCents:2500n,absorbedCents:500n}],
+     ['s',{receivedCents:500n,absorbedCents:500n}],
+   ]);
+   const sameMembership=(snapshot:ReturnType<typeof buildBudgetForecast>)=>{
+     const bbCodes=snapshot.details.bb.map(detail=>detail.storeCode).sort();
+     const activeCodes=snapshot.details.activeStores.map(detail=>detail.storeCode).sort();
+     expect(bbCodes).toEqual(activeCodes);
+     expect(bbCodes.every(code=>code==='LOJ-001'||code==='LOJ-002')).toBe(true);
+     expect(bbCodes).not.toContain('LOJ-028');
+     expect(bbCodes).not.toContain('LOJ-022');
+     expect(bbCodes).not.toContain('LOJ-099');
+     expect(sum(snapshot.details.bb)).toBe(snapshot.bbCents);
+     expect(sum(snapshot.details.forecastBalance)).toBe(snapshot.forecastBalanceCents);
+     expect(sum(snapshot.details.bbBalance)).toBe(snapshot.bbBalanceCents);
+   };
+   const filtersToCheck: ForecastFilters[]=[
+     all,{...all,state:'MG'},{...all,implantation:'closed'},
+     {...all,operation:'inactive'},{...all,storeId:'v'},
+   ];
+   for(const filter of filtersToCheck){
+     for(const reimbursements of [undefined,settlements]){
+       sameMembership(buildBudgetForecast(candidates,values,[],filter,
+         undefined,undefined,reimbursements));
+     }
+   }
+   const overview=buildBudgetForecast(candidates,values,[],all);
+   expect(overview.bbCents).toBe(85000n);
+   expect(overview.originalBbCents).toBe(85000n);
+   expect(overview.activeStores).toBe(2);
+   expect(overview.storesWithBudget).toBe(4);
+   expect(overview.inactiveStoresWithBudget).toBe(2);
+   expect(overview.inactiveBudgetCents).toBe(20000n);
+   expect(overview.details.bb.map(detail=>detail.storeCode)).toEqual(['LOJ-001','LOJ-002']);
+   const net=buildBudgetForecast(candidates,values,[],all,undefined,undefined,settlements);
+   expect(net.originalBbCents).toBe(85000n);
+   expect(net.bbCents).toBe(80000n);
+   expect(net.details.bb).toHaveLength(2);
+   expect(net.details.bb[0].amountCents).toBe(45000n);
+   expect(net.details.bb[1].amountCents).toBe(35000n);
+   const inactive=buildBudgetForecast(candidates,values,[],{...all,operation:'inactive'});
+   expect(inactive.activeStores).toBe(0);
+   expect(inactive.bbCents).toBe(0n);
+   expect(inactive.details.bb).toHaveLength(0);
  });
  it('filtra situação operacional e fechamento independentemente',()=>{
   const ended=buildBudgetForecast(stores,overview,payments,
@@ -121,7 +183,7 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(inactive.storesWithBudget).toBe(1);
   expect(inactive.inactiveStoresWithBudget).toBe(1);
   expect(inactive.inactiveBudgetCents).toBe(10000n);
-  expect(inactive.bbCents).toBe(10000n);
+  expect(inactive.bbCents).toBe(0n);
   expect(buildBudgetForecast(stores,overview,payments,{...all,state:'CE'}).bbCents).toBe(50000n);
   expect(buildBudgetForecast(stores,overview,payments,{...all,storeId:'b'}).bbCents).toBe(35000n);
  });
@@ -149,6 +211,8 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(style).toContain('justify-content: flex-start;');
   expect(page).toContain('forecast.inactiveStoresWithBudget > 0');
   expect(page).toContain('forecast.inactiveBudgetCents');
+   expect(page).toContain('Excluídos ');
+   expect(page).toContain('Mesma lista da composição Verba BB Reembolsável.');
   const contracts = page.split('title="Contratações"')[1].split('title="Execução Financeira"')[0];
   expect(contracts).toContain("(['contracted','contractBalance'] as const)");
   expect(contracts).toContain('className="forecast-card-grid"');

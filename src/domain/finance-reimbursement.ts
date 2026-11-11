@@ -1,6 +1,8 @@
 import { financePaymentTotals, scopeFinancePaymentsByStores, type UnifiedFinancePaymentRow } from './finance-payments';
 import type { PurchaseV2 } from './purchase-v2-types';
 import type { WorkService } from './works-types';
+import { serviceTotals } from './works-calculations';
+import { formatBRL } from './supply-calculations';
 
 export type ReimbursementFiscalState = 'present' | 'missing' | 'review';
 export type ReimbursementFiscalType = 'invoice' | 'receipt';
@@ -33,6 +35,8 @@ export interface ReimbursementLine {
   documents: ReimbursementFiscalDocument[];
   paymentProofs: ReimbursementPaymentProof[];
   fiscalState: ReimbursementFiscalState;
+  /** Independent from the presence of a fiscal receipt: uses Obras e Serviços compliance. */
+  workDocumentationIssues: string[];
 }
 
 function uniqueDocuments<T extends { source: string; id: string }>(documents: T[]): T[] {
@@ -178,6 +182,37 @@ export function reimbursementEligibleStoreIds(allRows: UnifiedFinancePaymentRow[
   return eligibleIds;
 }
 
+/**
+ * Document compliance for a work as a whole. The same serviceTotals rule is
+ * used by Obras e Serviços; having a receipt does not mean a work is paid or
+ * has enough payment proofs. Never infer payments from an attached receipt.
+ */
+export function reimbursementWorkDocumentationIssues(work: WorkService): string[] {
+  if (typeof work.contractedAmount !== 'string' ||
+      !Array.isArray(work.payments) || !Array.isArray(work.documents)) {
+    return ['Não foi possível conferir integralmente os dados financeiros da obra.'];
+  }
+  const totals = serviceTotals(work);
+  if (totals.documentationStatus === 'complete') return [];
+  const issues: string[] = [];
+  if (!totals.hasFiscalDocument) issues.push('Nota fiscal ou recibo não anexado.');
+  if (!totals.hasPaymentProof) {
+    issues.push('Comprovante de pagamento não anexado.');
+  } else if (totals.paymentProofCents < totals.paidCents) {
+    issues.push(`Comprovantes insuficientes: ${formatBRL(totals.paymentProofCents)} de ${formatBRL(totals.paidCents)} pagos.`);
+  }
+  if (totals.contractedCents > 0n && totals.paidCents === 0n) {
+    issues.push(`Pagamento não registrado; saldo a pagar de ${formatBRL(totals.payableCents)}.`);
+  } else if (totals.payableCents > 0n) {
+    issues.push(`Pagamento parcial; saldo a pagar de ${formatBRL(totals.payableCents)}.`);
+  }
+  const scheduled = work.payments.some((payment) =>
+    (payment.status === 'planned' || payment.status === 'overdue') &&
+    Number(payment.amount) > 0);
+  if (scheduled) issues.push('Há parcela programada ou vencida ainda não quitada.');
+  return issues.length ? issues : ['Documentação da obra não atende à conferência de Obras e Serviços.'];
+}
+
 export function buildStoreReimbursement(
   allRows: UnifiedFinancePaymentRow[],
   purchases: PurchaseV2[],
@@ -187,6 +222,9 @@ export function buildStoreReimbursement(
   // Important: all three payment statuses, independent of active page filters/tabs.
   const scoped = scopeFinancePaymentsByStores(allRows, [storeId])
     .filter((row) => row.amountCents > 0n);
+  const workById = new Map(works.filter((work) => work.storeId === storeId)
+    .map((work) => [work.id, work]));
+  const workIssuesById = new Map<string, string[]>();
   const lines: ReimbursementLine[] = scoped.map((row) => {
     const documents = fiscalDocumentsForPayment(row, purchases, works, storeId);
     const paymentProofs = row.workServiceId
@@ -195,17 +233,41 @@ export function buildStoreReimbursement(
     const fiscalState: ReimbursementFiscalState = !documents.length
       ? 'missing'
       : documents.some((doc) => !doc.needsStoreReview) ? 'present' : 'review';
-    return { row, documents, paymentProofs, fiscalState };
+    let workDocumentationIssues: string[] = [];
+    if (row.workServiceId) {
+      const work = workById.get(row.workServiceId);
+      if (!work) {
+        workDocumentationIssues = ['Obra não encontrada nos dados carregados para esta loja.'];
+      } else {
+        workDocumentationIssues = workIssuesById.get(work.id) ||
+          reimbursementWorkDocumentationIssues(work);
+      }
+      workIssuesById.set(row.workServiceId, workDocumentationIssues);
+    }
+    return { row, documents, paymentProofs, fiscalState, workDocumentationIssues };
   });
   const totals = financePaymentTotals(scoped);
   const unique = uniqueDocuments(lines.flatMap((line) => line.documents));
   const paymentProofs = uniqueDocuments(lines.flatMap((line) => line.paymentProofs));
+  // One pending work per OBR, irrespective of how many payment instalments it has.
+  const pendingWorks = [...workIssuesById.entries()]
+    .filter(([, issues]) => issues.length > 0)
+    .map(([workId, issues]) => ({
+      workId,
+      reference: workById.get(workId)?.code ||
+        lines.find((line) => line.row.workServiceId === workId)?.row.referenceCodes.join(' + ') ||
+        'OBR sem referência',
+      issues,
+    }))
+    .sort((a, b) => a.reference.localeCompare(b.reference, 'pt-BR'));
   return {
     lines,
     documents: unique,
     paymentProofs,
     totals,
-    pendingLines: lines.filter((line) => line.fiscalState !== 'present'),
+    pendingLines: lines.filter((line) =>
+      line.fiscalState !== 'present' || line.workDocumentationIssues.length > 0),
+    pendingWorks,
     sumMatches:
       totals.paidCents + totals.plannedCents + totals.unscheduledCents === totals.commitmentCents,
   };
