@@ -85,13 +85,13 @@
 - Nenhuma concessão, negação ou dado de teste permaneceu gravado; os testes transacionais terminaram com `ROLLBACK`.
 
 ### Medições de plano em DEV
-As medições abaixo usam `EXPLAIN (ANALYZE, BUFFERS)` com usuário autenticado e os dados reduzidos existentes em DEV (3 lojas, 6 compras). Servem para comparar o plano local, não para projetar diretamente a latência de PROD.
+As medições abaixo usam `EXPLAIN (ANALYZE, BUFFERS)` com usuário autenticado e os dados reduzidos existentes em DEV (3 lojas, 6 compras). Os valores finais são a mediana de três execuções consecutivas após as quatro migrations; a primeira execução variou mais por aquecimento. Servem para comparar o plano local, não para projetar diretamente a latência de PROD.
 
 | Consulta | Medição anterior observada | Medição final em DEV | Variação |
 | --- | ---: | ---: | ---: |
-| `supply_purchase_stores` | 34,65 ms | 9,21 ms | -73% |
-| `supply_purchase_order_line_stores` | 60,49 ms após a primeira otimização de escopo | 16,17 ms | -73% |
-| `supply_purchase_attachment_stores` | 22,57 ms após a primeira otimização de escopo | 11,40 ms | -49% |
+| `supply_purchase_stores` | 34,65 ms | 14,12 ms | -59% |
+| `supply_purchase_order_line_stores` | 60,49 ms após a primeira otimização de escopo | 16,28 ms | -73% |
+| `supply_purchase_attachment_stores` | 22,57 ms após a primeira otimização de escopo | 11,88 ms | -47% |
 
 Os planos confirmam a redução de avaliações repetidas de RLS por linha. Ainda é necessário validar com volume representativo e medir novamente após os carregadores por módulo.
 
