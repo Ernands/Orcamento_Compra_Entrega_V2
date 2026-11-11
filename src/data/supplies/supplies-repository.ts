@@ -22,6 +22,8 @@ type ItemRow = Database['public']['Tables']['supply_items']['Row'];
 type SupplierTableRow = Database['public']['Tables']['suppliers']['Row'];
 type ChannelRow = Database['public']['Tables']['supplier_channels']['Row'];
 type QuoteRow = Database['public']['Tables']['supply_quotes']['Row'];
+type StoreNeedRow = Database['public']['Tables']['store_needs']['Row'];
+type StoreLookupRow = Pick<Database['public']['Tables']['lojas']['Row'], 'id' | 'codigo_negocio' | 'nome' | 'cidade' | 'uf'>;
 type QuoteStoreRow = Database['public']['Tables']['supply_quote_stores']['Row'];
 type QuoteItemRow = Database['public']['Tables']['supply_quote_items']['Row'] & { position: number };
 type FreightProfileRow = { id: string; name: string; state: string; active: boolean; position: number };
@@ -101,9 +103,10 @@ function mapChannel(row: ChannelRow): SupplierChannel {
 }
 
 export async function listSupplyItems(): Promise<SupplyItem[]> {
-  const { data, error } = await supabase.from('supply_items').select('*').order('name');
-  if (error) throw error;
-  return data.map(mapItem);
+  const rows = await fetchAllPages<ItemRow>((from, to) =>
+    supabase.from('supply_items').select('*').order('name').order('id').range(from, to),
+  );
+  return rows.map(mapItem);
 }
 
 function itemPayload(values: SupplyItemValues) {
@@ -149,18 +152,61 @@ export async function updateSupplyItem(
 }
 
 export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDetail> {
-  const [itemResult, needs, quoteItemsResult] = await Promise.all([
+  const [itemResult, needsResult, quoteItemsResult] = await Promise.all([
     supabase.from('supply_items').select('*').eq('id', itemId).single(),
-    listSupplyNeeds(),
+    supabase
+      .from('store_needs')
+      .select('*')
+      .eq('supply_item_id', itemId)
+      .order('created_at', { ascending: false })
+      .order('id'),
     supabase
       .from('supply_quote_items')
       .select('id, quote_id, quantity, unit, unit_price')
       .eq('supply_item_id', itemId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .order('id'),
   ]);
 
   if (itemResult.error) throw itemResult.error;
+  if (needsResult.error) throw needsResult.error;
   if (quoteItemsResult.error) throw quoteItemsResult.error;
+
+  const needStoreIds = [...new Set(needsResult.data.map((need) => need.store_id))];
+  const needStoreRows = await fetchAllPagesForIds<StoreLookupRow>(
+    needStoreIds,
+    (ids, from, to) => supabase
+      .from('lojas')
+      .select('id, codigo_negocio, nome, cidade, uf')
+      .in('id', ids)
+      .order('id')
+      .range(from, to),
+  );
+  const needStores = new Map(needStoreRows.map((store) => [store.id, store]));
+  const needs = needsResult.data.flatMap((need) => {
+    const store = needStores.get(need.store_id);
+    if (!store) return [];
+    return [{
+      id: need.id,
+      storeId: need.store_id,
+      title: need.title,
+      description: need.description,
+      category: need.category,
+      quantity: Number(need.quantity),
+      unit: need.unit,
+      priority: need.priority,
+      status: need.status,
+      notes: need.notes,
+      origin: need.origin,
+      sourceImplementationItemId: need.source_implementation_item_id,
+      supplyItemId: need.supply_item_id,
+      createdAt: need.created_at,
+      storeCode: store.codigo_negocio,
+      storeName: store.nome,
+      storeCity: store.cidade,
+      storeState: store.uf,
+    }];
+  });
 
   const quoteIds = [...new Set(quoteItemsResult.data.map((usage) => usage.quote_id))];
   const quotesResult = quoteIds.length
@@ -197,15 +243,21 @@ export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDet
 }
 
 export async function listSupplyNeeds(): Promise<SupplyNeed[]> {
-  const [needsResult, storesResult] = await Promise.all([
-    supabase.from('store_needs').select('*').order('created_at', { ascending: false }),
-    supabase.from('lojas').select('id, codigo_negocio, nome, cidade, uf'),
-  ]);
-  if (needsResult.error) throw needsResult.error;
-  if (storesResult.error) throw storesResult.error;
-
-  const stores = new Map(storesResult.data.map((store) => [store.id, store]));
-  return needsResult.data.flatMap((need) => {
+  const needRows = await fetchAllPages<StoreNeedRow>((from, to) =>
+    supabase.from('store_needs').select('*').order('created_at', { ascending: false }).order('id').range(from, to),
+  );
+  const storeIds = [...new Set(needRows.map((need) => need.store_id))];
+  const storeRows = await fetchAllPagesForIds<StoreLookupRow>(
+    storeIds,
+    (ids, from, to) => supabase
+      .from('lojas')
+      .select('id, codigo_negocio, nome, cidade, uf')
+      .in('id', ids)
+      .order('id')
+      .range(from, to),
+  );
+  const stores = new Map(storeRows.map((store) => [store.id, store]));
+  return needRows.flatMap((need) => {
     const store = stores.get(need.store_id);
     if (!store) return [];
     return [
