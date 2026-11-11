@@ -64,13 +64,18 @@ describe('fetchAllPagesForIds', () => {
   });
 
   it('nao consulta o banco quando nao ha IDs', async () => {
-    const fetchPage = vi.fn();
+    const fetchPage = vi.fn((_ids: string[], _from: number, _to: number) =>
+      Promise.resolve({ data: [] as { id: string }[], error: null }),
+    );
     await expect(fetchAllPagesForIds([], fetchPage)).resolves.toEqual([]);
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
   it('rejeita tamanho de lote invalido', async () => {
-    await expect(fetchAllPagesForIds(['a'], vi.fn(), 500, 0)).rejects.toThrow(
+    const fetchPage = vi.fn((_ids: string[], _from: number, _to: number) =>
+      Promise.resolve({ data: [] as { id: string }[], error: null }),
+    );
+    await expect(fetchAllPagesForIds(['a'], fetchPage, 500, 0)).rejects.toThrow(
       'chunkSize must be a positive integer',
     );
   });
