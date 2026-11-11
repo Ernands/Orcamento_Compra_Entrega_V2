@@ -98,7 +98,7 @@ Os planos confirmam a redução de avaliações repetidas de RLS por linha. Aind
 ### Limites desta entrega
 - Esta etapa trata o gargalo compartilhado de autorização das tabelas de Compras que também alimentam Financeiro, Dashboard, Reembolso e Conferência.
 - Cotações e Obras e Serviços não apresentaram HTTP 500/504 nos endpoints observados, mas seus repositórios ainda têm consultas integrais que serão tratadas na fase de carregamento seletivo/paginação.
-- O carregamento de dados por módulo, as agregações de Dashboard e os anexos sob demanda permanecem como trabalho seguinte.
+- As agregações dos Dashboards de Implantação e Suprimentos foram entregues nesta fase; indicadores financeiros, paginação visual e anexos sob demanda permanecem como trabalho seguinte.
 - **PROD não foi alterado.** As migrations foram aplicadas somente ao projeto DEV; nenhuma migration foi aplicada ao projeto de produção.
 
 
@@ -127,8 +127,19 @@ Foram adicionados testes unitários para paginação por IDs, deduplicação, lo
 - `EXPLAIN (ANALYZE, BUFFERS)` sob usuário autenticado: 19,21–19,71 ms nas três execuções (mediana 19,56 ms; 2.569 buffers hit). O volume de DEV é pequeno e não havia baseline equivalente; portanto, esse número não é apresentado como redução de tempo, e sim como referência inicial do novo caminho.
 - Os advisors não apontaram a nova função como `SECURITY DEFINER`; alertas existentes em outras funções e políticas não foram alterados nesta etapa.
 
+### Terceira entrega da Fase C — Dashboard de Suprimentos e InitPlans
+
+- Migration `20261111202641_dashboard_supply_metrics.sql` aplicada exclusivamente em DEV; criada a RPC `public.dashboard_supply_metrics_v1(p_today date)`, `STABLE SECURITY INVOKER`, `search_path` vazio e execução restrita a `authenticated`.
+- A RPC calcula no banco contagens de itens ativos, necessidades abertas/não vinculadas, fornecedores ativos, cotações totais/recebidas/comparáveis e os cinco agrupamentos do dashboard. A ordenação e o limite de seis linhas continuam aplicados no cliente, preservando o mesmo critério de desempate em português.
+- O frontend deixou de chamar `listSupplyItems()`, `listSupplyNeeds()`, `listSupplyQuotes()` e a contagem separada de fornecedores para montar o Dashboard. A RPC não carrega destinos e lojas de destino das linhas de cotação, dados que `listSupplyQuotes()` buscava mas o Dashboard não utiliza.
+- No DEV, o caminho anterior consultava 106 linhas distribuídas entre itens, necessidades, cotações, lojas/itens de cotação, destinos e lojas de destino; o novo contrato retorna uma linha agregada com os indicadores e agrupamentos. Em PROD, a inspeção anterior encontrou 1.813 destinos de itens de cotação, que deixam de ser transferidos para esta tela.
+- A função respeita a RLS de `supply_items`, `store_needs`, `suppliers`, `supply_quotes`, `supply_quote_stores`, `supply_quote_items` e `lojas`. Três usuários ativos tiveram os sete indicadores de contagem iguais aos SELECTs diretos sob RLS; usuário sem vínculo/permissão recebeu todos os indicadores zerados.
+- **5 verificações pgTAP** da RPC e **4 verificações pgTAP** da política de leitura do catálogo/fornecedores adicionadas. O teste unitário compara o novo mapeamento agregado com o resultado do cálculo anterior.
+- Migration `20261111203131_optimize_supply_catalog_read_policy_initplan.sql`: as capacidades constantes de leitura de catálogo e fornecedores passaram a ser avaliadas por InitPlan, uma vez por statement, em vez de repetir `app.can(...)` por linha. Os planos mostram InitPlans e os totais visíveis permaneceram 53 itens e 1 fornecedor para os usuários ativos testados; usuário sem permissão continuou vendo zero.
+- Medição em DEV para a leitura de itens ativos: **36,82 ms → 3,60 ms** (aprox. -90%). Para a RPC completa do Dashboard de Suprimentos, mediana de três execuções: **132,33 ms → 98,11 ms** (aprox. -26%), após a otimização de InitPlan. Os dados de DEV são reduzidos; não extrapolar diretamente para PROD.
+
 ### Próxima parte da Fase C
-- Agregação SQL do Dashboard de Suprimentos e dos indicadores financeiros, sem reconstruir todos os registros operacionais no cliente.
+- Agregações SQL dos indicadores financeiros, sem reconstruir todos os registros operacionais no cliente.
 - Paginação visual no servidor nas tabelas com grande volume, mantendo filtros e totais.
 - Carregamento por aba e anexos sob demanda em Pagamentos, Conciliação, Cotações e Obras.
 - Revisão das leituras de lojas, implantação e administração que ainda carregam coleções completas.
