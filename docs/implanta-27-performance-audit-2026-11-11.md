@@ -115,9 +115,21 @@ Além da otimização compartilhada de RLS, a Preview #85 passou a restringir as
 
 Foram adicionados testes unitários para paginação por IDs, deduplicação, lotes, páginas, listas vazias e validação do tamanho de lote.
 
+### Segunda entrega da Fase C — agregação do Dashboard de Implantação
+
+- Migration `20261111202109_dashboard_implementation_store_metrics.sql` aplicada exclusivamente em DEV.
+- Criada a função `public.dashboard_implementation_store_metrics_v1(p_today date)`, SQL `STABLE SECURITY INVOKER`, com `search_path` vazio e permissões de execução restritas a `authenticated`. Não usa `SECURITY DEFINER`.
+- A consulta agrega no PostgreSQL a implantação mais recente por loja, progresso, pendências, atrasos, atividades críticas e próximo vencimento. A data é recebida do cliente para manter o mesmo calendário local da tela.
+- O frontend deixou de buscar as coleções completas de `store_implementations` e `store_implementation_items` e passou a consumir uma única RPC com uma linha por loja visível. As consolidações por UF e responsável continuam no cliente, mas operam sobre esse conjunto reduzido.
+- Teste unitário compara o resultado do novo agregador de linhas com o cálculo anterior e exige igualdade dos indicadores apresentados.
+- **5 verificações pgTAP** adicionadas: existência, execução como invoker, permissão para autenticados, bloqueio para anon e respeito à RLS. A verificação de usuário sem vínculo/permissão retornou zero lojas.
+- Teste de três usuários ativos de DEV: a função retornou as mesmas 3 lojas visíveis por RLS. No conjunto reduzido de DEV, as 1 implantação + 30 atividades deixam de ser transferidas ao navegador; a RPC retorna 3 linhas agregadas.
+- `EXPLAIN (ANALYZE, BUFFERS)` sob usuário autenticado: 19,21–19,71 ms nas três execuções (mediana 19,56 ms; 2.569 buffers hit). O volume de DEV é pequeno e não havia baseline equivalente; portanto, esse número não é apresentado como redução de tempo, e sim como referência inicial do novo caminho.
+- Os advisors não apontaram a nova função como `SECURITY DEFINER`; alertas existentes em outras funções e políticas não foram alterados nesta etapa.
+
 ### Próxima parte da Fase C
+- Agregação SQL do Dashboard de Suprimentos e dos indicadores financeiros, sem reconstruir todos os registros operacionais no cliente.
 - Paginação visual no servidor nas tabelas com grande volume, mantendo filtros e totais.
-- Agregações SQL específicas para Dashboard e indicadores financeiros, sem reconstruir todos os registros operacionais no cliente.
 - Carregamento por aba e anexos sob demanda em Pagamentos, Conciliação, Cotações e Obras.
 - Revisão das leituras de lojas, implantação e administração que ainda carregam coleções completas.
 
