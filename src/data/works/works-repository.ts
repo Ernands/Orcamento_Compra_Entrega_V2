@@ -175,9 +175,9 @@ export async function listWorkServices(options?: { allRows?: boolean }): Promise
     .order('sort_order', { ascending: true })
     .order('id');
 
-  const servicesResult = options?.allRows
-    ? { data: await fetchAllPages<WorkServiceRow>((from, to) => servicesQuery().range(from, to)), error: null }
-    : await servicesQuery();
+  const servicesResult = options?.allRows === false
+    ? await servicesQuery()
+    : { data: await fetchAllPages<WorkServiceRow>((from, to) => servicesQuery().range(from, to)), error: null };
   if (servicesResult.error) throw servicesResult.error;
 
   const services = (servicesResult.data || []) as unknown as WorkServiceRow[];
