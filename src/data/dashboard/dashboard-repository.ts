@@ -14,11 +14,6 @@ import type {
   SupplyQuote,
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
-import {
-  listSupplyItems,
-  listSupplyNeeds,
-  listSupplyQuotes,
-} from '../supplies/supplies-repository';
 
 export interface DashboardImplementationInput {
   id: string;
@@ -300,13 +295,60 @@ export async function loadImplementationDashboard(): Promise<ImplementationDashb
   );
 }
 
+type SupplyDashboardMetricBreakdownRow = {
+  label: string;
+  count: number;
+  secondaryValue: number;
+};
+
+type SupplyDashboardMetricRow = {
+  active_items: number;
+  open_needs: number;
+  unlinked_needs: number;
+  active_suppliers: number;
+  total_quotes: number;
+  received_quotes: number;
+  comparable_quotes: number;
+  needs_by_status: SupplyDashboardMetricBreakdownRow[];
+  needs_by_store: SupplyDashboardMetricBreakdownRow[];
+  recurring_items: SupplyDashboardMetricBreakdownRow[];
+  quotes_by_store: SupplyDashboardMetricBreakdownRow[];
+  quotes_by_item: SupplyDashboardMetricBreakdownRow[];
+};
+
+function topBreakdownFromRows(rows: SupplyDashboardMetricBreakdownRow[]): SupplyDashboardBreakdown[] {
+  return [...rows]
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'))
+    .slice(0, 6);
+}
+
+export function buildSupplyDashboardFromMetrics(row: SupplyDashboardMetricRow): SupplyDashboard {
+  return {
+    activeItems: row.active_items,
+    openNeeds: row.open_needs,
+    unlinkedNeeds: row.unlinked_needs,
+    activeSuppliers: row.active_suppliers,
+    totalQuotes: row.total_quotes,
+    receivedQuotes: row.received_quotes,
+    comparableQuotes: row.comparable_quotes,
+    needsByStatus: topBreakdownFromRows(row.needs_by_status),
+    needsByStore: topBreakdownFromRows(row.needs_by_store),
+    recurringItems: topBreakdownFromRows(row.recurring_items),
+    quotesByStore: topBreakdownFromRows(row.quotes_by_store),
+    quotesByItem: topBreakdownFromRows(row.quotes_by_item),
+  };
+}
+
 export async function loadSupplyDashboard(): Promise<SupplyDashboard> {
-  const [items, needs, quotes, suppliersResult] = await Promise.all([
-    listSupplyItems(),
-    listSupplyNeeds(),
-    listSupplyQuotes(),
-    supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('active', true),
-  ]);
-  if (suppliersResult.error) throw suppliersResult.error;
-  return buildSupplyDashboard(items, needs, suppliersResult.count || 0, quotes, localDate());
+  const today = localDate();
+  const { data, error } = await supabase.rpc(
+    'dashboard_supply_metrics_v1' as never,
+    { p_today: today } as never,
+  );
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as SupplyDashboardMetricRow[];
+  const metrics = rows[0];
+  if (!metrics) throw new Error('O Dashboard de Suprimentos nao retornou indicadores.');
+  return buildSupplyDashboardFromMetrics(metrics);
 }
