@@ -184,6 +184,16 @@ function groupedDocumentStatus(group: ReimbursementReferenceGroup, unavailable: 
   const details = [...counts.entries()].map(([status, count]) =>
     group.lines.length === 1 ? status : `${status} (${count} lançamento${count === 1 ? '' : 's'})`
   );
+  // Work compliance is at OBR level, not payment-instalment level.
+  // A work with multiple payments must only report each issue once.
+  const workIssues = new Map<string, string[]>();
+  group.lines.forEach((line) => {
+    if (line.row.workServiceId && !workIssues.has(line.row.workServiceId)) {
+      workIssues.set(line.row.workServiceId, line.workDocumentationIssues);
+    }
+  });
+  const uniqueWorkIssues = [...new Set([...workIssues.values()].flat())];
+  details.push(...uniqueWorkIssues);
   const failedProofs = group.paymentProofs.filter((doc) =>
     unavailable.has(`${doc.source}:${doc.id}`)).length;
   if (failedProofs) details.push(`Falha ao obter ${failedProofs} comprovante(s) de pagamento`);
@@ -361,7 +371,9 @@ export async function createStoreReimbursementWorkbook(input: {
     input.report.paymentProofs.filter((doc) => doc.source === 'purchase').length]);
   summary.addRow(['Comprovantes de pagamento de obras/serviços (OBR)',
     input.report.paymentProofs.filter((doc) => doc.source === 'work').length]);
-  summary.addRow(['Lançamentos com pendência/conferência', input.report.lines.filter((line) => currentStatus(line, input.unavailable)).length]);
+  summary.addRow(['Lançamentos com pendência/conferência', input.report.lines.filter((line) =>
+    Boolean(currentStatus(line, input.unavailable)) || line.workDocumentationIssues.length > 0).length]);
+  summary.addRow(['OBRs com pendências documentais', input.report.pendingWorks.length]);
   for (const index of [4, 5, 6, 7]) summary.getRow(index).getCell(2).numFmt = MONEY;
   summary.getRow(7).font = { bold: true, color: { argb: GREEN } };
 
@@ -449,6 +461,9 @@ export async function downloadStoreReimbursementZip(input: {
     'Critério: pago + programado + sem programação, incluindo valores ainda não quitados.',
     `Lançamentos sem nota ou recibo: ${missing}`,
     `Lançamentos com documento a conferir por loja: ${review}`,
+    `Obras/serviços com documentação incompleta: ${input.report.pendingWorks.length}`,
+    ...input.report.pendingWorks.map((work) =>
+      `  ${work.reference}: ${work.issues.join('; ')}`),
     `Anexos indisponíveis no download: ${unavailable.size}`,
     'Consulte a aba Pendências Documentais no Excel; pendências não reduzem o valor solicitado.',
     'LINKS DE DOCUMENTOS: extraia TODO o ZIP para uma única pasta antes de abrir a planilha.',
