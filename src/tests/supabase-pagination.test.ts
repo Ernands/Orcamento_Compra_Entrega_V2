@@ -64,7 +64,7 @@ describe('fetchAllPagesForIds', () => {
   });
 
   it('nao consulta o banco quando nao ha IDs', async () => {
-    const fetchPage = vi.fn((_ids: string[], _from: number, _to: number) =>
+    const fetchPage = vi.fn(() =>
       Promise.resolve({ data: [] as { id: string }[], error: null }),
     );
     await expect(fetchAllPagesForIds([], fetchPage)).resolves.toEqual([]);
