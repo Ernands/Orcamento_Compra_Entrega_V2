@@ -506,6 +506,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
       .in('quote_item_id', ids)
       .order('quote_item_id')
       .order('position')
+      .order('id')
       .range(from, to) as never,
   );
   const destinationIds = quoteDestinationRows.map((row) => row.id);
@@ -535,6 +536,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
         .select('*')
         .in('id', ids)
         .order('name')
+        .order('id')
         .range(from, to),
     ),
     fetchAllPagesForIds<{ id: string; title: string }>(
