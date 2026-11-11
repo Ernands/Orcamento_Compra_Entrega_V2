@@ -150,6 +150,6 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 
 
 ### CI e Preview
-- GitHub Actions Quality: **Tests, Lint, Typecheck e Build — todos aprovados** na revisão final da branch.
-- Netlify `deploy-preview-85`: **deploy concluído com sucesso** — https://deploy-preview-85--implanta-27.netlify.app/
+- GitHub Actions Quality: **Tests, Lint, Typecheck e Build — aprovados na revisão anterior**. O último commit com código (`2d3f36a`) disparou o run #785, que permanece na fila sem jobs iniciados; portanto, ainda não há resultado de CI para essa revisão.
+- Netlify `deploy-preview-85`: **deploy concluído com sucesso** para o último commit com código — https://deploy-preview-85--implanta-27.netlify.app/. O commit posterior (`36a3fce`) alterou somente esta documentação.
 - A PR #85 continua em rascunho; nenhum merge ou deploy de produção foi executado.
