@@ -304,38 +304,60 @@ export async function linkNeedToSupplyItem(needId: string, supplyItemId: string)
 
 async function loadSupplierRows(includeDocument: boolean): Promise<SupplierListRow[]> {
   if (includeDocument) {
-    const { data, error } = await supabase.rpc('list_suppliers_for_management');
-    if (error) throw error;
-    return data;
+    return fetchAllPages<SupplierListRow>((from, to) =>
+      supabase
+        .rpc('list_suppliers_for_management')
+        .order('trade_name')
+        .order('id')
+        .range(from, to) as never,
+    );
   }
 
-  const { data, error } = await supabase
-    .from('suppliers')
-    .select(SUPPLIER_OPERATIONAL_COLUMNS)
-    .order('trade_name');
-  if (error) throw error;
-  return data.map((row) => ({ ...row, document: null }));
+  const rows = await fetchAllPages<SupplierOperationalRow>((from, to) =>
+    supabase
+      .from('suppliers')
+      .select(SUPPLIER_OPERATIONAL_COLUMNS)
+      .order('trade_name')
+      .order('id')
+      .range(from, to),
+  );
+  return rows.map((row) => ({ ...row, document: null }));
 }
 
 export async function listSuppliers(includeDocument = false): Promise<Supplier[]> {
-  const [supplierRows, channelsResult, quotesResult] = await Promise.all([
-    loadSupplierRows(includeDocument),
-    supabase.from('supplier_channels').select('*').order('created_at'),
-    supabase.from('supply_quotes').select('supplier_id, quote_date').order('quote_date', {
-      ascending: false,
-    }),
+  const supplierRows = await loadSupplierRows(includeDocument);
+  const supplierIds = supplierRows.map((supplier) => supplier.id);
+  const [channelRows, quoteRows] = await Promise.all([
+    fetchAllPagesForIds<ChannelRow>(
+      supplierIds,
+      (ids, from, to) => supabase
+        .from('supplier_channels')
+        .select('*')
+        .in('supplier_id', ids)
+        .order('created_at')
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAllPagesForIds<{ supplier_id: string; quote_date: string }>(
+      supplierIds,
+      (ids, from, to) => supabase
+        .from('supply_quotes')
+        .select('supplier_id, quote_date')
+        .in('supplier_id', ids)
+        .order('quote_date', { ascending: false })
+        .order('id')
+        .range(from, to),
+    ),
   ]);
-  if (channelsResult.error) throw channelsResult.error;
-  if (quotesResult.error) throw quotesResult.error;
 
   const channels = new Map<string, SupplierChannel[]>();
-  channelsResult.data.forEach((row) => {
+  channelRows.forEach((row) => {
     const current = channels.get(row.supplier_id) || [];
     current.push(mapChannel(row));
     channels.set(row.supplier_id, current);
   });
   const latestQuotes = new Map<string, string>();
-  quotesResult.data.forEach((quote) => {
+  quoteRows.forEach((quote) => {
     if (!latestQuotes.has(quote.supplier_id)) latestQuotes.set(quote.supplier_id, quote.quote_date);
   });
 
