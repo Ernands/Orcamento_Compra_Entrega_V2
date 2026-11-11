@@ -61,3 +61,41 @@
 - Nesta fase não houve SQL de escrita/DDL em PROD, alteração de permissão, migração, atualização de pagamentos, comprovantes ou exclusão de dados.
 - A Preview #85 não significa que os timeouts já tenham sido eliminados: a causa principal está no custo das consultas/RLS e precisa da Fase B/C.
 - Fontes: código da branch `main` e ferramentas de diagnóstico Supabase no dia 11/11/2026.
+
+
+## Execução da Fase B em DEV — 11/11/2026
+
+### Mudanças aplicadas exclusivamente em DEV
+- Atualizadas as estatísticas das 59 tabelas públicas com `ANALYZE`.
+- Removida a camada customizada de retry do cliente Supabase. O cliente passa a usar o retry nativo do SDK, sem repetir automaticamente respostas 500/504.
+- Adicionadas as migrations:
+  - `20261111194500_cache_purchase_read_scope_initplan.sql`
+  - `20261111195500_optimize_purchase_permission_matrix_set_based.sql`
+  - `20261111201000_cache_purchase_store_permission_scope.sql`
+- As políticas de leitura de Compras e seus filhos agora calculam o escopo de compras/lojas uma vez por statement (InitPlan), em vez de reexecutar verificações completas de permissão por linha.
+- O escopo de anexos é separado do escopo de compras. Acesso de documentos e pagamentos consolidados não concede leitura do registro de compra.
+- O caminho de auditoria continua exigindo `finance.view` + `finance.document_audit_view`; políticas de vínculos por loja continuam store-scoped.
+
+### Validação funcional e de segurança
+- **32 verificações pgTAP** do arquivo `supabase/tests/purchase_read_scope_cache.test.sql` aprovadas em DEV.
+- Comparação com as funções de autorização anteriores: 3 usuários ativos × 6 compras, sem divergência nos escopos de Compras, Anexos ou Auditoria.
+- Comparação do escopo de lojas com `app.can_store_any`: 3 usuários × 3 lojas × 4 conjuntos de permissões, sem divergências.
+- Testes em transações revertidas cobriram concessão limitada a uma loja, permissão global de documentos, negação por loja e compras multiloja. O usuário com apenas concessão escopada de `purchases.view` continuou sem acesso ao registro da compra.
+- Nenhuma concessão, negação ou dado de teste permaneceu gravado; os testes transacionais terminaram com `ROLLBACK`.
+
+### Medições de plano em DEV
+As medições abaixo usam `EXPLAIN (ANALYZE, BUFFERS)` com usuário autenticado e os dados reduzidos existentes em DEV (3 lojas, 6 compras). Servem para comparar o plano local, não para projetar diretamente a latência de PROD.
+
+| Consulta | Medição anterior observada | Medição final em DEV | Variação |
+| --- | ---: | ---: | ---: |
+| `supply_purchase_stores` | 34,65 ms | 9,21 ms | -73% |
+| `supply_purchase_order_line_stores` | 60,49 ms após a primeira otimização de escopo | 16,17 ms | -73% |
+| `supply_purchase_attachment_stores` | 22,57 ms após a primeira otimização de escopo | 11,40 ms | -49% |
+
+Os planos confirmam a redução de avaliações repetidas de RLS por linha. Ainda é necessário validar com volume representativo e medir novamente após os carregadores por módulo.
+
+### Limites desta entrega
+- Esta etapa trata o gargalo compartilhado de autorização das tabelas de Compras que também alimentam Financeiro, Dashboard, Reembolso e Conferência.
+- Cotações e Obras e Serviços não apresentaram HTTP 500/504 nos endpoints observados, mas seus repositórios ainda têm consultas integrais que serão tratadas na fase de carregamento seletivo/paginação.
+- O carregamento de dados por módulo, as agregações de Dashboard e os anexos sob demanda permanecem como trabalho seguinte.
+- **PROD não foi alterado.** As migrations foram aplicadas somente ao projeto DEV; nenhuma migration foi aplicada ao projeto de produção.
