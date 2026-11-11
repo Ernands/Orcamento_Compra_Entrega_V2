@@ -72,7 +72,7 @@ describe('fetchAllPagesForIds', () => {
   });
 
   it('rejeita tamanho de lote invalido', async () => {
-    const fetchPage = vi.fn((_ids: string[], _from: number, _to: number) =>
+    const fetchPage = vi.fn(() =>
       Promise.resolve({ data: [] as { id: string }[], error: null }),
     );
     await expect(fetchAllPagesForIds(['a'], fetchPage, 500, 0)).rejects.toThrow(
