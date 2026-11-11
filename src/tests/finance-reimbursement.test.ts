@@ -215,7 +215,7 @@ describe('solicitação de reembolso por loja', () => {
 
   it('não sinaliza obra quitada com recibo e comprovante suficientes', () => {
     const works = [{
-      id: 'work-ok', code: 'OBR-OK', storeId: storeA, contractedAmount: '60.00',
+      id: 'work-ok', code: 'OBR-OK', storeId: storeA, contractedAmount: '60.00', budgetAmount: '60.00',
       payments: [{ id: 'p-ok', status: 'paid', amount: '60.00' }],
       documents: [
         { id: 'f-ok', documentType: 'receipt', storagePath: 'obras/rec.pdf', documentAmount: '60.00' },
@@ -629,8 +629,13 @@ describe('solicitação de reembolso por loja', () => {
     expect(book.getWorksheet('Resumo')?.getCell('B8').value).toBe(5);
     expect(book.getWorksheet('Resumo')?.getCell('B9').value).toBe(2);
     const pending = book.getWorksheet('Pendências Documentais');
-    expect(pending?.rowCount).toBe(2);
+    // The historical fixture only supplies a work receipt, without its
+    // financial contract/payments. Conservatively flag that unverified OBR
+    // instead of declaring it complete merely because a receipt exists.
+    expect(pending?.rowCount).toBe(3);
     expect(pending?.getCell('B2').value).toBe('CMP-00002 + CMP-00003');
+    expect(pending?.getCell('B3').value).toBe('OBR-00019');
+    expect(String(pending?.getCell('C3').value)).toContain('Não foi possível conferir');
     expect(pending?.getCell('D2').value).toBe(6638);
     expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(3);
   });
