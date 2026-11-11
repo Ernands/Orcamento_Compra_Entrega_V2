@@ -4,6 +4,7 @@ import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { WorkService } from '../domain/works-types';
 
+const textCell = (value: unknown): string => typeof value === 'string' ? value : '';
 const storeA = 'store-a';
 const storeB = 'store-b';
 const orig = (value: bigint) => ({ equipment: value, furniture: 0n, works: 0n });
@@ -201,14 +202,14 @@ describe('solicitação de reembolso por loja', () => {
     expect(pending?.rowCount).toBe(3); // 2 unique OBRs + heading, not 3 instalments
     const pendingRows = [pending?.getRow(2), pending?.getRow(3)];
     const pendingByCode = new Map(pendingRows.map((value) =>
-      [String(value?.getCell(2).value), String(value?.getCell(3).value)]));
+      [textCell(value?.getCell(2).value), textCell(value?.getCell(3).value)]));
     expect(pendingByCode.get('OBR-00381')).toContain('Comprovante de pagamento não anexado.');
     expect(pendingByCode.get('OBR-00381')).toContain('Pagamento não registrado; saldo a pagar de R$ 60,00.');
     expect(pendingByCode.get('OBR-00308')).toContain('Pagamento parcial; saldo a pagar de R$ 755,50.');
     expect(pendingByCode.get('OBR-00308')?.match(/Pagamento parcial/g)).toHaveLength(1);
     const main = workbook.getWorksheet('Solicitação de Reembolso');
     const mainByCode = new Map([main?.getRow(5),main?.getRow(6)].map((r) =>
-      [String(r?.getCell(3).value), String(r?.getCell(10).value)]));
+      [textCell(r?.getCell(3).value), textCell(r?.getCell(10).value)]));
     expect(mainByCode.get('OBR-00381')).toContain('Pagamento não registrado');
     expect(mainByCode.get('OBR-00308')).toContain('Pagamento parcial');
   });
@@ -635,7 +636,7 @@ describe('solicitação de reembolso por loja', () => {
     expect(pending?.rowCount).toBe(3);
     expect(pending?.getCell('B2').value).toBe('CMP-00002 + CMP-00003');
     expect(pending?.getCell('B3').value).toBe('OBR-00019');
-    expect(String(pending?.getCell('C3').value)).toContain('Não foi possível conferir');
+    expect(textCell(pending?.getCell('C3').value)).toContain('Não foi possível conferir');
     expect(pending?.getCell('D2').value).toBe(6638);
     expect(book.getWorksheet('Arquivos do ZIP')?.rowCount).toBe(3);
   });
