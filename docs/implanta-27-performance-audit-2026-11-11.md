@@ -69,9 +69,9 @@
 - Atualizadas as estatísticas das 59 tabelas públicas com `ANALYZE`.
 - Removida a camada customizada de retry do cliente Supabase. O cliente passa a usar o retry nativo do SDK, sem repetir automaticamente respostas 500/504.
 - Adicionadas as migrations:
-  - `20261111194500_cache_purchase_read_scope_initplan.sql`
-  - `20261111195500_optimize_purchase_permission_matrix_set_based.sql`
-  - `20261111201000_cache_purchase_store_permission_scope.sql`
+  - `20261111194525_cache_purchase_read_scope_initplan.sql`
+  - `20261111194748_optimize_purchase_permission_matrix_set_based.sql`
+  - `20261111194929_cache_purchase_store_permission_scope.sql`
 - As políticas de leitura de Compras e seus filhos agora calculam o escopo de compras/lojas uma vez por statement (InitPlan), em vez de reexecutar verificações completas de permissão por linha.
 - O escopo de anexos é separado do escopo de compras. Acesso de documentos e pagamentos consolidados não concede leitura do registro de compra.
 - O caminho de auditoria continua exigindo `finance.view` + `finance.document_audit_view`; políticas de vínculos por loja continuam store-scoped.
