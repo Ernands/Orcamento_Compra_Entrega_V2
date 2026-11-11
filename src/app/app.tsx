@@ -1,35 +1,6 @@
-import { useEffect } from 'react';
+import { lazy, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AccessPage } from '../pages/access-page';
-import { AdminReferenceAuditPage } from '../pages/admin-reference-audit-page';
-import { ChangePasswordPage } from '../pages/change-password-page';
 import { LoginPage } from '../pages/login-page';
-import { ChecklistMasterPage } from '../pages/checklist-master-page';
-import { DashboardPage } from '../pages/dashboard-page';
-import { BudgetForecastDashboardPage } from '../pages/budget-forecast-dashboard-page';
-import { FinancialCompositionPage } from '../pages/financial-composition-page';
-import { FinancePage } from '../pages/finance-page';
-import { FinanceDocumentAuditPage } from '../pages/finance-document-audit-page';
-import { FinancePaymentsPage } from '../pages/finance-payments-page';
-import { FinanceAccountReconciliationPage } from '../pages/finance-account-reconciliation-page';
-import { ManagerialReimbursementPage } from '../pages/managerial-reimbursement-page';
-import { FinanceStoreDetailPage } from '../pages/finance-store-detail-page';
-import { WorksPage } from '../pages/works-page';
-import { PendingItemsPage } from '../pages/pending-items-page';
-import { StoreAttachmentsPage } from '../pages/store-attachments-page';
-import { StoreImplementationPage } from '../pages/store-implementation-page';
-import { StoreSummaryNeedsPage } from '../pages/store-summary-needs-page';
-import { StoreWorkspacePage } from '../pages/store-workspace-page';
-import { StoresPage } from '../pages/stores-page';
-import { SuppliersPage } from '../pages/suppliers-page';
-import { SupplyComparisonPage } from '../pages/supply-comparison-page';
-import { SupplyItemsPage } from '../pages/supply-items-page';
-import { SupplyPlannedBudgetPage } from '../pages/supply-planned-budget-page';
-import { SupplyPlannedBudgetDetailPage } from '../pages/supply-planned-budget-detail-page';
-import { SupplyItemDetailPage } from '../pages/supply-item-detail-page';
-import { SupplyNeedsPage } from '../pages/supply-needs-page';
-import { SupplyPurchasesPage } from '../pages/supply-purchases-page';
-import { SupplyQuotesPage } from '../pages/supply-quotes-page';
 import { AppShell } from './app-shell';
 import {
   AuthorizedHomeRedirect,
@@ -38,6 +9,38 @@ import {
   RequireSession,
 } from './guards';
 import { SessionProvider } from './session-provider';
+
+// Each protected page is loaded on demand to keep the initial app bundle lightweight.
+const AccessPage = lazy(() => import('../pages/access-page').then((module) => ({ default: module.AccessPage })));
+const AdminReferenceAuditPage = lazy(() => import('../pages/admin-reference-audit-page').then((module) => ({ default: module.AdminReferenceAuditPage })));
+const ChangePasswordPage = lazy(() => import('../pages/change-password-page').then((module) => ({ default: module.ChangePasswordPage })));
+const ChecklistMasterPage = lazy(() => import('../pages/checklist-master-page').then((module) => ({ default: module.ChecklistMasterPage })));
+const DashboardPage = lazy(() => import('../pages/dashboard-page').then((module) => ({ default: module.DashboardPage })));
+const BudgetForecastDashboardPage = lazy(() => import('../pages/budget-forecast-dashboard-page').then((module) => ({ default: module.BudgetForecastDashboardPage })));
+const FinancialCompositionPage = lazy(() => import('../pages/financial-composition-page').then((module) => ({ default: module.FinancialCompositionPage })));
+const FinancePage = lazy(() => import('../pages/finance-page').then((module) => ({ default: module.FinancePage })));
+const FinanceDocumentAuditPage = lazy(() => import('../pages/finance-document-audit-page').then((module) => ({ default: module.FinanceDocumentAuditPage })));
+const FinancePaymentsPage = lazy(() => import('../pages/finance-payments-page').then((module) => ({ default: module.FinancePaymentsPage })));
+const FinanceAccountReconciliationPage = lazy(() => import('../pages/finance-account-reconciliation-page').then((module) => ({ default: module.FinanceAccountReconciliationPage })));
+const ManagerialReimbursementPage = lazy(() => import('../pages/managerial-reimbursement-page').then((module) => ({ default: module.ManagerialReimbursementPage })));
+const FinanceStoreDetailPage = lazy(() => import('../pages/finance-store-detail-page').then((module) => ({ default: module.FinanceStoreDetailPage })));
+const WorksPage = lazy(() => import('../pages/works-page').then((module) => ({ default: module.WorksPage })));
+const PendingItemsPage = lazy(() => import('../pages/pending-items-page').then((module) => ({ default: module.PendingItemsPage })));
+const StoreAttachmentsPage = lazy(() => import('../pages/store-attachments-page').then((module) => ({ default: module.StoreAttachmentsPage })));
+const StoreImplementationPage = lazy(() => import('../pages/store-implementation-page').then((module) => ({ default: module.StoreImplementationPage })));
+const StoreSummaryNeedsPage = lazy(() => import('../pages/store-summary-needs-page').then((module) => ({ default: module.StoreSummaryNeedsPage })));
+const StoreWorkspacePage = lazy(() => import('../pages/store-workspace-page').then((module) => ({ default: module.StoreWorkspacePage })));
+const StoresPage = lazy(() => import('../pages/stores-page').then((module) => ({ default: module.StoresPage })));
+const SuppliersPage = lazy(() => import('../pages/suppliers-page').then((module) => ({ default: module.SuppliersPage })));
+const SupplyComparisonPage = lazy(() => import('../pages/supply-comparison-page').then((module) => ({ default: module.SupplyComparisonPage })));
+const SupplyItemsPage = lazy(() => import('../pages/supply-items-page').then((module) => ({ default: module.SupplyItemsPage })));
+const SupplyPlannedBudgetPage = lazy(() => import('../pages/supply-planned-budget-page').then((module) => ({ default: module.SupplyPlannedBudgetPage })));
+const SupplyPlannedBudgetDetailPage = lazy(() => import('../pages/supply-planned-budget-detail-page').then((module) => ({ default: module.SupplyPlannedBudgetDetailPage })));
+const SupplyItemDetailPage = lazy(() => import('../pages/supply-item-detail-page').then((module) => ({ default: module.SupplyItemDetailPage })));
+const SupplyNeedsPage = lazy(() => import('../pages/supply-needs-page').then((module) => ({ default: module.SupplyNeedsPage })));
+const SupplyPurchasesPage = lazy(() => import('../pages/supply-purchases-page').then((module) => ({ default: module.SupplyPurchasesPage })));
+const SupplyQuotesPage = lazy(() => import('../pages/supply-quotes-page').then((module) => ({ default: module.SupplyQuotesPage })));
+
 
 function SupplyPurchasesRoute() {
   useEffect(() => {
