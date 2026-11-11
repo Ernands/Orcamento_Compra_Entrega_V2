@@ -309,7 +309,7 @@ async function loadSupplierRows(includeDocument: boolean): Promise<SupplierListR
         .rpc('list_suppliers_for_management')
         .order('trade_name')
         .order('id')
-        .range(from, to) as never,
+        .range(from, to),
     );
   }
 
@@ -538,7 +538,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
       .order('quote_item_id')
       .order('position')
       .order('id')
-      .range(from, to) as never,
+      .range(from, to),
   );
   const destinationIds = quoteDestinationRows.map((row) => row.id);
   const quoteDestinationStoreRows = await fetchAllPagesForIds<QuoteDestinationStoreRow>(
@@ -549,7 +549,7 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
       .in('quote_destination_id', ids)
       .order('quote_destination_id')
       .order('store_id')
-      .range(from, to) as never,
+      .range(from, to),
   );
 
   const itemIds = [...new Set(quoteItemRows.map((item) => item.supply_item_id))];
