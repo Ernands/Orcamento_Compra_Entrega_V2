@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(32);
 
 select ok(to_regprocedure('private.readable_supply_purchase_ids_for(text[])') is not null,
   'Private purchase-scope matrix exists');
