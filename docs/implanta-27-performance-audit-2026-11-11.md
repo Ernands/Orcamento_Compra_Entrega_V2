@@ -119,3 +119,7 @@ Foram adicionados testes unitários para paginação por IDs, deduplicação, lo
 - Agregações SQL específicas para Dashboard e indicadores financeiros, sem reconstruir todos os registros operacionais no cliente.
 - Carregamento por aba e anexos sob demanda em Pagamentos, Conciliação, Cotações e Obras.
 - Revisão das leituras de lojas, implantação e administração que ainda carregam coleções completas.
+
+
+### Evidência de limite de 1.000 registros em PROD
+A consulta de contagem em produção encontrou **1.001 registros em `works_service_documents`**. O carregador antigo consultava essa coleção sem paginação e poderia retornar no máximo 1.000 registros. A nova implementação pagina os documentos e restringe a consulta aos `service_id` carregados, evitando a omissão do registro excedente. Também foram verificados os índices existentes que suportam os filtros por `service_id`, `quote_id`, `quote_item_id` e `quote_destination_id`; não foi necessário criar índices redundantes nesta etapa.
