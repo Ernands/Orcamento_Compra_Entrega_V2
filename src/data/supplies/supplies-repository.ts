@@ -446,40 +446,27 @@ export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
   ]);
 
   const quoteItemIds = quoteItemRows.map((item) => item.id);
-  const [quoteDestinationRows, quoteDestinationStoreRows] = await Promise.all([
-    fetchAllPagesForIds<QuoteDestinationRow>(
-      quoteItemIds,
-      (ids, from, to) => supabase
-        .from('supply_quote_item_destinations' as never)
-        .select('*')
-        .in('quote_item_id', ids)
-        .order('quote_item_id')
-        .order('position')
-        .range(from, to) as never,
-    ),
-    (async () => {
-      const destinationIds = await fetchAllPagesForIds<QuoteDestinationRow>(
-        quoteItemIds,
-        (ids, from, to) => supabase
-          .from('supply_quote_item_destinations' as never)
-          .select('*')
-          .in('quote_item_id', ids)
-          .order('quote_item_id')
-          .order('position')
-          .range(from, to) as never,
-      ).then((rows) => rows.map((row) => row.id));
-      return fetchAllPagesForIds<QuoteDestinationStoreRow>(
-        destinationIds,
-        (ids, from, to) => supabase
-          .from('supply_quote_item_destination_stores' as never)
-          .select('*')
-          .in('quote_destination_id', ids)
-          .order('quote_destination_id')
-          .order('store_id')
-          .range(from, to) as never,
-      );
-    })(),
-  ]);
+  const quoteDestinationRows = await fetchAllPagesForIds<QuoteDestinationRow>(
+    quoteItemIds,
+    (ids, from, to) => supabase
+      .from('supply_quote_item_destinations' as never)
+      .select('*')
+      .in('quote_item_id', ids)
+      .order('quote_item_id')
+      .order('position')
+      .range(from, to) as never,
+  );
+  const destinationIds = quoteDestinationRows.map((row) => row.id);
+  const quoteDestinationStoreRows = await fetchAllPagesForIds<QuoteDestinationStoreRow>(
+    destinationIds,
+    (ids, from, to) => supabase
+      .from('supply_quote_item_destination_stores' as never)
+      .select('*')
+      .in('quote_destination_id', ids)
+      .order('quote_destination_id')
+      .order('store_id')
+      .range(from, to) as never,
+  );
 
   const itemIds = [...new Set(quoteItemRows.map((item) => item.supply_item_id))];
   const needIds = [...new Set(quoteItemRows.flatMap((item) => item.store_need_id ? [item.store_need_id] : []))];
