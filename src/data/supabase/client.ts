@@ -11,8 +11,5 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       detectSessionInUrl: false,
     },
-    db: {
-      retryEnabled: true,
-    },
   },
 );
