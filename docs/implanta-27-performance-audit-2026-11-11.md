@@ -124,3 +124,9 @@ Foram adicionados testes unitários para paginação por IDs, deduplicação, lo
 
 ### Evidência de limite de 1.000 registros em PROD
 A consulta de contagem em produção encontrou **1.001 registros em `works_service_documents`**. O carregador antigo consultava essa coleção sem paginação e poderia retornar no máximo 1.000 registros. A nova implementação pagina os documentos e restringe a consulta aos `service_id` carregados, evitando a omissão do registro excedente. Também foram verificados os índices existentes que suportam os filtros por `service_id`, `quote_id`, `quote_item_id` e `quote_destination_id`; não foi necessário criar índices redundantes nesta etapa.
+
+
+### CI e Preview
+- GitHub Actions Quality: **Tests, Lint, Typecheck e Build — todos aprovados** na revisão final da branch.
+- Netlify `deploy-preview-85`: **deploy concluído com sucesso** — https://deploy-preview-85--implanta-27.netlify.app/
+- A PR #85 continua em rascunho; nenhum merge ou deploy de produção foi executado.
