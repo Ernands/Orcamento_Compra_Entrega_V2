@@ -872,6 +872,61 @@
 .finance-reimbursement-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .finance-reimbursement-meta span { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; }
 .finance-reimbursement-meta .finance-reimbursement-warning { color: #9b342b; }
+/* Reembolso: avisos por OBR antes da exportação, sem alterar cálculos. */
+.finance-reimbursement-work-pendencies {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e6bd96;
+  border-radius: 7px;
+  background: #fffaf4;
+}
+.finance-reimbursement-work-pendencies h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #77502d;
+  font-size: .86rem;
+}
+.finance-reimbursement-work-pendencies > p {
+  margin: 0;
+  color: #765d46;
+  font-size: .75rem;
+  line-height: 1.5;
+}
+.finance-reimbursement-work-pendencies__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+}
+.finance-reimbursement-work-pendencies__list article {
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid #ecd7c4;
+  border-radius: 6px;
+  background: #fff;
+}
+.finance-reimbursement-work-pendencies__list article strong {
+  color: #4b3422;
+  font-size: .82rem;
+}
+.finance-reimbursement-work-pendencies__list ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #684d3b;
+  font-size: .76rem;
+  line-height: 1.45;
+}
+.finance-reimbursement-pendency-cell {
+  min-width: 225px;
+  max-width: 380px;
+  white-space: normal;
+  color: #76502b;
+  line-height: 1.45;
+}
 .finance-reimbursement-preview { overflow: auto; max-height: 325px; border: 1px solid var(--line); border-radius: 8px; }
 .finance-reimbursement-preview table { width: 100%; border-collapse: collapse; font-size: 0.73rem; }
 .finance-reimbursement-preview th { position: sticky; top: 0; background: #eaf5ee; text-align: left; padding: 9px; white-space: nowrap; }
