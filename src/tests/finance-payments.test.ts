@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assertPurchaseEventParity } from '../domain/finance-purchase-event-parity';
 import { assertPurchaseUnscheduledParity } from '../domain/finance-purchase-unscheduled-parity';
+import { assertPurchaseStoreCostParity } from '../domain/finance-purchase-store-cost-parity';
 import { assertPurchaseAdjustmentParity } from '../domain/finance-purchase-adjustment-parity';
 import type { FinancePurchaseAdjustmentSnapshot } from '../data/finance/finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
@@ -874,5 +875,68 @@ describe('paridade de pedidos com pagamento geral distribuído', () => {
     expect(() => assertPurchaseUnscheduledParity(
       [pilot], { ...page, isComplete: false }, projected, current,
     )).toThrow('não pode ser aprovada');
+  });
+});
+
+
+describe('paridade das linhas de custo distribuídas por loja no SQL', () => {
+  it('confere R$ 0,05 entre três lojas, incluindo arredondamento de centavos', () => {
+    const pilot = purchase({
+      id: 'cost-3', code: 'CMP-STORE-COSTS',
+      total: '0.05', paid: '0.00', planned: '0.00',
+    });
+    const line = pilot.orders[0].lines[0];
+    line.lineTotal = '0.05';
+    line.unitPrice = '0.05';
+    const source = line.stores[0];
+    line.stores = ['store-a', 'store-b', 'store-c'].map((storeId) => ({
+      ...source, id: 'link-' + storeId,
+      storeId, code: 'LOJ-' + storeId.slice(-1).toUpperCase(),
+      quantity: '1',
+    }));
+    const orderId = pilot.orders[0].id;
+    const page = {
+      isComplete: true, totalCount: 1,
+      totalContractedCents: 5n, totalAllocatedCents: 5n,
+    };
+    const row = {
+      purchaseId: pilot.id, orderId,
+      referenceCode: pilot.code, contractedCents: 5n,
+      allocatedCents: 5n, unallocatedCents: 0n,
+      stores: [
+        { storeId: 'store-a', storeCode: 'LOJ-A', costCents: 2n },
+        { storeId: 'store-b', storeCode: 'LOJ-B', costCents: 2n },
+        { storeId: 'store-c', storeCode: 'LOJ-C', costCents: 1n },
+      ],
+    };
+    expect(() => assertPurchaseStoreCostParity([pilot], page, [row])).not.toThrow();
+    expect(() => assertPurchaseStoreCostParity(
+      [pilot], page, [{
+        ...row, stores: row.stores.map((s) =>
+          s.storeId === 'store-c' ? { ...s, costCents: 0n } : s),
+      }],
+    )).toThrow('Rateio de centavos por loja divergente');
+  });
+
+  it('preserva custo integral sem alocação para loja com distribuição pendente', () => {
+    const pilot = purchase({
+      id: 'cost-pending', code: 'CMP-STORE-PENDING',
+      total: '10.00', paid: '0.00', planned: '0.00',
+    });
+    pilot.orders[0].lines[0].storeDistributionStatus = 'pending';
+    const row = {
+      purchaseId: pilot.id, orderId: pilot.orders[0].id,
+      referenceCode: pilot.code, contractedCents: 1000n,
+      allocatedCents: 0n, unallocatedCents: 1000n,
+      stores: [],
+    };
+    const summary = {
+      isComplete: true, totalCount: 1,
+      totalContractedCents: 1000n, totalAllocatedCents: 0n,
+    };
+    expect(() => assertPurchaseStoreCostParity([pilot], summary, [row])).not.toThrow();
+    expect(() => assertPurchaseStoreCostParity(
+      [pilot], summary, [{ ...row, unallocatedCents: 999n }],
+    )).toThrow('Contratação ou custo não alocado divergente');
   });
 });
