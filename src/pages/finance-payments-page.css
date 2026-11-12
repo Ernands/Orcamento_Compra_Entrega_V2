@@ -961,6 +961,7 @@
 .finance-reimbursement-preview td small { margin-top: 2px; color: var(--muted); }
 .finance-reimbursement-money { white-space: nowrap; font-weight: 750; }
 .finance-reimbursement-buttons { display: flex; justify-content: flex-end; gap: 9px; }
+.finance-reimbursement-progress { color: #365a7b; font-size: 0.78rem; font-weight: 650; margin: 6px 0; }
 .finance-reimbursement-error { color: #9b342b; font-size: 0.75rem; }
 .finance-reimbursement-success { color: #177354; font-size: 0.75rem; }
 @media (max-width: 800px) {
