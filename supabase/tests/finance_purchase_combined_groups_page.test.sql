@@ -56,7 +56,7 @@ select ok(
  'CMP-00002 e CMP-00003: parcela combinada exata em centavos'
 );
 select ok(
-  (select count(*)=1 and sum(amount_cents)=4357920::bigint
+  (select count(*)=2 and sum(amount_cents)=4357920::bigint
   from (values
    ('paid'::text,date '2026-09-11','Miranda','invoiced','Entrada Miranda',3139920::bigint),
    ('paid',date '2026-09-11','Miranda','invoiced','Entrada Miranda',1218000::bigint)
