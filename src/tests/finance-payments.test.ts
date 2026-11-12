@@ -605,3 +605,53 @@ describe('auditoria conservativa das quatro etapas financeiras', () => {
     expect(rows.find((row) => row.status === 'unscheduled')?.amountCents).toBe(2500n);
   });
 });
+
+
+describe('rateio cruzado entre equipamentos, mobiliário e lojas', () => {
+  it('conserva centavos nas três lojas e nas origens financeiras independentes', () => {
+    const pilot = purchase({
+      id: 'mixed', code: 'CMP-RATEIO-MISTO', total: '101.03', paid: '101.03', planned: '0.00',
+    });
+    pilot.payments[1].status = 'cancelled';
+    const line = pilot.orders[0].lines[0];
+    line.lineTotal = '50.01';
+    line.unitPrice = '50.01';
+    line.stores = line.stores.map((store) => ({
+      ...store, storeId: 'store-a', code: 'LOJ-A',
+    }));
+    pilot.items.push({
+      ...pilot.items[0], id: 'mixed-furniture-item',
+      itemName: 'Mesa de apoio', itemCategory: 'Mobiliário',
+      catalogFinancialGroup: 'furniture', actualTotal: '51.02',
+      purchasedQuantity: '2',
+    });
+    const otherLine = {
+      ...line, id: line.id + '-furniture', purchaseItemId: 'mixed-furniture-item',
+      itemCode: 'ITM-MESA', itemName: 'Mesa de apoio',
+      unitPrice: '51.02', lineTotal: '51.02', quantity: '2',
+      stores: ['store-b', 'store-c'].map((storeId) => ({
+        ...line.stores[0], id: line.id + '-' + storeId,
+        storeId, code: 'LOJ-' + storeId.slice(-1).toUpperCase(),
+        quantity: '1',
+      })),
+    };
+    pilot.orders[0].lines.push(otherLine);
+    pilot.stores = [...line.stores, ...otherLine.stores].map((store) => ({
+      id: store.id, storeId: store.storeId, code: store.code,
+      name: store.name, city: store.city, state: store.state,
+      address: null, addressSnapshotSource: null,
+    }));
+    const rows = buildUnifiedFinancePayments([pilot], []);
+    const audit = auditUnifiedFinanceProjection([pilot], [], rows);
+    expect(audit.passed).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].originAllocations).toEqual({
+      equipment: 5001n, furniture: 5102n, works: 0n,
+    });
+    expect(Object.fromEntries(rows[0].storeAllocations.map((entry) =>
+      [entry.storeId, entry.amountCents]))).toEqual({
+      'store-a': 5001n, 'store-b': 2551n, 'store-c': 2551n,
+    });
+    expect(rows[0].unallocatedCents).toBe(0n);
+  });
+});
