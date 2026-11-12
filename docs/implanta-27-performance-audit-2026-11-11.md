@@ -369,3 +369,28 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - A SQL de custos por loja **não implementa ainda a distribuição efetiva por origem financeira**, nem a consolidação SQL de parcelas entre CMPs com notas `compra única`/`parcela combinada`. Esses casos permanecem no domínio atual.
 - A SQL de saldos ainda exclui compras com cancelamentos parciais; seu pagamento geral é alocado apenas para compras sem ajustes, com paridade a ser aferida automaticamente no ambiente autorizado.
 - Dados de produção NÃO foram copiados para DEV e não foram alterados. Sem merge, deploy em PROD ou mudanças nas telas financeiras oficiais. PR #85 continua em rascunho.
+
+
+## Etapa SQL: grupos CMP combinados e origens financeiras dos eventos — 12/11/2026
+
+### Consulta de agrupamento de CMPs (DEV)
+- Migration `finance_purchase_combined_groups_page_v1` (versão `20261112194403`): RPC `STABLE SECURITY INVOKER` somente leitura, autorização `finance.payments_view` e RLS. Agrupa eventos cujas notas contêm `compra única` ou `parcela combinada` exatamente pela chave do domínio: status, vencimento, fornecedor, meio de pagamento e `sourceLabel`.
+- Produz `combined:<IDs ordenados>`, referências únicas de CMPs, IDs de eventos de origem, quantidade de eventos e valor consolidado em centavos. São explicitamente excluídos pagamentos combinados ajustados, negativos e com quantidade de parcelas acima do limite; o indicador `is_complete=false` impede homologação indevida.
+- `assertCombinedPurchaseParity` exige igualdade com o agrupamento atual `buildUnifiedFinancePayments` em ID, referências, status, data, fornecedor, forma de pagamento, `sourceLabel` e valor. A consulta é paginada, e o executor Preview #85 exige todas as páginas.
+- PgTAP 12 verificações de contrato, permissões e cenários sintéticos; casos de CMP-00002 + CMP-00003: entrada combinada **R$ 43.579,20** e parcela **R$ 20.336,96**. O primeiro rascunho do teste SQL tinha contagem de eventos incorreta (1 em vez de 2); o arquivo foi corrigido e a execução final concluiu com 12 testes sem falhas.
+- **No DEV não há registros marcados como combinados**, logo a consulta real retornou zero grupos e a homologação de dados reais para esse cenário permanece pendente.
+
+### Rateio de cada pagamento por origem financeira (DEV)
+- Migrations `20261112195028_finance_purchase_payment_origins_page_v1` e `20261112195222_finance_purchase_payment_origins_source_coverage_gate`: retorna para cada evento de pagamento v2 o valor em centavos por `equipment`, `furniture`, `works` e `unallocated_origin_cents`.
+- Classificação segue a precedência do domínio: `supply_items.financial_group` quando definido e, como fallback, subcategoria/grupo/categoria/nome do item, com normalização de caracteres portugueses e padrões de mobiliário/equipamentos.
+- Rateio por maiores restos, desempate da chave textual e centavos inteiros `bigint`. Para eventos sem linha de custo, preserva a parcela não alocada em vez de inventar classificação. Compras com ajustes ou custos indefinidos são excluídas e sinalizadas; a migração de cobertura propaga a incompletude da consulta fonte de eventos.
+- Repositório `finance-purchase-payment-origins-repository.ts` verifica as somas de cada página e de cada evento; `assertPurchasePaymentOriginParity` compara a soma dos eventos SQL com as linhas financeiras do domínio, mesmo quando vários eventos foram consolidados em uma linha `combined:`. A mesma auditoria verifica vínculos CMP/pedido e centavos não explicados.
+- No DEV, conferência real autorizada em páginas de 3: **9 eventos distintos**, zero divergências de ID/status/data/valor comparados com a RPC v2; `equipment=508820` centavos (**R$ 5.088,20**), `furniture=10450` centavos (**R$ 104,50**), `unallocated=0`, total **R$ 5.192,70**. Perfil sem acesso Financeiro recebeu zero linhas e totais zero.
+- PgTAP 12 verificações SQL, além de testes Vitest de contrato, CTE de origem, cobertura de CMPs combinadas, detecção de centavo perdido, eventos sem custo e usuário sem permissão.
+
+### Bloqueio na publicação e no rateio final por loja
+- A integração da auditoria de origens na tela Financeiro → Pagamentos foi enviada à PR #85 em modo somente leitura, sem afetar os totais oficiais.
+- A primeira tentativa de SQL para rateio **final de pagamento por loja e origem simultaneamente** falhou na validação de tipos do banco (`UNION` entre bigint e texto); **a migration não foi aplicada**, nem é usada pela Preview. Continuar somente após revisão da implementação e comparação.
+- Após a integração da auditoria, alguns deploys Netlify falharam. A investigação apontou import TypeScript não utilizado (`FinancePurchaseOriginPage`) na auditoria, com `noUnusedLocals=true`; o import foi removido em commit posterior. A confirmação do build final deve ser verificada no commit HEAD antes de considerar a Preview homologada.
+- GitHub Actions ainda não apresentou execução para o HEAD recente da PR. Não considerar Vitest executado/CI aprovado apenas porque o Netlify eventualmente compilar. PR continua em rascunho, sem merge e com indicador de bloqueio de mesclagem.
+- **PROD intacto**: nenhuma migration, pagamento, reembolso, permissão, anexo ou documento foi modificado em produção. A transferência PROD→DEV permanece suspensa.
