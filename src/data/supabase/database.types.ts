@@ -3465,6 +3465,10 @@ export type Database = {
         Args: { p_page?: number | null; p_page_size?: number | null }
         Returns: Json
       }
+      finance_purchase_store_origin_weights_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
       finance_purchase_unscheduled_page_v1: {
         Args: { p_page?: number | null; p_page_size?: number | null }
         Returns: Json
