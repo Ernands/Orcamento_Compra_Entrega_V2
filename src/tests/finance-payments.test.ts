@@ -1226,14 +1226,14 @@ describe('regressão financeira com estrutura real CMP-00038 e CMP-00002/00003',
     for (const [p, paymentCents] of [[two, '14652.96'], [three, '5684.00']] as const) {
       const original = p.payments[1];
       const paid = {
-        ...original, id: p.id + '-boleto-1', paymentMethod: 'boleto',
+        ...original, id: p.id + '-boleto-1', paymentMethod: 'boleto' as const,
         sourceLabel: 'Boleto Miranda 1/5', status: 'paid' as const,
         amount: paymentCents, paidAt: '2026-10-08T12:00:00Z',
         firstDueDate: '2026-10-13',
       };
       const future = due.map((date, i) => ({
         ...original, id: p.id + '-boleto-' + (i + 2),
-        paymentMethod: 'boleto', sourceLabel: 'Boleto Miranda ' + (i + 2) + '/5',
+        paymentMethod: 'boleto' as const, sourceLabel: 'Boleto Miranda ' + (i + 2) + '/5',
         status: 'planned' as const, amount: paymentCents,
         firstDueDate: date, paidAt: null,
       }));
