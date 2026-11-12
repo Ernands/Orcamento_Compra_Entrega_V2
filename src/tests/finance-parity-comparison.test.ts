@@ -6,8 +6,8 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock('../data/supabase/client', () => ({
   supabase: {
-    rpc: (name: string, args: unknown) =>
-      name === 'finance_purchase_adjustment_reconciliation_v1'
+    rpc: (name: string, args: unknown): unknown =>
+      (name === 'finance_purchase_adjustment_reconciliation_v1'
         ? mock.adjustments(name, args)
         : name === 'finance_purchase_unscheduled_page_v1'
           ? mock.unscheduled(name, args)
@@ -19,7 +19,7 @@ vi.mock('../data/supabase/client', () => ({
                 ? mock.origins(name, args)
                 : name === 'finance_purchase_payment_store_origins_page_v1'
                   ? mock.storePayments(name, args)
-                  : mock.rpc(name, args),
+                  : mock.rpc(name, args)) as unknown,
   },
 }));
 
