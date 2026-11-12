@@ -4,6 +4,7 @@ import { assertPurchaseUnscheduledParity } from '../domain/finance-purchase-unsc
 import { assertPurchaseStoreCostParity } from '../domain/finance-purchase-store-cost-parity';
 import { assertCombinedPurchaseParity } from '../domain/finance-purchase-combined-parity';
 import { assertPurchasePaymentOriginParity } from '../domain/finance-purchase-payment-origin-parity';
+import { assertFinancePaymentStoreParity } from '../domain/finance-purchase-payment-store-parity';
 import { assertPurchaseAdjustmentParity } from '../domain/finance-purchase-adjustment-parity';
 import type { FinancePurchaseAdjustmentSnapshot } from '../data/finance/finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
@@ -1050,5 +1051,79 @@ describe('rateio financeiro de eventos combinados por origem', () => {
     };
     expect(() => assertPurchasePaymentOriginParity(canonical,
       { isComplete: true, totalCount: 1 }, [event])).not.toThrow();
+  });
+});
+
+
+describe('paridade SQL de pagamentos por loja, origem e CMP consolidada', () => {
+  it('verifica cada pagamento combinado e bloqueia um centavo deslocado de loja', () => {
+    const p1 = purchase({ id: 'parity-cmp02', code: 'CMP-00002',
+      total: '46052.16', paid: '31399.20', planned: '14652.96' });
+    const p2 = purchase({ id: 'parity-cmp03', code: 'CMP-00003',
+      total: '17864.00', paid: '12180.00', planned: '5684.00' });
+    const canonical = buildUnifiedFinancePayments([p1,p2], []);
+    const rawRows = [p1,p2].flatMap(p => buildUnifiedFinancePayments([p], [])
+      .filter(row => row.workServiceId === null && row.status !== 'unscheduled'));
+    const events = rawRows.map(row => ({
+      id: row.id,
+      purchaseId: row.purchaseIds[0],
+      orderId: row.purchaseOrderIds[0] || null,
+      referenceCode: row.referenceCodes[0],
+      status: row.status as 'paid' | 'planned',
+      date: row.date!,
+      amountCents: row.amountCents,
+      allocatedCents: row.storeAllocations.reduce((sum,store)=>sum+store.amountCents,0n),
+      unallocatedCents: row.unallocatedCents,
+      stores: row.storeAllocations.map(store => ({
+        storeId: store.storeId, storeCode: store.storeCode,
+        amountCents: store.amountCents,
+        equipmentCents: store.originAllocations.equipment,
+        furnitureCents: store.originAllocations.furniture,
+        worksCents: store.originAllocations.works,
+      })),
+    }));
+    expect(canonical.filter(row => row.id.startsWith('combined:'))).toHaveLength(2);
+    expect(() => assertFinancePaymentStoreParity(canonical,
+      { isComplete: true, totalCount: events.length }, events)).not.toThrow();
+    const damaged = events.map((event,index) => index === 0 ? {
+      ...event, stores: event.stores.map((store,slot)=>slot===0
+        ? { ...store, equipmentCents: store.equipmentCents-1n } : store),
+    } : event);
+    expect(() => assertFinancePaymentStoreParity(canonical,
+      { isComplete: true, totalCount: damaged.length }, damaged))
+      .toThrow('Rateio de pagamento por loja/origem diverge');
+    expect(() => assertFinancePaymentStoreParity(canonical,
+      { isComplete: true, totalCount: events.length+1 }, events))
+      .toThrow('Páginas de pagamentos por loja/origem faltantes');
+    expect(() => assertFinancePaymentStoreParity(canonical,
+      { isComplete: false, totalCount: events.length }, events))
+      .toThrow('incompleto');
+  });
+
+  it('preserva pagamento sem loja distribuída e detecta vínculo CMP incorreto', () => {
+    const p = purchase({ id: 'parity-unallocated', code: 'CMP-SEM-LOJA',
+      total: '10.00', paid: '10.00', planned: '0.00' });
+    p.payments[1].status = 'cancelled';
+    p.orders[0].status = 'cancelled';
+    const canonical = buildUnifiedFinancePayments([p], []);
+    const row = canonical[0];
+    const event = {
+      id: row.id,
+      purchaseId: p.id,
+      orderId: p.payments[0].purchaseOrderId,
+      referenceCode: p.code,
+      status: row.status as 'paid' | 'planned',
+      date: row.date!,
+      amountCents: row.amountCents,
+      allocatedCents: 0n,
+      unallocatedCents: row.amountCents,
+      stores: [],
+    };
+    expect(() => assertFinancePaymentStoreParity(canonical,
+      { isComplete: true, totalCount: 1 }, [event])).not.toThrow();
+    expect(() => assertFinancePaymentStoreParity(canonical,
+      { isComplete: true, totalCount: 1 },
+      [{ ...event, referenceCode: 'CMP-INCORRETA' }]))
+      .toThrow('Vínculo de compra/pedido/status/data divergente');
   });
 });
