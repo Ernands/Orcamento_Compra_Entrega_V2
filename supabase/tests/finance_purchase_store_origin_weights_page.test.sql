@@ -51,7 +51,7 @@ select ok(
 );
 set local role postgres;
 select ok(
- (select proconfig @> array['search_path=']::text[]
+ (select array_to_string(proconfig,'|') in ('search_path=', 'search_path=""')
   from pg_proc where oid =
  'public.finance_purchase_store_origin_weights_page_v1(integer,integer)'::regprocedure),
  'Funcao possui search_path vazio'
