@@ -416,3 +416,43 @@ describe('paridade dos eventos de Compras entre SQL e cálculo legado', () => {
     )).toThrow('incompleta');
   });
 });
+
+describe('distribuição de 11 centavos em 12 parcelas', () => {
+  it('replica o desempate lexicográfico usado no domínio, inclusive parcela zerada', () => {
+    const pilot = purchase({
+      id: 'cmp-centavos', code: 'CMP-CENTAVOS', total: '0.11',
+      paid: '0.00', planned: '0.11',
+    });
+    pilot.payments[0].status = 'cancelled';
+    pilot.payments[1].entryAmount = '0';
+    pilot.payments[1].installmentCount = 12;
+    pilot.payments[1].firstDueDate = '2027-01-31';
+    pilot.payments[1].sourceLabel = 'Teste de 12 parcelas';
+
+    const dates = [
+      '2027-01-31', '2027-02-28', '2027-03-31',
+      '2027-04-30', '2027-05-31', '2027-06-30',
+      '2027-07-31', '2027-08-31', '2027-09-30',
+      '2027-10-31', '2027-11-30', '2027-12-31',
+    ];
+    // JS allocateCents desempata índices como strings ("10" antes de "2");
+    // por isso a décima parcela é zero, e não a última parcela.
+    const rows: FinancePurchaseEvent[] = dates.flatMap((date, index) =>
+      index === 9 ? [] : [{
+        id: 'purchase:cmp-centavos-planned:installment:' + (index + 1),
+        paymentId: pilot.payments[1].id,
+        purchaseId: pilot.id, orderId: pilot.orders[0].id,
+        referenceCode: pilot.code, counterpart: 'Miranda',
+        status: 'planned' as const, date, amountCents: 1n,
+        paymentMethod: 'boleto', sourceLabel: 'Teste de 12 parcelas',
+        installmentLabel: 'Parcela ' + (index + 1) + '/12',
+      }],
+    );
+    expect(rows).toHaveLength(11);
+    expect(() => assertPurchaseEventParity(
+      [pilot],
+      { isComplete: true, totalCount: 11, paidCents: 0n, plannedCents: 11n },
+      rows,
+    )).not.toThrow();
+  });
+});
