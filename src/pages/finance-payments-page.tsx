@@ -530,6 +530,7 @@ export function FinancePaymentsPage() {
             methodFilter={methodFilter}
             dateFrom={dateFrom}
             dateTo={dateTo}
+            occurrenceValuesOnly={occurrenceValueScopeActive}
             query={query}
             hasDeepFilter={hasDeepFilter}
             onError={setError}
