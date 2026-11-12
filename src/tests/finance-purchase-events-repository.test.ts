@@ -8,6 +8,7 @@ beforeEach(() => mock.rpc.mockReset());
 function raw(overrides: Record<string, unknown> = {}) {
   return {
     page: 1, page_size: 50, total_count: 1, paid_cents: '340858',
+    gross_paid_cents: '340858', refunds_cents: '0',
     planned_cents: '0', unsupported_purchase_count: 0,
     unsupported_payment_count: 0, is_complete: true,
     rows: [{
@@ -16,6 +17,7 @@ function raw(overrides: Record<string, unknown> = {}) {
       order_id: 'order-97', reference_code: 'CMP-00097',
       counterpart: 'Fornecedor', status: 'paid',
       event_date: '2026-11-10', amount_cents: '340858',
+      gross_amount_cents: '340858', refund_cents: '0',
       payment_method: 'pix', source_label: null,
       installment_label: 'Pagamento realizado',
     }],
@@ -29,12 +31,13 @@ describe('API paginada dos eventos de pagamento de Compras', () => {
       page: 2, pageSize: 10, status: 'paid',
       dateFrom: '2026-11-01', dateTo: '2026-11-30', query: 'CMP-',
     });
-    expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v1', {
+    expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v2', {
       p_page: 2, p_page_size: 10, p_status: 'paid',
       p_date_from: '2026-11-01', p_date_to: '2026-11-30', p_query: 'CMP-',
     });
     expect(result).toMatchObject({
-      paidCents: 340858n, plannedCents: 0n,
+      paidCents: 340858n, grossPaidCents: 340858n,
+      refundedCents: 0n, plannedCents: 0n,
       isComplete: true, unsupportedPurchaseCount: 0,
       totalCount: 1,
     });
@@ -45,6 +48,7 @@ describe('API paginada dos eventos de pagamento de Compras', () => {
   it('bloqueia retorno incompleto por reembolso ou parcelamento fora do limite', async () => {
     mock.rpc.mockResolvedValue({ data: raw({
       total_count: 0, rows: [], paid_cents: '0',
+      gross_paid_cents: '0', refunds_cents: '0',
       is_complete: false, unsupported_purchase_count: 1,
       unsupported_payment_count: 2,
     }), error: null });

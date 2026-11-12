@@ -359,12 +359,14 @@ describe('paridade dos eventos de Compras entre SQL e cálculo legado', () => {
       {
         ...common, id: 'purchase:cmp-pilot-paid:paid', paymentId: paid.id,
         status: 'paid', date: '2027-01-07', amountCents: 1234n,
+        grossAmountCents: 1234n, refundCents: 0n,
         paymentMethod: 'invoiced', sourceLabel: 'Entrada Miranda',
         installmentLabel: 'Pagamento realizado',
       },
       {
         ...common, id: 'purchase:cmp-pilot-planned:entry', paymentId: planned.id,
         status: 'planned', date: '2027-01-05', amountCents: 1000n,
+        grossAmountCents: 1000n, refundCents: 0n,
         paymentMethod: 'boleto', sourceLabel: 'Plano piloto',
         installmentLabel: 'Entrada prevista',
       },
@@ -376,12 +378,14 @@ describe('paridade dos eventos de Compras entre SQL e cálculo legado', () => {
         ...common, id: 'purchase:cmp-pilot-planned:installment:' + (index + 1),
         paymentId: planned.id, status: 'planned',
         date, amountCents,
+        grossAmountCents: amountCents, refundCents: 0n,
         paymentMethod: 'boleto', sourceLabel: 'Plano piloto',
         installmentLabel: 'Parcela ' + (index + 1) + '/3',
       })),
     ];
     const summary = {
       isComplete: true, totalCount: 5, paidCents: 1234n, plannedCents: 10001n,
+      grossPaidCents: 1234n, refundedCents: 0n,
     };
     expect(() => assertPurchaseEventParity([pilot], summary, expectedRows)).not.toThrow();
     expect(() => assertPurchaseEventParity(
@@ -406,17 +410,20 @@ describe('paridade dos eventos de Compras entre SQL e cálculo legado', () => {
       purchaseId: pilot.id, orderId: pilot.orders[0].id,
       referenceCode: pilot.code, counterpart: 'Miranda',
       status: 'paid', date: '2026-09-11', amountCents: 0n,
+      grossAmountCents: 0n, refundCents: 0n,
       paymentMethod: 'invoiced', sourceLabel: 'Entrada Miranda',
       installmentLabel: 'Pagamento realizado',
     };
     expect(() => assertPurchaseEventParity(
       [pilot],
-      { isComplete: true, totalCount: 1, paidCents: 0n, plannedCents: 0n },
+      { isComplete: true, totalCount: 1, paidCents: 0n, plannedCents: 0n,
+        grossPaidCents: 0n, refundedCents: 0n },
       [zeroPaid],
     )).not.toThrow();
     expect(() => assertPurchaseEventParity(
       [pilot],
-      { isComplete: false, totalCount: 1, paidCents: 0n, plannedCents: 0n },
+      { isComplete: false, totalCount: 1, paidCents: 0n, plannedCents: 0n,
+        grossPaidCents: 0n, refundedCents: 0n },
       [zeroPaid],
     )).toThrow('incompleta');
   });
@@ -449,6 +456,7 @@ describe('distribuição de 11 centavos em 12 parcelas', () => {
         purchaseId: pilot.id, orderId: pilot.orders[0].id,
         referenceCode: pilot.code, counterpart: 'Miranda',
         status: 'planned' as const, date, amountCents: 1n,
+        grossAmountCents: 1n, refundCents: 0n,
         paymentMethod: 'boleto', sourceLabel: 'Teste de 12 parcelas',
         installmentLabel: 'Parcela ' + (index + 1) + '/12',
       }],
@@ -456,7 +464,8 @@ describe('distribuição de 11 centavos em 12 parcelas', () => {
     expect(rows).toHaveLength(11);
     expect(() => assertPurchaseEventParity(
       [pilot],
-      { isComplete: true, totalCount: 11, paidCents: 0n, plannedCents: 11n },
+      { isComplete: true, totalCount: 11, paidCents: 0n, plannedCents: 11n,
+        grossPaidCents: 0n, refundedCents: 0n },
       rows,
     )).not.toThrow();
   });

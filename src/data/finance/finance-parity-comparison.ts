@@ -140,6 +140,8 @@ export async function runFinancePreviewParity(
     page.totalCount === first.totalCount &&
     page.paidCents === first.paidCents &&
     page.plannedCents === first.plannedCents &&
+    page.grossPaidCents === first.grossPaidCents &&
+    page.refundedCents === first.refundedCents &&
     page.isComplete === first.isComplete &&
     page.unsupportedPaymentCount === first.unsupportedPaymentCount &&
     page.unsupportedPurchaseCount === first.unsupportedPurchaseCount;

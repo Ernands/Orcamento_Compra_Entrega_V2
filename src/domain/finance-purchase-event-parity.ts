@@ -53,7 +53,8 @@ export function assertPurchaseEventParity(
     if (row.status === 'paid') {
       const payment = payments.get(row.paymentId);
       const refund = moneyToCents(payment?.refundedAmount || '0');
-      if (row.refundCents !== refund ||
+      if (row.refundCents === undefined || row.grossAmountCents === undefined ||
+        row.refundCents !== refund ||
         row.grossAmountCents !== row.amountCents + refund ||
         (payment?.grossAmount !== undefined &&
           row.grossAmountCents !== moneyToCents(payment.grossAmount))) {

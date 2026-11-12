@@ -16,6 +16,8 @@ const emptyPage = {
   page_size: 100,
   total_count: 0,
   paid_cents: '0',
+  gross_paid_cents: '0',
+  refunds_cents: '0',
   planned_cents: '0',
   unsupported_purchase_count: 0,
   unsupported_payment_count: 0,
@@ -44,7 +46,7 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.adjustmentSqlStatus).toBe('matched');
     expect(report.adjustmentSqlChecked).toBe(0);
     expect(report.domain.checks.map((entry) => entry.passed)).toEqual([true, true, true, true]);
-    expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v1', {
+    expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v2', {
       p_page: 1, p_page_size: 100, p_status: null,
       p_date_from: null, p_date_to: null, p_query: null,
     });
