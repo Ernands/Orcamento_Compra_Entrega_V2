@@ -655,3 +655,62 @@ describe('rateio cruzado entre equipamentos, mobiliário e lojas', () => {
     expect(rows[0].unallocatedCents).toBe(0n);
   });
 });
+
+
+describe('crédito residual de frete sem classificação fiscal indevida', () => {
+  it('compara o crédito excedente, a redução integral do frete e o valor líquido', () => {
+    const source = purchase({ id: 'credit', code: 'CMP-CREDITO', total: '100.00', paid: '100.00', planned: '0.00' });
+    source.payments[1].status = 'cancelled';
+    const order = source.orders[0];
+    const kept = order.lines[0];
+    kept.lineTotal = '60.00';
+    kept.unitPrice = '50.00';
+    kept.shippingAmount = '10.00';
+    const cancelled = {
+      ...kept, id: order.id + '-cancel', itemCode: 'ITM-CANCEL',
+      itemName: 'Item devolvido', unitPrice: '40.00',
+      shippingAmount: '0.00', lineTotal: '40.00',
+      stores: kept.stores.map((store) => ({ ...store, id: store.id + '-cancel' })),
+    };
+    order.lines.push(cancelled);
+    const adjustment: PartialAdjustmentRecord = {
+      id: 'credit-adjust', purchase_id: source.id, order_id: order.id,
+      payment_id: source.payments[0].id,
+      refund_attachment_id: 'refund-proof',
+      original_cents: 10000, cancelled_cents: 4000,
+      freight_reduction_cents: 1300, refund_cents: 5300,
+      remaining_cents: 4700, refunded_on: '2026-11-03',
+      reference: 'AJ-CREDITO', reason: 'Crédito residual',
+      created_at: '2026-11-03T10:00:00Z',
+      line_adjustments: [
+        {
+          line_id: cancelled.id, kind: 'cancelled', reduction_cents: 4000,
+          original_line_cents: 4000, original_shipping_cents: 0,
+        },
+        {
+          line_id: kept.id, kind: 'freight', reduction_cents: 1000,
+          original_line_cents: 6000, original_shipping_cents: 1000,
+        },
+        {
+          line_id: kept.id, kind: 'residual_credit', reduction_cents: 300,
+          original_line_cents: 6000, original_shipping_cents: 1000,
+        },
+      ],
+      refund_entries: [{
+        line_id: cancelled.id, amount_cents: 5300, refunded_on: '2026-11-03',
+      }],
+    };
+    const adjusted = applyPurchasePartialAdjustments(source, [adjustment]);
+    const rows = buildUnifiedFinancePayments([adjusted], []);
+    const report = auditUnifiedFinanceProjection([adjusted], [], rows);
+    expect(report.passed).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amountCents).toBe(4700n);
+    expect(rows[0].refundCents).toBe(5300n);
+    expect(rows[0].adjustmentEntries?.reduce((total, event) => total + event.amountCents, 0n)).toBe(-5300n);
+    expect(rows[0].storeAllocations[0].amountCents).toBe(4700n);
+    expect(adjusted.orders[0].lines.some((line) => line.itemCode === 'AJ-CREDITO')).toBe(true);
+    expect(adjusted.orders[0].lines.some((line) =>
+      line.itemCode === 'AJ-CREDITO' && line.lineTotal === '-3.00')).toBe(true);
+  });
+});
