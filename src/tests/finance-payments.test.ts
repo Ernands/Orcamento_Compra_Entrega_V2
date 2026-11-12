@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { assertPurchaseEventParity } from '../domain/finance-purchase-event-parity';
+import type { FinancePurchaseEvent } from '../data/finance/finance-purchase-events-repository';
 import {
   buildUnifiedFinancePayments,
   financePaymentOriginSummary,
@@ -325,5 +327,92 @@ describe('unified finance payments', () => {
       plannedCents: 500000n,
       unscheduledCents: 1500000n,
     });
+  });
+});
+
+
+describe('paridade dos eventos de Compras entre SQL e cálculo legado', () => {
+  it('reconcilia parcela em janeiro 31, entrada, arredondamento e pagamento quitado', () => {
+    const pilot = purchase({
+      id: 'cmp-pilot', code: 'CMP-PILOTO', total: '100.01',
+      paid: '12.34', planned: '100.01',
+    });
+    const paid = pilot.payments[0];
+    const planned = pilot.payments[1];
+    paid.paidAt = '2027-01-07T12:00:00Z';
+    planned.entryAmount = '10.00';
+    planned.installmentCount = 3;
+    planned.createdAt = '2027-01-05T12:00:00Z';
+    planned.firstDueDate = '2027-01-31';
+    planned.sourceLabel = 'Plano piloto';
+
+    const common = {
+      purchaseId: pilot.id, orderId: pilot.orders[0].id,
+      referenceCode: pilot.code, counterpart: 'Miranda',
+    };
+    const expectedRows: FinancePurchaseEvent[] = [
+      {
+        ...common, id: 'purchase:cmp-pilot-paid:paid', paymentId: paid.id,
+        status: 'paid', date: '2027-01-07', amountCents: 1234n,
+        paymentMethod: 'invoiced', sourceLabel: 'Entrada Miranda',
+        installmentLabel: 'Pagamento realizado',
+      },
+      {
+        ...common, id: 'purchase:cmp-pilot-planned:entry', paymentId: planned.id,
+        status: 'planned', date: '2027-01-05', amountCents: 1000n,
+        paymentMethod: 'boleto', sourceLabel: 'Plano piloto',
+        installmentLabel: 'Entrada prevista',
+      },
+      ...([
+        ['2027-01-31', 3001n],
+        ['2027-02-28', 3000n],
+        ['2027-03-31', 3000n],
+      ] as const).map(([date, amountCents], index): FinancePurchaseEvent => ({
+        ...common, id: 'purchase:cmp-pilot-planned:installment:' + (index + 1),
+        paymentId: planned.id, status: 'planned',
+        date, amountCents,
+        paymentMethod: 'boleto', sourceLabel: 'Plano piloto',
+        installmentLabel: 'Parcela ' + (index + 1) + '/3',
+      })),
+    ];
+    const summary = {
+      isComplete: true, totalCount: 5, paidCents: 1234n, plannedCents: 10001n,
+    };
+    expect(() => assertPurchaseEventParity([pilot], summary, expectedRows)).not.toThrow();
+    expect(() => assertPurchaseEventParity(
+      [pilot], summary,
+      expectedRows.map((row) => row.id.endsWith(':entry')
+        ? { ...row, amountCents: row.amountCents + 1n } : row),
+    )).toThrow('Divergência de paridade no evento financeiro');
+    expect(() => assertPurchaseEventParity(
+      [pilot], summary, expectedRows.slice(0, 3),
+    )).toThrow('nem todas as páginas');
+  });
+
+  it('mantém pagamento quitado de valor zero e omite pagamentos cancelados', () => {
+    const pilot = purchase({
+      id: 'cmp-zero', code: 'CMP-ZERO', total: '0.00',
+      paid: '0.00', planned: '10.00',
+    });
+    pilot.payments[1].status = 'cancelled';
+    const zeroPaid: FinancePurchaseEvent = {
+      id: 'purchase:cmp-zero-paid:paid',
+      paymentId: pilot.payments[0].id,
+      purchaseId: pilot.id, orderId: pilot.orders[0].id,
+      referenceCode: pilot.code, counterpart: 'Miranda',
+      status: 'paid', date: '2026-09-11', amountCents: 0n,
+      paymentMethod: 'invoiced', sourceLabel: 'Entrada Miranda',
+      installmentLabel: 'Pagamento realizado',
+    };
+    expect(() => assertPurchaseEventParity(
+      [pilot],
+      { isComplete: true, totalCount: 1, paidCents: 0n, plannedCents: 0n },
+      [zeroPaid],
+    )).not.toThrow();
+    expect(() => assertPurchaseEventParity(
+      [pilot],
+      { isComplete: false, totalCount: 1, paidCents: 0n, plannedCents: 0n },
+      [zeroPaid],
+    )).toThrow('incompleta');
   });
 });
