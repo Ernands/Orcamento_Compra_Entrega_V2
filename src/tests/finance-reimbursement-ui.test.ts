@@ -57,4 +57,13 @@ describe('integração UI reembolso', () => {
     expect(exporter).toContain("fiscalLabel(line)");
     expect(exporter).toContain("const unavailable = new Set<string>()");
   });
+  it('mostra progresso dos anexos do ZIP e usa downloads paralelos limitados', () => {
+    expect(modal).toContain('onProgress: (completed, total) => setDownloadProgress({ completed, total })');
+    expect(modal).toContain('Obtendo anexos: {downloadProgress.completed} de {downloadProgress.total}');
+    expect(modal).toContain('setDownloadProgress(null)');
+    expect(paymentsCss).toContain('.finance-reimbursement-progress');
+    expect(exporter).toContain('MAX_PARALLEL_REIMBURSEMENT_DOWNLOADS = 4');
+    expect(exporter).toContain('fetchReimbursementZipAttachments(');
+    expect(exporter).toContain('input.onProgress');
+  });
 });
