@@ -71,7 +71,6 @@ export function auditUnifiedFinanceProjection(
   const events = new Map(allEvents.map((event) => ['purchase:' + event.id, event]));
   const consumed = new Set<string>();
   const sourceEventAmounts = new Map<string, bigint>();
-  const sourceEventRefunds = new Map<string, bigint>();
   const sourceCodesByRow = new Map<string, string[]>();
   const purchaseRows = sourceRows.filter((row) => row.workServiceId === null && row.status !== 'unscheduled');
   let combinedRowCount = 0;
@@ -138,10 +137,9 @@ export function auditUnifiedFinanceProjection(
     purchaseRows.filter((row) => row.purchaseIds.includes(purchase.id)).forEach((row) => {
       // Combined rows can contain other CMPs: aggregate once per row globally
       // below; never attribute the entire combined refund to each CMP.
-      if (row.purchaseIds.length === 1) {
-        row.paymentIds.forEach((paymentId) =>
-          rowRefunds.set(paymentId, (rowRefunds.get(paymentId) || 0n) +
-            (row.paymentIds.length === 1 ? (row.refundCents || 0n) : 0n)));
+      if (row.purchaseIds.length === 1 && row.paymentIds.length === 1) {
+        rowRefunds.set(row.paymentIds[0],
+          (rowRefunds.get(row.paymentIds[0]) || 0n) + (row.refundCents || 0n));
       }
     });
 
