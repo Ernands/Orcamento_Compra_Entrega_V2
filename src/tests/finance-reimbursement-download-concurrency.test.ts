@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchReimbursementZipAttachments } from '../data/exports/finance-reimbursement-export';
-import type { ReimbursementFiscalDocument } from '../domain/finance-reimbursement';
+import type { ReimbursementFiscalDocument, ReimbursementPaymentProof } from '../domain/finance-reimbursement';
 
 const fiscal = (id: string): ReimbursementFiscalDocument => ({
   id,
@@ -36,7 +36,7 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
       };
     });
     vi.stubGlobal('fetch', fakeFetch);
-    const sign = vi.fn(async (doc: ReimbursementFiscalDocument) => {
+    const sign = vi.fn(async (doc: ReimbursementFiscalDocument | ReimbursementPaymentProof) => {
       if (doc.id === 'doc-3') throw new Error('Objeto ausente do Storage DEV');
       return 'https://storage.invalid/' + doc.id;
     });
