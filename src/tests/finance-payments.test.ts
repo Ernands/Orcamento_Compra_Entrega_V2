@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assertPurchaseEventParity } from '../domain/finance-purchase-event-parity';
 import { assertPurchaseUnscheduledParity } from '../domain/finance-purchase-unscheduled-parity';
 import { assertPurchaseStoreCostParity } from '../domain/finance-purchase-store-cost-parity';
+import { assertCombinedPurchaseParity } from '../domain/finance-purchase-combined-parity';
 import { assertPurchaseAdjustmentParity } from '../domain/finance-purchase-adjustment-parity';
 import type { FinancePurchaseAdjustmentSnapshot } from '../data/finance/finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
@@ -938,5 +939,47 @@ describe('paridade das linhas de custo distribuídas por loja no SQL', () => {
     expect(() => assertPurchaseStoreCostParity(
       [pilot], summary, [{ ...row, unallocatedCents: 999n }],
     )).toThrow('Contratação ou custo não alocado divergente');
+  });
+});
+
+
+describe('confronto SQL da consolidação entre CMPs', () => {
+  it('exige as mesmas referências, IDs, status, datas e centavos do cálculo atual', () => {
+    const purchases = [
+      purchase({ id: 'cmp02', code: 'CMP-00002', total: '46052.16', paid: '31399.20', planned: '14652.96' }),
+      purchase({ id: 'cmp03', code: 'CMP-00003', total: '17864.00', paid: '12180.00', planned: '5684.00' }),
+    ];
+    const canonical = buildUnifiedFinancePayments(purchases, []);
+    const combined = canonical.filter((row) => row.id.startsWith('combined:'));
+    expect(combined).toHaveLength(2);
+    const projected = combined.map((row) => ({
+      id: row.id,
+      status: row.status as 'paid' | 'planned',
+      date: row.date!,
+      supplierName: row.supplierName,
+      paymentMethod: row.paymentMethod,
+      sourceLabel: row.sourceLabel,
+      eventCount: row.id.slice(9).split('|').length,
+      purchaseCount: row.purchaseIds.length,
+      sourceEventIds: row.id.slice(9).split('|').sort(),
+      referenceCodes: [...row.referenceCodes].sort(),
+      amountCents: row.amountCents,
+    }));
+    const totals = {
+      totalCount: 2, isComplete: true,
+      amountCentsTotal: projected.reduce((sum, row) => sum + row.amountCents, 0n),
+    };
+    expect(() => assertCombinedPurchaseParity(canonical, totals, projected)).not.toThrow();
+    expect(() => assertCombinedPurchaseParity(canonical, totals,
+      projected.map((row, index) => index === 0
+        ? { ...row, amountCents: row.amountCents + 1n } : row),
+    )).toThrow('Centavos ou critérios de agrupamento');
+    expect(() => assertCombinedPurchaseParity(canonical, totals,
+      projected.map((row, index) => index === 0
+        ? { ...row, referenceCodes: ['CMP-00002'] } : row),
+    )).toThrow('Centavos ou critérios de agrupamento');
+    expect(() => assertCombinedPurchaseParity(canonical,
+      { ...totals, isComplete: false }, projected),
+    ).toThrow('incompleta');
   });
 });
