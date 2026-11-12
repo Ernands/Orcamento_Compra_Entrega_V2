@@ -1,4 +1,5 @@
 import { buildFinancePaymentEvents } from './finance-calculations';
+import { moneyToCents } from './supply-calculations';
 import type { PurchaseV2 } from './purchase-v2-types';
 import type { FinancePurchaseEventsPage, FinancePurchaseEvent } from '../data/finance/finance-purchase-events-repository';
 
@@ -10,7 +11,7 @@ import type { FinancePurchaseEventsPage, FinancePurchaseEvent } from '../data/fi
 export function assertPurchaseEventParity(
   purchases: PurchaseV2[],
   result: Pick<FinancePurchaseEventsPage,
-    'isComplete' | 'totalCount' | 'paidCents' | 'plannedCents'>,
+    'isComplete' | 'totalCount' | 'paidCents' | 'plannedCents' | 'grossPaidCents' | 'refundedCents'>,
   rows: FinancePurchaseEvent[],
 ): void {
   if (!result.isComplete) {
@@ -27,6 +28,10 @@ export function assertPurchaseEventParity(
   const seen = new Set<string>();
   let paidCents = 0n;
   let plannedCents = 0n;
+  let grossPaidCents = 0n;
+  let refundedCents = 0n;
+  const payments = new Map(purchases.flatMap((purchase) =>
+    purchase.payments.map((payment) => [payment.id, payment] as const)));
 
   for (const row of rows) {
     if (seen.has(row.id)) throw new Error('Evento financeiro duplicado: ' + row.id);
@@ -45,11 +50,31 @@ export function assertPurchaseEventParity(
         old.installmentLabel !== row.installmentLabel) {
       throw new Error('Divergência de paridade no evento financeiro: ' + row.id);
     }
-    if (row.status === 'paid') paidCents += row.amountCents;
-    else plannedCents += row.amountCents;
+    if (row.status === 'paid') {
+      const payment = payments.get(row.paymentId);
+      const refund = moneyToCents(payment?.refundedAmount || '0');
+      if (row.refundCents !== refund ||
+        row.grossAmountCents !== row.amountCents + refund ||
+        (payment?.grossAmount !== undefined &&
+          row.grossAmountCents !== moneyToCents(payment.grossAmount))) {
+        throw new Error('Histórico bruto-líquido SQL divergente em ' + row.id);
+      }
+      paidCents += row.amountCents;
+      grossPaidCents += row.grossAmountCents;
+      refundedCents += refund;
+    } else {
+      if (row.refundCents !== 0n || row.grossAmountCents !== row.amountCents) {
+        throw new Error('Evento programado SQL contém crédito ou bruto inconsistente.');
+      }
+      plannedCents += row.amountCents;
+    }
   }
 
-  if (paidCents !== result.paidCents || plannedCents !== result.plannedCents) {
+  if (paidCents !== result.paidCents ||
+    plannedCents !== result.plannedCents ||
+    grossPaidCents !== result.grossPaidCents ||
+    refundedCents !== result.refundedCents ||
+    grossPaidCents - refundedCents !== paidCents) {
     throw new Error('Divergência de centavos nos totais da projeção financeira.');
   }
 }

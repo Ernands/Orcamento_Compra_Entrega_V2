@@ -17,6 +17,9 @@ export interface FinancePurchaseEvent {
   status: PurchaseEventStatus;
   date: string;
   amountCents: bigint;
+  /** Gross and refund are returned by v2 for paid rows, 0 refund for planned events. */
+  grossAmountCents?: bigint;
+  refundCents?: bigint;
   paymentMethod: string;
   sourceLabel: string | null;
   installmentLabel: string;
@@ -27,6 +30,8 @@ export interface FinancePurchaseEventsPage {
   pageSize: number;
   totalCount: number;
   paidCents: bigint;
+  grossPaidCents: bigint;
+  refundedCents: bigint;
   plannedCents: bigint;
   unsupportedPurchaseCount: number;
   unsupportedPaymentCount: number;
@@ -43,6 +48,8 @@ interface RawFinancePurchaseEvent {
   status: PurchaseEventStatus;
   event_date: string;
   amount_cents: string;
+  gross_amount_cents: string;
+  refund_cents: string;
   payment_method: string;
   source_label: string | null;
   installment_label: string;
@@ -52,6 +59,8 @@ interface RawFinancePurchaseEventsPage {
   page_size: number;
   total_count: number;
   paid_cents: string;
+  gross_paid_cents: string;
+  refunds_cents: string;
   planned_cents: string;
   unsupported_purchase_count: number;
   unsupported_payment_count: number;
@@ -71,7 +80,7 @@ export async function listFinancePurchaseEventsPage(filters: {
   query?: string | null;
   allowIncomplete?: boolean;
 } = {}): Promise<FinancePurchaseEventsPage> {
-  const { data, error } = await supabase.rpc('finance_purchase_events_page_v1', {
+  const { data, error } = await supabase.rpc('finance_purchase_events_page_v2', {
     p_page: filters.page ?? 1,
     p_page_size: filters.pageSize ?? 50,
     p_status: filters.status ?? null,
@@ -103,6 +112,11 @@ export async function listFinancePurchaseEventsPage(filters: {
 
   const paidCents = BigInt(raw.paid_cents);
   const plannedCents = BigInt(raw.planned_cents);
+  const grossPaidCents = BigInt(raw.gross_paid_cents);
+  const refundedCents = BigInt(raw.refunds_cents);
+  if (grossPaidCents - refundedCents !== paidCents) {
+    throw new Error('Totais de Compras não conciliam bruto, crédito e líquido.');
+  }
   const rows = raw.rows.map((row): FinancePurchaseEvent => ({
     id: row.id,
     paymentId: row.payment_id,
@@ -113,6 +127,8 @@ export async function listFinancePurchaseEventsPage(filters: {
     status: row.status,
     date: row.event_date,
     amountCents: BigInt(row.amount_cents),
+    grossAmountCents: BigInt(row.gross_amount_cents),
+    refundCents: BigInt(row.refund_cents),
     paymentMethod: row.payment_method,
     sourceLabel: row.source_label,
     installmentLabel: row.installment_label,
@@ -122,6 +138,8 @@ export async function listFinancePurchaseEventsPage(filters: {
     pageSize: raw.page_size,
     totalCount: raw.total_count,
     paidCents,
+    grossPaidCents,
+    refundedCents,
     plannedCents,
     unsupportedPurchaseCount: raw.unsupported_purchase_count,
     unsupportedPaymentCount: raw.unsupported_payment_count,
