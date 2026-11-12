@@ -40,10 +40,13 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
       if (doc.id === 'doc-3') throw new Error('Objeto ausente do Storage DEV');
       return 'https://storage.invalid/' + doc.id;
     });
+    const progress = vi.fn();
     const result = await fetchReimbursementZipAttachments(
-      [...documents, documents[0]], plannedNames, sign,
+      [...documents, documents[0]], plannedNames, sign, progress,
     );
 
+    expect(progress).toHaveBeenCalledWith(0, 10);
+    expect(progress).toHaveBeenLastCalledWith(10, 10);
     expect(maxActive).toBeGreaterThan(1);
     expect(maxActive).toBeLessThanOrEqual(4);
     expect(sign).toHaveBeenCalledTimes(10);
@@ -89,5 +92,42 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
     expect(result.downloaded).toEqual([]);
     expect(result.unavailable.size).toBe(4);
     expect(fakeFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('suporta 160 documentos com até quatro requisições e progresso limitado', async () => {
+    const documents = Array.from({ length: 160 }, (_, index) => fiscal('bulk-' + index));
+    const planned = new Map(documents.map((doc) => [
+      'purchase:' + doc.id, 'Notas_e_Recibos/' + doc.id + '.pdf',
+    ]));
+    let active = 0;
+    let peak = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Promise.resolve();
+      await Promise.resolve();
+      active -= 1;
+      return {
+        ok: !url.endsWith('bulk-42'),
+        status: url.endsWith('bulk-42') ? 404 : 200,
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+      };
+    }));
+    const progress = vi.fn();
+    const result = await fetchReimbursementZipAttachments(
+      documents,
+      planned,
+      async (doc) => 'https://storage.invalid/' + doc.id,
+      progress,
+    );
+    expect(peak).toBe(4);
+    expect(result.downloaded).toHaveLength(159);
+    expect([...result.unavailable]).toEqual(['purchase:bulk-42']);
+    expect(progress).toHaveBeenCalledWith(0, 160);
+    expect(progress).toHaveBeenLastCalledWith(160, 160);
+    // One update per 5% of the files, not a React re-render for each file.
+    expect(progress.mock.calls.length).toBeLessThanOrEqual(22);
+    expect(result.downloaded[0].key).toBe('purchase:bulk-0');
+    expect(result.downloaded.at(-1)?.key).toBe('purchase:bulk-159');
   });
 });
