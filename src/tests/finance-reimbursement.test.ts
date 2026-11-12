@@ -70,6 +70,34 @@ describe('solicitação de reembolso por loja', () => {
     expect(report.paymentProofs).toHaveLength(0);
     expect(report.sumMatches).toBe(true);
   });
+  it('não oculta nota de obra/compra ausente do Storage e preserva o valor do ZIP', async () => {
+    const one = row('p1', 'paid', 10_000n);
+    const p = purchase([attachment('unavailable', 'invoice')]);
+    const report = buildStoreReimbursement([one], [p], [], storeA);
+    expect(report.documents).toHaveLength(1);
+    expect(report.totals.commitmentCents).toBe(10_000n);
+    const { createStoreReimbursementWorkbook } = await import('../data/exports/finance-reimbursement-export');
+    const { Workbook } = await import('exceljs');
+    const bytes = await createStoreReimbursementWorkbook({
+      store: { id: storeA, code: 'LOJ-001', name: 'Loja Teste', city: 'Teste' } as never,
+      report,
+      generatedAt: new Date('2026-11-12T12:00:00Z'),
+      zipNames: new Map(),
+      unavailable: new Set(['purchase:unavailable']),
+    });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(bytes);
+    const main = workbook.getWorksheet('Solicitação de Reembolso');
+    const pending = workbook.getWorksheet('Pendências Documentais');
+    const summary = workbook.getWorksheet('Resumo');
+
+    expect(main?.getRow(5).getCell(6).value).toBe(100);
+    expect(main?.getRow(5).getCell(8).value).toBe('—');
+    expect(textCell(main?.getRow(5).getCell(10).value)).toContain('Falha ao obter arquivo');
+    expect(textCell(pending?.getRow(2).getCell(3).value)).toContain('Falha ao obter arquivo');
+    expect(summary?.getCell('B7').value).toBe(100);
+  });
+
   it('identifica falta de nota/recibo em qualquer situação e ignora orçamento/comprovante', () => {
     const p = purchase([attachment('orc', 'quote'), attachment('proof', 'payment_proof')]);
     for (const status of ['paid', 'planned', 'unscheduled'] as const) {
