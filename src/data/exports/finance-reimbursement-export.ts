@@ -414,6 +414,72 @@ export async function createStoreReimbursementWorkbook(input: {
   return bytes;
 }
 
+const MAX_PARALLEL_REIMBURSEMENT_DOWNLOADS = 4;
+
+interface ReimbursementDownloadedAttachment {
+  key: string;
+  filename: string;
+  bytes: ArrayBuffer;
+}
+
+/**
+ * Download signed fiscal/proof attachments with bounded concurrency.
+ * A failed or missing object is recorded by ID; no financial value is changed.
+ * All downloads finish before ZIP entry insertion, preserving a stable file order.
+ */
+export async function fetchReimbursementZipAttachments(
+  attachments: ReimbursementExportAttachment[],
+  plannedNames: ReadonlyMap<string, string>,
+  getSignedUrl: (document: ReimbursementExportAttachment) => Promise<string>,
+): Promise<{
+  downloaded: ReimbursementDownloadedAttachment[];
+  unavailable: Set<string>;
+}> {
+  const unique = new Map<string, ReimbursementExportAttachment>();
+  for (const document of attachments) {
+    const key = `${document.source}:${document.id}`;
+    if (!unique.has(key)) unique.set(key, document);
+  }
+  const documents = [...unique.values()];
+  const results: Array<ReimbursementDownloadedAttachment | null> =
+    Array.from({ length: documents.length }, () => null);
+  const unavailable = new Set<string>();
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < documents.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const doc = documents[index];
+      const key = `${doc.source}:${doc.id}`;
+      try {
+        const filename = plannedNames.get(key);
+        if (!filename) throw new Error('Documento sem nome de exportação.');
+        // Generate each signed URL immediately before its own request. URLs
+        // for other queued files are not generated early or allowed to expire.
+        const signedUrl = await getSignedUrl(doc);
+        const response = await fetch(signedUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const bytes = await response.arrayBuffer();
+        results[index] = { key, filename, bytes };
+      } catch {
+        unavailable.add(key);
+      }
+    }
+  }
+
+  await Promise.all(Array.from(
+    { length: Math.min(MAX_PARALLEL_REIMBURSEMENT_DOWNLOADS, documents.length) },
+    () => worker(),
+  ));
+  return {
+    downloaded: results.filter(
+      (entry): entry is ReimbursementDownloadedAttachment => entry !== null,
+    ),
+    unavailable,
+  };
+}
+
 export async function downloadStoreReimbursementZip(input: {
   store: Store;
   report: ReimbursementReport;
@@ -425,26 +491,15 @@ export async function downloadStoreReimbursementZip(input: {
   const zip = new JSZip();
   const zipNames = new Map<string, string>();
   const plannedNames = planReimbursementZipFileNames(input.report);
-  const unavailable = new Set<string>();
-
-  // Download once per unique fiscal attachment or work payment proof.
-  // Failures remain visible in the workbook; totals are never changed.
   const allAttachments: ReimbursementExportAttachment[] = [
     ...input.report.documents, ...input.report.paymentProofs,
   ];
-  for (const doc of allAttachments) {
-    const key = `${doc.source}:${doc.id}`;
-    try {
-      const url = await input.getSignedUrl(doc);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const filename = plannedNames.get(key);
-      if (!filename) throw new Error('Documento sem nome de exportação.');
-      zip.file(filename, await response.arrayBuffer());
-      zipNames.set(key, filename);
-    } catch {
-      unavailable.add(key);
-    }
+  const { downloaded, unavailable } = await fetchReimbursementZipAttachments(
+    allAttachments, plannedNames, input.getSignedUrl,
+  );
+  for (const attachment of downloaded) {
+    zip.file(attachment.filename, attachment.bytes);
+    zipNames.set(attachment.key, attachment.filename);
   }
 
   const generatedAt = new Date();
