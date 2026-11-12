@@ -257,3 +257,33 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Validar compras com parcelas, reembolso por item, consolidação CMP-00002/CMP-00003 e sobra sem programação contra `buildUnifiedFinancePayments` e `decorateFinancePaymentsWithOccurrences`; habilitar gradualmente apenas depois de paridade linha a linha, centavo a centavo.
 - **Nenhuma mudança em PROD, nenhuma migration promovida e nenhuma PR mesclada**. O histórico de migrations continua divergente entre DEV e PROD; não executar `db push` automático.
 - O GitHub Actions **ainda não publicou execução para os commits recentes** nesta verificação; os testes SQL foram executados em DEV, mas o novo código TypeScript aguarda CI. Não marcar como homologado sem a confirmação de testes, lint, typecheck e build.
+
+
+## Fase de paridade — eventos de Compras (DEV, 12/11/2026)
+
+### Projeção implementada
+- Nova RPC read-only `public.finance_purchase_events_page_v1(p_page,p_page_size,p_status,p_date_from,p_date_to,p_query)`, aplicada **somente no DEV**, em duas migrations:
+  - `20261112144333_finance_purchase_events_page_v1.sql`
+  - `20261112144448_finance_purchase_events_keep_zero_paid.sql` (preserva pagamento realizado mesmo com valor zero, conforme o domínio).
+- `SECURITY INVOKER`, `STABLE`, `search_path=''`, com autorização `finance.payments_view` e RLS de Compras, pagamentos e ajustes parciais. `authenticated` autorizado, `anon` e `PUBLIC` não autorizados. Avisos gerais do Security Advisor são preexistentes; nenhum indica a nova função.
+- Paginação SQL com limite de 100 eventos por página, ordenação determinística e filtros de status, data e pesquisa por CMP, fornecedor e identificação de pagamento.
+- Emula `buildFinancePaymentEvents` para compras sem ajuste: pagamento realizado (inclusive zero); entrada prevista; parcelas mensais; `entry_amount` limitado ao total; vencimento em meses curtos; distribuição de centavos por índice em ordem lexicográfica (para respeitar o desempate atual do domínio).
+- Compras com `supply_purchase_partial_adjustments` e pagamentos com mais de 120 parcelas são **excluídos e contabilizados** como não suportados. A RPC retorna `unsupported_purchase_count`, `unsupported_payment_count` e `is_complete=false`.
+- `src/data/finance/finance-purchase-events-repository.ts` falha **por padrão** quando houver exclusões. O parâmetro `allowIncomplete` existe apenas para diagnóstico, sem uso nas telas. Exibição oficial permanece no domínio anterior.
+- `src/domain/finance-purchase-event-parity.ts`: valida somente um conjunto **completo de páginas**, confrontando ID, compra, ordem, data, método, etiqueta, status, valores em `bigint` e totais com `buildFinancePaymentEvents`. Recusa duplicações, centavos divergentes, qualquer evento faltante ou indicador de incompletude.
+- Testes: `src/tests/finance-purchase-events-repository.test.ts`; novos casos de paridade em `src/tests/finance-payments.test.ts`; `supabase/tests/finance_purchase_events_page.test.sql` (9 verificações pgTAP).
+
+### Comparações executadas no DEV
+- Usuário autenticado autorizado: **9 pagamentos pagos**, `519270` centavos = **R$ 5.192,70**. Contagem e valor idênticos aos pagamentos visíveis por SELECT direto com o mesmo usuário/RLS; **0 divergências** por ID, código CMP, fornecedor, data, valor e vínculo de pedido.
+- Paginação com tamanho de 3: **3+3+3+0 = 9 registros**, **9 IDs distintos**.
+- Dois perfis DEV com acesso Financeiro: mesma paridade na amostra. Perfil sem `finance.payments_view`: 0 eventos e 0 valores.
+- Sem registros atuais de pagamentos parcelados nem de ajustes parciais no DEV, **não existe ainda conferência da nova RPC sobre dados reais desses cenários**.
+- Foram verificadas as fórmulas SQL em fixture sem escrita: vencimento 31/01/2027 → 28/02/2027 → 31/03/2027 e R$ 100,01 com entrada R$ 10,00, três parcelas **R$ 30,01 + R$ 30,00 + R$ 30,00**. Teste de 11 centavos em 12 parcelas confirma que a parcela 10 fica com zero na regra atual de desempate lexicográfico; isso foi documentado para evitar divergências futuras.
+- O novo contrato SQL e as verificações de acesso/anonimação passaram no DEV (9 pgTAP).
+
+### Riscos que impedem integração à tela
+- A projeção **ainda não calcula** saldo sem programação de Compras, rateios por loja/origem, pagamentos consolidados de CMPs, ocorrências de pagamento e eventos de créditos/reembolsos.
+- Excluir compras ajustadas é deliberado: documentos/cancelamentos parciais (ex.: CMP-00038) exigem recomposição dos valores líquidos, de frete retido, residual e do crédito por item antes de substituir `applyPurchasePartialAdjustments`.
+- A validação de pagamento parcelado ainda precisa de fixtures integradas na RPC com controle de RLS, além dos testes de fórmula e testes TypeScript.
+- Código TypeScript recente ainda sem execução própria do GitHub Actions identificável no momento desta atualização; não considerar CI homologado.
+- Não trocar `finance-payments-page.tsx` ou dashboards pela nova RPC antes da paridade integral; nenhuma publicação em PROD, merge ou migração em PROD.
