@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
 import { FinanceAmount } from '../components/finance-amount';
+import { FinanceTablePager } from '../components/finance-table-pager';
+import { financeTablePage } from '../domain/finance-table-pagination';
 import { EmptyState, ErrorState, InlineLoading, Modal } from '../components/ui';
 import {
   createFinanceAccountAttachmentSignedUrl,
@@ -115,6 +117,7 @@ export function FinanceAccountReconciliationPage() {
   const [dayRecords, setDayRecords] = useState<Awaited<ReturnType<typeof listFinanceAccountDays>>>([]);
   const [manualEntries, setManualEntries] = useState<FinanceAccountManualEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tablePage, setTablePage] = useState(1);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -251,6 +254,12 @@ export function FinanceAccountReconciliationPage() {
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [dateFrom, dateTo, days, query, stateFilter, statusFilter, storeFilter]);
+
+  // Keep the complete day ledger for balances and exports; paginate only DOM rows.
+  const pagedDays = financeTablePage(filteredDays, tablePage);
+  useEffect(() => {
+    setTablePage(1);
+  }, [dateFrom, dateTo, statusFilter, storeFilter, stateFilter, query]);
 
   useEffect(() => {
     const table = tableRef.current;
@@ -685,7 +694,7 @@ export function FinanceAccountReconciliationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredDays.map((day) => (
+                    {pagedDays.items.map((day) => (
                       <tr key={day.date} className={`finance-account-table-row finance-account-table-row--${day.status}`}>
                         <td><strong>{dateLabel(day.date)}</strong></td>
                         <td className="finance-account-money">{formatBRL(day.investmentCents)}</td>
@@ -748,6 +757,14 @@ export function FinanceAccountReconciliationPage() {
                   </tbody>
                 </table>
                 </div>
+                <FinanceTablePager
+                  page={pagedDays.page}
+                  pageCount={pagedDays.pageCount}
+                  total={pagedDays.total}
+                  pageSize={50}
+                  label="datas"
+                  onPageChange={setTablePage}
+                />
               </>
             ) : (
               <EmptyState title="Nenhuma data encontrada" detail="Ajuste os filtros ou registre um movimento da Conta BB." />

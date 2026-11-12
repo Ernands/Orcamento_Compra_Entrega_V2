@@ -24,6 +24,8 @@ import {
   FinancePaymentOccurrencesModal,
 } from '../components/finance-payment-occurrences';
 import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
+import { FinanceTablePager } from '../components/finance-table-pager';
+import { financeTablePage } from '../domain/finance-table-pagination';
 import { FinanceReimbursementModal } from '../components/finance-reimbursement-modal';
 import { fiscalStateForPayment } from '../domain/finance-reimbursement';
 import { financePaymentStoreLabel, financePaymentStoreTitle } from '../domain/finance-payment-store-label';
@@ -140,6 +142,7 @@ export function FinancePaymentsPage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [occurrences, setOccurrences] = useState<PurchasePaymentOccurrenceV2[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tablePage, setTablePage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [originOpen, setOriginOpen] = useState(true);
   const [reimbursementOpen, setReimbursementOpen] = useState(false);
@@ -304,6 +307,14 @@ export function FinancePaymentsPage() {
         .sort((a, b) => dateSort(a, b, view)),
     [summaryRows, view],
   );
+  // Paginate only the rendered table; totals, filters, exports and reimbursements
+  // continue to use the complete filtered/unfiltered datasets.
+  const pagedPayments = financeTablePage(filteredRows, tablePage);
+  useEffect(() => {
+    setTablePage(1);
+  }, [view, originFilter, storeFilter, stateFilter, supplierFilter, methodFilter,
+    dateFrom, dateTo, occurrenceValuesOnly, query, focusItemId, focusServiceId]);
+
   const activeFilterCount = [
     originFilter,
     storeFilter,
@@ -721,6 +732,7 @@ export function FinancePaymentsPage() {
               <span>{filteredRows.length} registro(s)</span>
             </header>
             {filteredRows.length ? (
+              <>
               <div className="finance-payments-table-scroll">
                 <table className="finance-payments-table">
                   <thead>
@@ -735,7 +747,7 @@ export function FinancePaymentsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((row, index) => {
+                    {pagedPayments.items.map((row, index) => {
                       const origin = rowOriginLabel(row);
                       const store = financePaymentStoreLabel(row, storesById);
                       const storeTitle = financePaymentStoreTitle(row, storesById);
@@ -863,6 +875,15 @@ export function FinancePaymentsPage() {
                   </tbody>
                 </table>
               </div>
+              <FinanceTablePager
+                page={pagedPayments.page}
+                pageCount={pagedPayments.pageCount}
+                total={pagedPayments.total}
+                pageSize={50}
+                label="pagamentos"
+                onPageChange={setTablePage}
+              />
+              </>
             ) : (
               <EmptyState
                 title={`Nenhum pagamento em “${VIEW_LABELS[view]}”`}
