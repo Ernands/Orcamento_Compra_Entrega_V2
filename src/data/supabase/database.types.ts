@@ -3453,6 +3453,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finance_payment_sources_page_v1: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+          p_status?: string | null
+          p_source?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_query?: string | null
+        }
+        Returns: Json
+      }
       change_store_financial_closure: {
         Args: { p_store_id: string; p_action: string; p_confirm_text: string; p_reason?: string | null }
         Returns: Json
