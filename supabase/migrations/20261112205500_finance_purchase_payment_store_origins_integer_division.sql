@@ -177,7 +177,7 @@ weights as (
  from event_context e
  where e.amount_cents>0 and e.context_cents>e.known_cents
 ),
-weight_totals as (
+payment_weight_totals as (
  select w.*,sum(w.weight_cents) over(partition by w.id)::bigint as total_weight_cents
  from weights w
 ),
@@ -185,7 +185,7 @@ shares as (
  select w.*,
  (w.amount_cents*w.weight_cents/w.total_weight_cents)::bigint as base_cents,
  (w.amount_cents*w.weight_cents%w.total_weight_cents)::bigint as rem_cents
- from weight_totals w
+ from payment_weight_totals w
  where w.total_weight_cents>0
 ),
 ranked_shares as (
