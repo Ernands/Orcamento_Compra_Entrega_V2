@@ -43,6 +43,7 @@ interface FinanceUnifiedPaymentsExportActionsProps {
   methodFilter: string;
   dateFrom: string;
   dateTo: string;
+  occurrenceValuesOnly: boolean;
   query: string;
   hasDeepFilter: boolean;
   onError: (message: string) => void;
@@ -66,6 +67,7 @@ export function FinanceUnifiedPaymentsExportActions({
   methodFilter,
   dateFrom,
   dateTo,
+  occurrenceValuesOnly,
   query,
   hasDeepFilter,
   onError,
@@ -90,6 +92,9 @@ export function FinanceUnifiedPaymentsExportActions({
     if (methodFilter) parts.push(`Forma: ${PAYMENT_LABELS[methodFilter] || methodFilter}`);
     if (dateFrom) parts.push(`De: ${formatDate(dateFrom)}`);
     if (dateTo) parts.push(`Até: ${formatDate(dateTo)}`);
+    if (occurrenceValuesOnly && (dateFrom || dateTo)) {
+      parts.push('Valores: somente ocorrências financeiras dentro do período filtrado');
+    }
     if (query.trim()) parts.push(`Busca: ${query.trim()}`);
     if (hasDeepFilter) parts.push('Filtro de item/serviço do Detalhe da Loja ativo');
     return parts.join(' | ');
@@ -99,6 +104,7 @@ export function FinanceUnifiedPaymentsExportActions({
     hasDeepFilter,
     methodFilter,
     originFilter,
+    occurrenceValuesOnly,
     query,
     stateFilter,
     storeFilter,
