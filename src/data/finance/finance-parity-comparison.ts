@@ -1,4 +1,10 @@
 import { assertPurchaseEventParity } from '../../domain/finance-purchase-event-parity';
+import { assertPurchaseAdjustmentParity } from '../../domain/finance-purchase-adjustment-parity';
+import {
+  listFinancePurchaseAdjustmentsPage,
+  type FinancePurchaseAdjustmentPage,
+  type FinancePurchaseAdjustmentSnapshot,
+} from './finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection, type FinanceAuditReport } from '../../domain/finance-projection-audit';
 import type { PurchaseV2 } from '../../domain/purchase-v2-types';
 import type { WorkService } from '../../domain/works-types';
@@ -20,8 +26,66 @@ export interface FinancePreviewParityReport {
   excludedPurchases: number;
   excludedPayments: number;
   sqlDetail: string;
+  adjustmentSqlStatus: SqlParityStatus;
+  adjustmentSqlChecked: number;
+  adjustmentSqlDetail: string;
   /** The full four-stage conservation audit and SQL event parity both passed. */
   passed: boolean;
+}
+
+async function checkAdjustmentParity(
+  purchases: PurchaseV2[],
+): Promise<{
+  adjustmentSqlStatus: SqlParityStatus;
+  adjustmentSqlChecked: number;
+  adjustmentSqlDetail: string;
+}> {
+  const first = await listFinancePurchaseAdjustmentsPage({
+    page: 1, pageSize: PAGE_SIZE, allowIncomplete: true,
+  });
+  if (!first.isComplete) return {
+    adjustmentSqlStatus: 'incomplete',
+    adjustmentSqlChecked: 0,
+    adjustmentSqlDetail: first.invalidCount + ' ajuste(s) com histórico inconsistente no SQL.',
+  };
+  const pages = Math.ceil(first.totalCount / PAGE_SIZE);
+  if (pages > MAX_PAGES) return {
+    adjustmentSqlStatus: 'incomplete',
+    adjustmentSqlChecked: 0,
+    adjustmentSqlDetail: 'Quantidade de ajustes excede o limite de conferência.',
+  };
+  const rows: FinancePurchaseAdjustmentSnapshot[] = [...first.rows];
+  let problem: string | null = null;
+  const sameTotals = (next: FinancePurchaseAdjustmentPage) =>
+    next.totalCount === first.totalCount &&
+    next.invalidCount === first.invalidCount &&
+    next.grossCents === first.grossCents &&
+    next.netCents === first.netCents &&
+    next.refundedCents === first.refundedCents &&
+    next.isComplete === first.isComplete;
+  for (let page = 2; page <= pages; page += 1) {
+    const next = await listFinancePurchaseAdjustmentsPage({
+      page, pageSize: PAGE_SIZE, allowIncomplete: true,
+    });
+    if (!sameTotals(next) || next.page !== page || next.pageSize !== PAGE_SIZE) {
+      problem = 'A leitura de ajustes mudou durante a paginação.';
+      break;
+    }
+    rows.push(...next.rows);
+  }
+  if (!problem) {
+    try {
+      assertPurchaseAdjustmentParity(purchases, first, rows);
+    } catch (error) {
+      problem = error instanceof Error ? error.message : 'Divergência na conciliação dos ajustes.';
+    }
+  }
+  return {
+    adjustmentSqlStatus: problem ? 'failed' : 'matched',
+    adjustmentSqlChecked: rows.length,
+    adjustmentSqlDetail: problem || rows.length +
+      ' ajuste(s) conciliados com o domínio financeiro atual, em centavos.',
+  };
 }
 
 /**
@@ -35,12 +99,16 @@ export async function runFinancePreviewParity(
   displayedRows?: UnifiedFinancePaymentRow[],
 ): Promise<FinancePreviewParityReport> {
   const domain = auditUnifiedFinanceProjection(purchases, works, displayedRows);
-  const first = await listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true });
+  const [first, adjustmentSql] = await Promise.all([
+    listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true }),
+    checkAdjustmentParity(purchases),
+  ]);
 
   const base = {
     domain,
     excludedPurchases: first.unsupportedPurchaseCount,
     excludedPayments: first.unsupportedPaymentCount,
+    ...adjustmentSql,
   };
 
   if (!first.isComplete) {
@@ -99,6 +167,7 @@ export async function runFinancePreviewParity(
     sqlStatus,
     sqlCheckedEvents: pageRows.length,
     sqlDetail: mismatch || 'Eventos SQL comparados, sem divergência, com o cálculo atual.',
-    passed: domain.passed && sqlStatus === 'matched',
+    passed: domain.passed && sqlStatus === 'matched' &&
+      adjustmentSql.adjustmentSqlStatus === 'matched',
   };
 }

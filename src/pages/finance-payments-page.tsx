@@ -570,6 +570,9 @@ export function FinancePaymentsPage() {
                     {check.warnings.length > 0 && ' — ' + check.warnings.length + ' ressalva(s)'}
                   </li>
                 ))}
+                <li>Reembolsos (SQL): {financeParity.adjustmentSqlStatus === 'matched'
+                  ? financeParity.adjustmentSqlDetail
+                  : 'Pendente — ' + financeParity.adjustmentSqlDetail}</li>
                 <li>SQL paginado: {financeParity.sqlStatus === 'matched'
                   ? financeParity.sqlCheckedEvents + ' eventos conferidos'
                   : financeParity.sqlDetail}</li>
