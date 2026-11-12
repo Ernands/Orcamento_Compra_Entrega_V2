@@ -3,6 +3,7 @@ import { assertPurchaseEventParity } from '../domain/finance-purchase-event-pari
 import { assertPurchaseUnscheduledParity } from '../domain/finance-purchase-unscheduled-parity';
 import { assertPurchaseStoreCostParity } from '../domain/finance-purchase-store-cost-parity';
 import { assertCombinedPurchaseParity } from '../domain/finance-purchase-combined-parity';
+import { assertPurchasePaymentOriginParity } from '../domain/finance-purchase-payment-origin-parity';
 import { assertPurchaseAdjustmentParity } from '../domain/finance-purchase-adjustment-parity';
 import type { FinancePurchaseAdjustmentSnapshot } from '../data/finance/finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
@@ -981,5 +982,57 @@ describe('confronto SQL da consolidação entre CMPs', () => {
     expect(() => assertCombinedPurchaseParity(canonical,
       { ...totals, isComplete: false }, projected),
     ).toThrow('incompleta');
+  });
+});
+
+
+describe('rateio financeiro de eventos combinados por origem', () => {
+  it('preserva a soma por equipamentos e mobiliário de pagamentos de duas CMPs combinadas', () => {
+    const compras = [
+      purchase({ id: 'cmp02-origin', code: 'CMP-00002', total: '46052.16', paid: '31399.20', planned: '14652.96' }),
+      purchase({ id: 'cmp03-origin', code: 'CMP-00003', total: '17864.00', paid: '12180.00', planned: '5684.00' }),
+    ];
+    const canonical = buildUnifiedFinancePayments(compras, []);
+    const events = compras.flatMap((p) => p.payments.map((payment) => {
+      const status = payment.status === 'paid' ? 'paid' as const : 'planned' as const;
+      const date = payment.status === 'paid' ? '2026-09-11' : '2026-10-10';
+      const amountCents = BigInt(payment.amount.replace('.', ''));
+      return {
+        id: 'purchase:' + payment.id +
+          (status === 'paid' ? ':paid' : ':installment:1'),
+        purchaseId: p.id, orderId: payment.purchaseOrderId,
+        referenceCode: p.code, status, date, amountCents,
+        equipmentCents: amountCents, furnitureCents: 0n,
+        worksCents: 0n, unallocatedOriginCents: 0n,
+      };
+    }));
+    expect(canonical.filter((r) => r.id.startsWith('combined:'))).toHaveLength(2);
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 4 }, events)).not.toThrow();
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 4 }, events.map((event, index) =>
+        index === 0 ? { ...event, equipmentCents: event.equipmentCents - 1n } : event),
+    )).toThrow('Classificação por origem financeira diverge');
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: false, totalCount: 4 }, events),
+    ).toThrow('exclui compras');
+  });
+
+  it('deixa sem origem eventos cujo pedido não possui custos ativos', () => {
+    const p = purchase({ id: 'no-cost', code: 'CMP-SEM-CUSTO', total: '10.00', paid: '10.00', planned: '0.00' });
+    p.orders[0].status = 'cancelled';
+    p.payments[1].status = 'cancelled';
+    const canonical = buildUnifiedFinancePayments([p], []);
+    expect(canonical).toHaveLength(1);
+    expect(canonical[0].originAllocations.equipment).toBe(0n);
+    const event = {
+      id: 'purchase:' + p.payments[0].id + ':paid',
+      purchaseId: p.id, orderId: p.orders[0].id,
+      referenceCode: p.code, status: 'paid' as const, date: '2026-09-11',
+      amountCents: 1000n, equipmentCents: 0n,
+      furnitureCents: 0n, worksCents: 0n, unallocatedOriginCents: 1000n,
+    };
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 1 }, [event])).not.toThrow();
   });
 });

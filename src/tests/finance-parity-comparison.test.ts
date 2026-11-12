@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { runFinancePreviewParity } from '../data/finance/finance-parity-comparison';
 
 const mock = vi.hoisted(() => ({
-  rpc: vi.fn(), adjustments: vi.fn(), unscheduled: vi.fn(), storeCosts: vi.fn(), combined: vi.fn(),
+  rpc: vi.fn(), adjustments: vi.fn(), unscheduled: vi.fn(), storeCosts: vi.fn(), combined: vi.fn(), origins: vi.fn(),
 }));
 vi.mock('../data/supabase/client', () => ({
   supabase: {
@@ -15,7 +15,9 @@ vi.mock('../data/supabase/client', () => ({
             ? mock.storeCosts(name, args)
             : name === 'finance_purchase_combined_groups_page_v1'
               ? mock.combined(name, args)
-              : mock.rpc(name, args),
+              : name === 'finance_purchase_payment_origins_page_v1'
+                ? mock.origins(name, args)
+                : mock.rpc(name, args),
   },
 }));
 
@@ -51,12 +53,19 @@ const emptyCombinedPage = {
   page: 1, page_size: 100, total_count: 0, amount_cents_total: '0',
   unsupported_payment_count: 0, is_complete: true, rows: [],
 };
+const emptyOriginPage = {
+  page: 1, page_size: 100, total_count: 0,
+  unsupported_purchase_count: 0, is_complete: true,
+  page_amount_cents: '0', page_origin_allocated_cents: '0', rows: [],
+};
 beforeEach(() => {
   mock.rpc.mockReset();
   mock.adjustments.mockReset();
   mock.unscheduled.mockReset();
   mock.storeCosts.mockReset();
   mock.combined.mockReset();
+  mock.origins.mockReset();
+  mock.origins.mockResolvedValue({ data: emptyOriginPage, error: null });
   mock.combined.mockResolvedValue({ data: emptyCombinedPage, error: null });
   mock.storeCosts.mockResolvedValue({ data: emptyStoreCostPage, error: null });
   mock.unscheduled.mockResolvedValue({ data: emptyUnscheduledPage, error: null });
@@ -78,6 +87,8 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.storeCostSqlChecked).toBe(0);
     expect(report.combinedSqlStatus).toBe('matched');
     expect(report.combinedSqlChecked).toBe(0);
+    expect(report.originSqlStatus).toBe('matched');
+    expect(report.originSqlCheckedEvents).toBe(0);
     expect(report.domain.checks.map((entry) => entry.passed)).toEqual([true, true, true, true]);
     expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v2', {
       p_page: 1, p_page_size: 100, p_status: null,
@@ -205,6 +216,28 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.passed).toBe(false);
     expect(report.combinedSqlStatus).toBe('failed');
     expect(report.combinedSqlDetail).toContain('páginas faltantes');
+  });
+
+  it('não aprova divisão de origens financeiras com compra excluída', async () => {
+    mock.rpc.mockResolvedValue({ data: emptyPage, error: null });
+    mock.origins.mockResolvedValue({ data: {
+      ...emptyOriginPage, unsupported_purchase_count: 1, is_complete: false,
+    }, error: null });
+    const report = await runFinancePreviewParity([], []);
+    expect(report.passed).toBe(false);
+    expect(report.originSqlStatus).toBe('incomplete');
+    expect(report.originSqlExcludedPurchases).toBe(1);
+  });
+
+  it('não aprova classificação SQL que omite evento de pagamento', async () => {
+    mock.rpc.mockResolvedValue({ data: emptyPage, error: null });
+    mock.origins.mockResolvedValue({ data: {
+      ...emptyOriginPage, total_count: 1,
+    }, error: null });
+    const report = await runFinancePreviewParity([], []);
+    expect(report.passed).toBe(false);
+    expect(report.originSqlStatus).toBe('failed');
+    expect(report.originSqlDetail).toContain('páginas faltantes');
   });
 
   it('preserva erro de permissão/conexão para diagnóstico seguro', async () => {
