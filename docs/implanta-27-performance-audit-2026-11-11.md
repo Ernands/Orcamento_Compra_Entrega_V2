@@ -394,3 +394,21 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Após a integração da auditoria, alguns deploys Netlify falharam. A investigação apontou import TypeScript não utilizado (`FinancePurchaseOriginPage`) na auditoria, com `noUnusedLocals=true`; o import foi removido em commit posterior. A confirmação do build final deve ser verificada no commit HEAD antes de considerar a Preview homologada.
 - GitHub Actions ainda não apresentou execução para o HEAD recente da PR. Não considerar Vitest executado/CI aprovado apenas porque o Netlify eventualmente compilar. PR continua em rascunho, sem merge e com indicador de bloqueio de mesclagem.
 - **PROD intacto**: nenhuma migration, pagamento, reembolso, permissão, anexo ou documento foi modificado em produção. A transferência PROD→DEV permanece suspensa.
+
+
+## Preview #85 — rateio paginado de pagamento por loja e origem (12/11/2026)
+
+### Implementação registrada somente em DEV
+- Duas migrations aplicadas ao Supabase **DEV** e versionadas com os IDs efetivamente atribuídos pelo servidor: `20261112202132_finance_purchase_payment_store_origins_page_v1.sql` e `20261112202258_finance_purchase_payment_store_origins_drop_zero_rows.sql`. A segunda retira lojas com zero centavos, espelhando o algoritmo legado.
+- Nova RPC `finance_purchase_payment_store_origins_page_v1(p_page,p_page_size)`: consulta **somente leitura**, pagina até 100 eventos por chamada, parte dos eventos de `finance_purchase_events_page_v2`, calcula peso da contratação por loja/origem, aplica o mesmo princípio de maiores restos e mantém o restante em `unallocated_cents`. Pagamentos sem pedido ativo ou sem distribuição não desaparecem do total.
+- Segurança: `SECURITY INVOKER`, `STABLE`, `search_path=''`, RLS das tabelas de origem, autorização `finance.payments_view`, `EXECUTE` apenas para `authenticated`. Compras ajustadas ou com custos/lojas ambíguos geram `is_complete=false` e não passam na auditoria.
+- Repositório tipado `src/data/finance/finance-purchase-payment-store-origins-repository.ts`, contrato da RPC em `database.types.ts`, comparador `assertFinancePaymentStoreParity` confrontando **ID/CMP/pedido, status/data, total, loja, categoria de origem, centavos não alocados e CMPs combinadas**. A tela Financeiro → Pagamentos exibe essa verificação **somente na Preview #85**. Nenhuma KPI ou exportação financeira utiliza a nova RPC.
+- Testes adicionados: `src/tests/finance-purchase-payment-store-origins-repository.test.ts`, regressões em `finance-payments.test.ts` e `finance-parity-comparison.test.ts`, e `supabase/tests/finance_purchase_payment_store_origins_page.test.sql` (**12/12 verificações SQL executadas em DEV**).
+
+### Evidências reais no DEV e limitações
+- Dois perfis DEV autorizados: **9 eventos cada, R$ 5.192,70 no total**, dos quais **R$ 5.090,50 atribuídos às lojas** e **R$ 102,20 sem distribuição**. A busca em páginas de 3 resultou em **3+3+3+0**, sem eventos ausentes, extras ou duplicados. Comparação SQL com os mesmos eventos da consulta v2: **zero diferenças em ID, CMP, valor, status e data**; todas as linhas mantiveram a conservação de centavos entre lojas e valores não distribuídos.
+- Perfil sem autorização financeira: **0 registros, R$ 0,00**, preservando a matriz de acesso.
+- `EXPLAIN (ANALYZE, BUFFERS)` no usuário autorizado DEV: execução da RPC aproximadamente **90,1 ms**, em base pequena (9 eventos). Não é previsão de desempenho para PROD.
+- Dados DEV ainda não contêm registros reais suficientes de reembolsos/cancelamentos parciais, rateios complexos ou CMPs combinadas como **CMP-00002/00003**. Casos sintéticos foram adicionados ao código de testes, mas **GitHub Actions Quality/Vitest dos commits mais recentes ainda não foram confirmados**. Netlify compilou um commit anterior; verifique o HEAD final antes de homologar.
+- A nova consulta faz leitura de pesos de contratação; não altera históricos, notas fiscais, saldos, documentos nem pagamentos reais. A comparação detecta falhas, mas **não autoriza substituição dos cálculos atuais** até CI, homologação funcional e benchmarks com volume representativo.
+- **PROD preservado**: sem merge, sem migrations em produção, sem cópia PROD→DEV. O histórico de migrations é diferente entre os dois ambientes; não utilizar `db push` indiscriminadamente.
