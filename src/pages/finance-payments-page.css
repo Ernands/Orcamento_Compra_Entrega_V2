@@ -242,6 +242,18 @@
   text-transform: none;
 }
 
+.finance-payments-occurrence-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 12px;
+  border-left: 3px solid #bd8b23;
+  border-radius: 4px;
+  background: #fff8e9;
+  color: #6f5221;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .finance-payments-search {
   grid-column: 1 / -1;
   position: relative;
