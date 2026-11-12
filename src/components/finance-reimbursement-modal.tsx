@@ -33,6 +33,7 @@ export function FinanceReimbursementModal({
     options.some((store) => store.id === initialStoreId) ? initialStoreId : options[0]?.id || '',
   );
   const [generating, setGenerating] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const selected = options.find((store) => store.id === storeId);
@@ -44,6 +45,7 @@ export function FinanceReimbursementModal({
   const generate = async () => {
     if (!selected || !report || generating) return;
     setGenerating(true);
+    setDownloadProgress(null);
     setError(null);
     setOutcome(null);
     try {
@@ -52,6 +54,7 @@ export function FinanceReimbursementModal({
         getSignedUrl: (doc) => doc.source === 'work'
           ? createWorkDocumentSignedUrl(doc.storagePath)
           : createPurchaseAttachmentSignedUrlV2(doc.storagePath),
+        onProgress: (completed, total) => setDownloadProgress({ completed, total }),
       });
       setOutcome(
         `ZIP gerado. ${result.missing} lançamento(s) sem nota/recibo, ${result.review} a conferir` +
@@ -61,6 +64,7 @@ export function FinanceReimbursementModal({
       setError(cause instanceof Error ? cause.message : 'Não foi possível gerar o ZIP.');
     } finally {
       setGenerating(false);
+      setDownloadProgress(null);
     }
   };
 
@@ -166,6 +170,11 @@ export function FinanceReimbursementModal({
               O valor é calculado pelos lançamentos atualmente atribuídos à loja no sistema.
               Se houver diferença em relação à planilha histórica, não será feito ajuste automático.
             </p>
+            {generating && downloadProgress && downloadProgress.total > 0 && (
+              <p className="finance-reimbursement-progress" role="status">
+                Obtendo anexos: {downloadProgress.completed} de {downloadProgress.total}.
+              </p>
+            )}
             {error && <p className="finance-reimbursement-error" role="alert">{error}</p>}
             {outcome && <p className="finance-reimbursement-success" role="status">{outcome}</p>}
             <div className="finance-reimbursement-buttons">
