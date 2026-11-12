@@ -343,3 +343,29 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - V2 cobre o valor líquido do evento e tem auditoria do histórico, mas **ainda não produz rateios SQL por loja/origem, saldo sem programação de Compras, agrupamentos de CMPs nem desmembramento de ocorrências**.
 - Antes de integrar a tela oficial, exige-se paridade completa e CI, além de validação com registros reais de ajuste. A cópia da produção para DEV permanece suspensa por orientação do usuário.
 - Sem migração, alteração de dados ou publicação em PROD. PR #85 ainda DRAFT.
+
+
+## Etapa SQL: saldos não programados e pesos de custo por loja — 12/11/2026
+
+### Somente DEV e Preview #85
+- `finance_purchase_unscheduled_page_v1`, migration `20261112192222` + correção `20261112192305`: consulta read-only de saldos sem programação **por pedido**. Deduz pagamentos diretamente vinculados e distribui pagamentos gerais proporcionalmente aos valores dos pedidos ativos com rateio de centavos e desempate lexical pelo ID; pedidos com peso zero não recebem centavos residuais.
+- Compras ajustadas, linhas sem `line_total` e outros dados que o SQL ainda não pode reproduzir com segurança são **explicitamente excluídos da projeção**; o indicador `is_complete=false` impede aprovação da paridade. Nenhuma escritura de dados ou alteração de saldo real é feita.
+- `finance_purchase_store_costs_page_v1`, migration `20261112193058`: projeta pesos/custos contratados por pedido e por loja quando a distribuição da linha está confirmada. Lojas com quantidade positiva recebem centavos pela regra de maiores restos; pedidos ainda sem distribuição mantêm `unallocated_cents`. São excluídos casos com ajustes imutáveis, linha de valor indefinido/negativo ou repetição de loja em uma mesma linha.
+- A consulta por loja ainda é **peso/custo do pedido**, não o rateio final de cada pagamento por origem (`equipment/furniture/works`). Essa separação é deliberada para não trocar indevidamente custos orçados por pagamentos executados.
+- Ambas as RPCs são `STABLE`, `SECURITY INVOKER`, RLS-scoped, autorizadas somente a usuário autenticado com `app.can('finance','payments_view')`; `anon` e `PUBLIC` sem `EXECUTE`.
+- `src/data/finance/finance-purchase-unscheduled-repository.ts` e `src/data/finance/finance-purchase-store-costs-repository.ts` usam tipos `bigint`, checagem de valores e rejeitam projeções incompletas por padrão (exceto diagnóstico explícito).
+- `assertPurchaseUnscheduledParity` compara todos os saldos SQL contra `buildUnifiedFinancePayments`, confrontando ordem, compra, total contratado, pagamentos vinculados e centavos não programados.
+- `assertPurchaseStoreCostParity` confere cada pedido e cada valor por loja, inclusive `unallocated_cents`, contra `purchaseOrderStoreCosts`; difere de uma comparação superficial de total global.
+- O executor automático da Preview #85 `runFinancePreviewParity` carrega todas as páginas das duas consultas e só permite `passed` quando as quatro camadas de SQL (eventos v2, reembolsos, saldo sem programação e custos por loja) mais a auditoria de domínio estiverem conciliadas. A tela continua exibindo **exclusivamente o cálculo financeiro legado**.
+
+### Evidências diretas do DEV
+- Consulta de saldos sem programação no perfil financeiro de teste: **1 pedido**, `340` centavos (**R$ 3,40**) associado à **CMP-00014**. Perfil sem `finance.payments_view` recebeu 0 linhas e 0 valores.
+- Projeção de custos: **7 pedidos ativos**, total contratado `505160` centavos (**R$ 5.051,60**), custo distribuído `498950` (**R$ 4.989,50**) e custo ainda não alocado `6210` (**R$ 62,10**). Contagens de páginas 3+3+1+0 com 7 IDs distintos e nenhuma divergência entre soma total, valor distribuído e não distribuído.
+- Acesso RLS negado também retornou 0 para custos por loja.
+- pgTAP executados em DEV: `supabase/tests/finance_purchase_unscheduled_page.test.sql` (11 assertions) e `supabase/tests/finance_purchase_store_costs_page.test.sql` (11 assertions). Testes Vitest novos: contrato de RPC, conservação de centavos entre dois pedidos com pagamento geral, rateio de 5 centavos entre três lojas e custo não distribuído.
+- Netlify `npm run build` (TypeScript + Vite) passou para a Preview durante a implementação. GitHub Actions ainda não executou as novas suítes Vitest do HEAD, portanto **não considerar regressões automaticamente homologadas**.
+
+### Limites e próximos gates
+- A SQL de custos por loja **não implementa ainda a distribuição efetiva por origem financeira**, nem a consolidação SQL de parcelas entre CMPs com notas `compra única`/`parcela combinada`. Esses casos permanecem no domínio atual.
+- A SQL de saldos ainda exclui compras com cancelamentos parciais; seu pagamento geral é alocado apenas para compras sem ajustes, com paridade a ser aferida automaticamente no ambiente autorizado.
+- Dados de produção NÃO foram copiados para DEV e não foram alterados. Sem merge, deploy em PROD ou mudanças nas telas financeiras oficiais. PR #85 continua em rascunho.
