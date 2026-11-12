@@ -39,6 +39,16 @@ export function assertPurchasePaymentOriginParity(
       if (!event || event.status !== row.status || event.date !== row.date) {
         throw new Error('Evento não conciliado entre classificação SQL e Financeiro: '+id);
       }
+      if (!row.purchaseIds.includes(event.purchaseId) ||
+          !row.referenceCodes.includes(event.referenceCode) ||
+          (event.orderId !== null && !row.purchaseOrderIds.includes(event.orderId))) {
+        throw new Error('Vínculo CMP/pedido divergente na classificação SQL: '+id);
+      }
+      if (event.unallocatedOriginCents < 0n ||
+          event.amountCents !== event.equipmentCents + event.furnitureCents +
+            event.worksCents + event.unallocatedOriginCents) {
+        throw new Error('Conservação de centavos por origem inválida: '+id);
+      }
       amount += event.amountCents;
       equipment += event.equipmentCents;
       furniture += event.furnitureCents;
