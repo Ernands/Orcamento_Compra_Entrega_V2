@@ -32,13 +32,13 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
       return {
         ok: !url.endsWith('doc-7'),
         status: url.endsWith('doc-7') ? 404 : 200,
-        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        arrayBuffer: () => Promise.resolve(new Uint8Array([1, 2, 3]).buffer),
       };
     });
     vi.stubGlobal('fetch', fakeFetch);
-    const sign = vi.fn(async (doc: ReimbursementFiscalDocument | ReimbursementPaymentProof) => {
+    const sign = vi.fn((doc: ReimbursementFiscalDocument | ReimbursementPaymentProof) => {
       if (doc.id === 'doc-3') throw new Error('Objeto ausente do Storage DEV');
-      return 'https://storage.invalid/' + doc.id;
+      return Promise.resolve('https://storage.invalid/' + doc.id);
     });
     const progress = vi.fn();
     const result = await fetchReimbursementZipAttachments(
@@ -63,7 +63,7 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
 
   it('sinaliza falta do nome no ZIP sem solicitar URL nem ocultar a falha', async () => {
     const first = fiscal('missing-filename');
-    const sign = vi.fn(async () => 'https://storage.invalid/file');
+    const sign = vi.fn(() => Promise.resolve('https://storage.invalid/file'));
     const fakeFetch = vi.fn();
     vi.stubGlobal('fetch', fakeFetch);
     const result = await fetchReimbursementZipAttachments([first], new Map(), sign);
@@ -78,16 +78,16 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
     const names = new Map(documents.map((doc) => [
       'purchase:' + doc.id, 'Notas_e_Recibos/' + doc.id + '.pdf',
     ]));
-    const fakeFetch = vi.fn(async () => ({
+    const fakeFetch = vi.fn(() => Promise.resolve({
       ok: false,
       status: 404,
-      arrayBuffer: async () => new ArrayBuffer(0),
-    }));
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    })));
     vi.stubGlobal('fetch', fakeFetch);
     const result = await fetchReimbursementZipAttachments(
       documents,
       names,
-      async (doc) => 'https://storage.invalid/' + doc.id,
+      (doc) => Promise.resolve('https://storage.invalid/' + doc.id),
     );
     expect(result.downloaded).toEqual([]);
     expect(result.unavailable.size).toBe(4);
@@ -110,14 +110,14 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
       return {
         ok: !url.endsWith('bulk-42'),
         status: url.endsWith('bulk-42') ? 404 : 200,
-        arrayBuffer: async () => new Uint8Array([1]).buffer,
+        arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
       };
     }));
     const progress = vi.fn();
     const result = await fetchReimbursementZipAttachments(
       documents,
       planned,
-      async (doc) => 'https://storage.invalid/' + doc.id,
+      (doc) => Promise.resolve('https://storage.invalid/' + doc.id),
       progress,
     );
     expect(peak).toBe(4);
