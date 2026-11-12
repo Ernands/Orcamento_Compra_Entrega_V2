@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assertPurchaseEventParity } from '../domain/finance-purchase-event-parity';
+import { assertPurchaseUnscheduledParity } from '../domain/finance-purchase-unscheduled-parity';
 import { assertPurchaseAdjustmentParity } from '../domain/finance-purchase-adjustment-parity';
 import type { FinancePurchaseAdjustmentSnapshot } from '../data/finance/finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
@@ -810,5 +811,68 @@ describe('evento SQL v2 em compra com reembolso parcial', () => {
     expect(() => assertPurchaseEventParity(
       [pilot], { ...totals, grossPaidCents: 9999n }, [row],
     )).toThrow('Divergência de centavos');
+  });
+});
+
+
+describe('paridade de pedidos com pagamento geral distribuído', () => {
+  it('compara dois pedidos com um pagamento geral e um pagamento específico', () => {
+    const pilot = purchase({
+      id: 'generic-01', code: 'CMP-GERAL-DOIS-PEDIDOS',
+      total: '100.00', paid: '30.00', planned: '10.00',
+    });
+    const first = pilot.orders[0];
+    const firstLine = first.lines[0];
+    firstLine.lineTotal = '50.00';
+    firstLine.unitPrice = '50.00';
+    const secondId = 'generic-second-order';
+    const second = {
+      ...first,
+      id: secondId,
+      lines: [{
+        ...firstLine, id: 'generic-second-line',
+        orderId: secondId,
+        lineTotal: '50.00', unitPrice: '50.00',
+        stores: firstLine.stores.map((store) => ({
+          ...store, id: 'generic-second-line-store',
+          orderLineId: 'generic-second-line',
+        })),
+      }],
+    };
+    pilot.orders.push(second);
+    pilot.payments[0].purchaseOrderId = null;
+    pilot.payments[1].purchaseOrderId = secondId;
+
+    const current = buildUnifiedFinancePayments([pilot], []);
+    const expected = current.filter((r) => r.status === 'unscheduled');
+    const projected = [
+      {
+        id: 'purchase-unscheduled:' + pilot.id + ':' + first.id,
+        purchaseId: pilot.id, orderId: first.id,
+        referenceCode: pilot.code, contractedCents: 5000n,
+        linkedCents: 0n, generalAllocatedCents: 1500n,
+        amountCents: 3500n,
+      },
+      {
+        id: 'purchase-unscheduled:' + pilot.id + ':' + second.id,
+        purchaseId: pilot.id, orderId: second.id,
+        referenceCode: pilot.code, contractedCents: 5000n,
+        linkedCents: 1000n, generalAllocatedCents: 1500n,
+        amountCents: 2500n,
+      },
+    ];
+    expect(expected).toHaveLength(2);
+    expect(expected.map((r) => r.amountCents).sort())
+      .toEqual([2500n, 3500n].sort());
+    const page = { isComplete: true, totalCount: 2, unscheduledCents: 6000n };
+    expect(() => assertPurchaseUnscheduledParity([pilot], page, projected, current))
+      .not.toThrow();
+    expect(() => assertPurchaseUnscheduledParity(
+      [pilot], page, projected.map((r) => r.orderId === secondId
+        ? { ...r, generalAllocatedCents: 1501n } : r), current,
+    )).toThrow('Contratação, vinculação ou rateio geral divergente');
+    expect(() => assertPurchaseUnscheduledParity(
+      [pilot], { ...page, isComplete: false }, projected, current,
+    )).toThrow('não pode ser aprovada');
   });
 });
