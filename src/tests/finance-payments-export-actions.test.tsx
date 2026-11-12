@@ -77,6 +77,21 @@ describe('exportações de Pagamentos — conferência funcional', () => {
     expect(input.filtersText).not.toContain('somente ocorrências');
   });
 
+  it('informa a exceção dos reembolsos que preservam o valor líquido integral', async () => {
+    const adjusted = {
+      id: 'cmp-38-payment',
+      refundCents: 122040n,
+    } as UnifiedFinancePaymentRow;
+    renderActions({ rows: [adjusted], summaryRows: [adjusted] });
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    await waitFor(() => expect(mocks.pdf).toHaveBeenCalledTimes(1));
+    const input = mocks.pdf.mock.calls[0][0] as FinanceUnifiedPaymentsExportInput;
+    expect(input.filtersText).toContain('somente ocorrências financeiras');
+    expect(input.filtersText).toContain(
+      'Exceção: pagamentos com reembolso preservam o valor líquido integral',
+    );
+  });
+
   it('não permite exportar sem registros e não apresenta valor parcial como total oficial', () => {
     renderActions({ rows: [], summaryRows: [] });
     expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled();
