@@ -94,6 +94,9 @@ export function FinanceUnifiedPaymentsExportActions({
     if (dateTo) parts.push(`Até: ${formatDate(dateTo)}`);
     if (occurrenceValuesOnly && (dateFrom || dateTo)) {
       parts.push('Valores: somente ocorrências financeiras dentro do período filtrado');
+      if (summaryRows.some((row) => (row.refundCents || 0n) > 0n)) {
+        parts.push('Exceção: pagamentos com reembolso preservam o valor líquido integral para conciliação');
+      }
     }
     if (query.trim()) parts.push(`Busca: ${query.trim()}`);
     if (hasDeepFilter) parts.push('Filtro de item/serviço do Detalhe da Loja ativo');
@@ -109,6 +112,7 @@ export function FinanceUnifiedPaymentsExportActions({
     stateFilter,
     storeFilter,
     stores,
+    summaryRows,
     supplierFilter,
     view,
   ]);
