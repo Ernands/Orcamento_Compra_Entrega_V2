@@ -6,7 +6,6 @@ import { assertCombinedPurchaseParity } from '../../domain/finance-purchase-comb
 import { assertPurchasePaymentOriginParity } from '../../domain/finance-purchase-payment-origin-parity';
 import {
   listFinancePurchasePaymentOriginsPage,
-  type FinancePurchaseOriginPage,
   type FinancePurchaseOriginEvent,
 } from './finance-purchase-payment-origins-repository';
 import {
