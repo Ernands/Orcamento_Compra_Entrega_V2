@@ -431,6 +431,7 @@ export async function fetchReimbursementZipAttachments(
   attachments: ReimbursementExportAttachment[],
   plannedNames: ReadonlyMap<string, string>,
   getSignedUrl: (document: ReimbursementExportAttachment) => Promise<string>,
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<{
   downloaded: ReimbursementDownloadedAttachment[];
   unavailable: Set<string>;
@@ -445,6 +446,9 @@ export async function fetchReimbursementZipAttachments(
     Array.from({ length: documents.length }, () => null);
   const unavailable = new Set<string>();
   let nextIndex = 0;
+  let completed = 0;
+  const progressStep = Math.max(1, Math.ceil(documents.length / 20));
+  onProgress?.(0, documents.length);
 
   async function worker(): Promise<void> {
     while (nextIndex < documents.length) {
@@ -464,6 +468,11 @@ export async function fetchReimbursementZipAttachments(
         results[index] = { key, filename, bytes };
       } catch {
         unavailable.add(key);
+      } finally {
+        completed += 1;
+        if (completed === documents.length || completed % progressStep === 0) {
+          onProgress?.(completed, documents.length);
+        }
       }
     }
   }
@@ -484,6 +493,7 @@ export async function downloadStoreReimbursementZip(input: {
   store: Store;
   report: ReimbursementReport;
   getSignedUrl: (document: ReimbursementExportAttachment) => Promise<string>;
+  onProgress?: (completed: number, total: number) => void;
 }): Promise<{ failed: number; missing: number; review: number }> {
   if (!input.report.lines.length) throw new Error('A loja não possui lançamentos para o relatório.');
   if (!input.report.sumMatches) throw new Error('A soma dos compromissos não confere com o total.');
@@ -495,7 +505,7 @@ export async function downloadStoreReimbursementZip(input: {
     ...input.report.documents, ...input.report.paymentProofs,
   ];
   const { downloaded, unavailable } = await fetchReimbursementZipAttachments(
-    allAttachments, plannedNames, input.getSignedUrl,
+    allAttachments, plannedNames, input.getSignedUrl, input.onProgress,
   );
   for (const attachment of downloaded) {
     zip.file(attachment.filename, attachment.bytes);
