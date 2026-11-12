@@ -224,3 +224,36 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Migration adicional somente DEV; PROD não recebeu esta função. A PR #85 segue rascunho e não foi mesclada.
 - O histórico de migrations DEV/PROD continua divergente e deverá ser reconciliado antes de qualquer promoção.
 - Testes do GitHub Actions para a revisão de código com a nova RPC devem ser conferidos separadamente dos testes manuais do banco.
+
+## Projeção paginada das Obras em DEV — 12/11/2026
+
+### Implementação
+- Nova RPC `public.finance_work_commitments_page_v1` somente no Supabase DEV, `STABLE SECURITY INVOKER`, respeitando RLS de `works_services` e `works_service_payments` + autorização `finance.payments_view`.
+- Filtragem server-side por situação (`paid`, `planned`, `unscheduled`), lojas permitidas, período e pesquisa textual; paginação estável limitada a **100 registros por página**; devolve contagens e totais de todas as linhas do filtro, não apenas da página.
+- A consulta espelha o domínio `workPaymentRows` em `src/domain/finance-payments.ts`: obras canceladas são ignoradas; pagamentos cancelados não entram no somatório; situações `overdue` integram `planned`; saldo sem programação = max(valor contratado - soma de pagamentos não cancelados, 0).
+- Status pago usa `paid_at` em UTC; programado usa `due_date`; saldo sem programação não possui data. `store_id`, código e estado são os da obra, como no domínio.
+- Importâncias transmitidas como strings de centavos (BigInt no TypeScript). O repositório `src/data/finance/finance-work-commitments-repository.ts` rejeita respostas inválidas e totais cuja soma dos status não coincide com o compromisso.
+- A segunda migration `20261112142002_finance_work_commitments_label_fallback.sql` replica a regra de exibição do domínio para `source_label` e `installment_label` quando o valor estiver em branco. A migration anterior `20261112141704_finance_work_commitments_page_v1.sql` permanece registrada no histórico do DEV.
+- Testes pgTAP em `supabase/tests/finance_work_commitments_page.test.sql` (9 verificações) e testes TypeScript em `src/tests/finance-work-commitments-repository.test.ts`, com massa sintética incluindo pagamento cancelado, adiantamento, parcela e saldo residual.
+
+### Validação real em DEV (consulta sob sessão autenticada e RLS)
+| Situação | Registros | Valor |
+|---|---:|---:|
+| Pago | 4 | R$ 8.800,00 |
+| A pagar | 3 | R$ 9.600,00 |
+| Sem programação | 2 | R$ 2.500,00 |
+| **Compromisso** | **9** | **R$ 20.900,00** |
+
+- 5 obras visíveis, 7 pagamentos não cancelados e 2 saldos não programados. Conferência de 7 eventos do banco por ID, valor exato em centavos, status, data e rótulo de origem: **0 divergências**.
+- A busca pelas quatro páginas de 3 registros encontrou **9 IDs únicos / 9 registros**, sem perdas/duplicações.
+- Testados filtros por `paid`, `planned`, `unscheduled`, código da obra, seleção vazia de lojas e tamanho de página; os totais respondem ao conjunto filtrado.
+- Dois usuários autorizados no DEV obtiveram o mesmo resultado (RLS sobre os dados que podem ver). Usuário sem `finance.payments_view`: **0 linhas e R$ 0**.
+- Verificado: `prosecdef = false`, função `STABLE`, sem `EXECUTE` para `anon`. Security Advisor não indicou essa função. Os demais alertas preexistentes do projeto não foram tratados neste estágio.
+
+### Limites e próximos passos
+- **Essa implementação é um recorte de paridade de Obras.** O modelo de Compras, sobretudo rateios de itens/lojas e os ajustes parciais de cancelamento e frete, ainda depende do domínio TypeScript original. Não somar a nova API ao Financeiro oficial sem remover duplas contagens.
+- **Não há alteração nas telas oficiais de Pagamentos/Conciliação/Dashboards** nesta etapa; o repositório é preparatório para substituição gradual quando houver a projeção integral.
+- A amostra do DEV é pequena: não há benchmark representativo de PROD nem homologação de todos os cenários de restrição de lojas, obras canceladas e pagamentos em atraso no ambiente real.
+- Validar compras com parcelas, reembolso por item, consolidação CMP-00002/CMP-00003 e sobra sem programação contra `buildUnifiedFinancePayments` e `decorateFinancePaymentsWithOccurrences`; habilitar gradualmente apenas depois de paridade linha a linha, centavo a centavo.
+- **Nenhuma mudança em PROD, nenhuma migration promovida e nenhuma PR mesclada**. O histórico de migrations continua divergente entre DEV e PROD; não executar `db push` automático.
+- O GitHub Actions **ainda não publicou execução para os commits recentes** nesta verificação; os testes SQL foram executados em DEV, mas o novo código TypeScript aguarda CI. Não marcar como homologado sem a confirmação de testes, lint, typecheck e build.
