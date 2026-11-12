@@ -180,3 +180,15 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Histórico remoto observado na revisão: DEV = 120 migrations, PROD = 111; 73 nomes comuns têm números de versão distintos. Não presumir que as histories são intercambiáveis. Comparar definições/efeitos e planejar a promoção de DDL sem aplicar novamente migrações já existentes em PROD.
 - **Próxima etapa:** read model financeiro paginado no banco para Pagamentos/Conciliação, com filtros, contagem e totais globais reproduzíveis; agregações de Previsão Orçamentária, Composição Financeira e Reembolso; cenários RLS, conciliação e documentação financeira com massa representativa.
 - **Nenhuma escrita em PROD ou dado financeiro foi realizada nesta entrega.** PR #85 segue em rascunho; não mesclar sem autorização.
+
+
+### Continuação adicional — projeção de leitura financeira sem destinos de Compras
+
+- \`listSupplyPurchasesV2\` agora aceita as opções opt-in \`includeDestinations\` e \`includeQuoteAttachments\`; o comportamento padrão permanece completo para Compras e demais módulos.
+- **Financeiro > Pagamentos** chama \`listSupplyPurchasesV2({ includeDestinations: false, includeQuoteAttachments: false })\` e \`listWorkServices({ includeComponents: false })\`. Continua trazendo anexos das compras e documentos das obras para os estados fiscais, links e reembolsos.
+- **Financeiro > Conciliação Conta** mantém o modo sem anexos, documentos ou componentes e também desativa destinos e anexos de cotação.
+- As consultas dispensadas retornam seus campos aninhados como arrays vazios no objeto em memória; \`orders.lines.stores\`, pagamentos, ajustes e catálogo financeiro de itens permanecem inalterados. O domínio de cálculos financeiros não foi modificado.
+- Um teste com compra multiloja simplificada \`CMP-00097\` confere, na mesma massa, a leitura operacional completa e a projeção financeira; as linhas/pagamentos e o resumo de valores devem permanecer idênticos. Também exige que o modo financeiro não dispare requisições às quatro tabelas não utilizadas (destinos, lojas de destino, anexos de cotação, e anexos da compra quando a opção já existente é falsa).
+- Inventário **somente leitura de PROD** em 12/11: 1.330 registros de destinos de Compras, 1.330 vínculos destinos/lojas, 6 anexos ativos de cotações. **Potencial redução:** até 2.666 registros consultados/transferidos por abertura dessas telas para perfis com acesso a todos os dados; resultado real depende da RLS e do payload de cada tabela. São quantidades, não métricas de duração.
+- **Não houve migration nova, escrita no banco, alteração de permissões nem qualquer atualização de PROD.**
+- Próximo estágio: materializar um read model financeiro SQL com paginação/filtros/totais consistentes no servidor; exigir antes comparação exata com os cálculos em centavos (inclusive reembolsos, ajustes parciais e lançamentos de múltiplas lojas) e escopo RLS, para evitar regressões.
