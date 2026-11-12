@@ -141,6 +141,10 @@ export function FinancePaymentsPage() {
   const financeParityEnabled = typeof window !== 'undefined' &&
     window.location.hostname.startsWith('deploy-preview-85--') &&
     searchParams.get('financeParity') !== '0';
+  // Avoid launching several paginated diagnostic RPCs during the ordinary
+  // Pagamentos load. ?financeParity=1 explicitly opts in to automatic audit.
+  const financeParityAuto = searchParams.get('financeParity') === '1';
+  const [financeParityRunId, setFinanceParityRunId] = useState(0);
   const [financeParity, setFinanceParity] = useState<FinancePreviewParityReport | null>(null);
   const [financeParityError, setFinanceParityError] = useState<string | null>(null);
   const [financeParityLoading, setFinanceParityLoading] = useState(false);
@@ -213,7 +217,8 @@ export function FinancePaymentsPage() {
   // Only Netlify Preview #85 runs the shadow read-only comparison.
   // It does not replace the current finance calculation or modify data.
   useEffect(() => {
-    if (!financeParityEnabled || loading || error) return;
+    if (!financeParityEnabled || loading || error ||
+        (!financeParityAuto && financeParityRunId === 0)) return;
     let active = true;
     setFinanceParityLoading(true);
     setFinanceParityError(null);
@@ -230,7 +235,7 @@ export function FinancePaymentsPage() {
         if (active) setFinanceParityLoading(false);
       });
     return () => { active = false; };
-  }, [financeParityEnabled, loading, error, purchases, works, rows]);
+  }, [financeParityEnabled, financeParityAuto, financeParityRunId, loading, error, purchases, works, rows]);
 
   const storesById = useMemo(
     () => new Map(stores.map((store) => [store.id, store])),
@@ -559,6 +564,15 @@ export function FinancePaymentsPage() {
         <section className="finance-parity-preview" aria-label="Auditoria financeira Preview 85"
           style={{ padding: 16, borderRadius: 8, border: '1px solid #94a3b8' }}>
           <strong>Auditoria financeira · Preview #85 (somente leitura)</strong>
+          <div className="finance-parity-preview__actions">
+            <button type="button" className="button button--secondary button--small"
+              disabled={financeParityLoading}
+              onClick={() => setFinanceParityRunId((id) => id + 1)}>
+              {financeParityLoading ? 'Conferindo…'
+                : financeParityRunId || financeParity ? 'Reexecutar auditoria' : 'Executar auditoria'}
+            </button>
+            <small>Diagnóstico sob demanda: não sobrecarrega o carregamento normal de Pagamentos.</small>
+          </div>
           {financeParityLoading && <p role="status">Comparando os lançamentos e o SQL paginado…</p>}
           {financeParityError && <p role="alert">Falha na auditoria: {financeParityError}</p>}
           {financeParity && (
