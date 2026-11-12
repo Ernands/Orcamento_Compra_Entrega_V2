@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { assertPurchaseEventParity } from '../domain/finance-purchase-event-parity';
+import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
+import { applyPurchasePartialAdjustments, type PartialAdjustmentRecord } from '../domain/purchase-partial-adjustments';
+import { decorateFinancePaymentsWithOccurrences } from '../domain/finance-payment-occurrences';
 import type { FinancePurchaseEvent } from '../data/finance/finance-purchase-events-repository';
 import {
   buildUnifiedFinancePayments,
@@ -454,5 +457,150 @@ describe('distribuição de 11 centavos em 12 parcelas', () => {
       { isComplete: true, totalCount: 11, paidCents: 0n, plannedCents: 11n },
       rows,
     )).not.toThrow();
+  });
+});
+
+
+describe('auditoria conservativa das quatro etapas financeiras', () => {
+  it('compara e reconcilia duas CMPs com pagamento e parcela combinados', () => {
+    const purchases = [
+      purchase({ id: 'cmp2', code: 'CMP-00002', total: '46052.16', paid: '31399.20', planned: '14652.96' }),
+      purchase({ id: 'cmp3', code: 'CMP-00003', total: '17864.00', paid: '12180.00', planned: '5684.00' }),
+    ];
+    const rows = buildUnifiedFinancePayments(purchases, [work]);
+    const report = auditUnifiedFinanceProjection(purchases, [work], rows, '2026-11-12T00:00:00Z');
+    expect(report.passed).toBe(true);
+    expect(report.checks.map((check) => check.issues)).toEqual([[], [], [], []]);
+    expect(rows.filter((row) => row.id.startsWith('combined:'))).toHaveLength(2);
+    expect(report.paidCents).toBe(5357920n);
+    expect(report.plannedCents).toBe(2533696n);
+    expect(report.unscheduledCents).toBe(1500000n);
+
+    const faulty = rows.map((row) => row.id.startsWith('combined:') && row.status === 'paid'
+      ? { ...row, amountCents: row.amountCents - 1n } : row);
+    const rejected = auditUnifiedFinanceProjection(purchases, [work], faulty);
+    expect(rejected.passed).toBe(false);
+    expect(rejected.checks[0].issues.join(' ')).toContain('Centavos divergentes');
+  });
+
+  it('compara entrada, parcelas e total pago sem confiar só no somatório oficial', () => {
+    const pilot = purchase({ id: 'schedule', code: 'CMP-PARCELAS', total: '100.01', paid: '0.00', planned: '100.01' });
+    pilot.payments[0].status = 'cancelled';
+    pilot.payments[1].entryAmount = '10.00';
+    pilot.payments[1].installmentCount = 3;
+    pilot.payments[1].firstDueDate = '2027-01-31';
+    const rows = buildUnifiedFinancePayments([pilot], []);
+    const report = auditUnifiedFinanceProjection([pilot], [], rows);
+    expect(report.passed).toBe(true);
+    expect(rows.filter((row) => row.status === 'planned')
+      .map((row) => row.amountCents).sort()).toEqual([1000n, 3000n, 3000n, 3001n].sort());
+    expect(report.plannedCents).toBe(10001n);
+
+    const faulty = rows.map((row) => row.id.endsWith('installment:2')
+      ? { ...row, amountCents: row.amountCents + 1n } : row);
+    expect(auditUnifiedFinanceProjection([pilot], [], faulty).checks[0].passed).toBe(false);
+  });
+
+  it('confronta frete retido, diferença residual, reembolso por item e saldo líquido', () => {
+    const raw = purchase({ id: 'adjust', code: 'CMP-00038', total: '100.00', paid: '100.00', planned: '0.00' });
+    raw.payments[1].status = 'cancelled';
+    const order = raw.orders[0];
+    const retained = order.lines[0];
+    retained.lineTotal = '60.00';
+    retained.unitPrice = '60.00';
+    const cancelled = {
+      ...retained, id: order.id + '-cancelled', itemName: 'Mesa cancelada',
+      itemCode: 'ITM-CANCEL', unitPrice: '35.00', shippingAmount: '5.00',
+      lineTotal: '40.00',
+      stores: retained.stores.map((store) => ({ ...store, id: store.id + '-cancelled' })),
+    };
+    order.lines.push(cancelled);
+    const adjustment: PartialAdjustmentRecord = {
+      id: 'ajuste-38', purchase_id: raw.id, order_id: order.id,
+      payment_id: raw.payments[0].id, refund_attachment_id: 'comprovante-38',
+      original_cents: 10000, cancelled_cents: 4000,
+      freight_reduction_cents: -510, refund_cents: 3490, remaining_cents: 6510,
+      refunded_on: '2026-11-01', reference: 'REEMB-38', reason: 'Cancelamento parcial',
+      created_at: '2026-11-01T12:00:00Z',
+      line_adjustments: [
+        {
+          line_id: cancelled.id, kind: 'cancelled',
+          reduction_cents: 4000, original_line_cents: 4000, original_shipping_cents: 500,
+        },
+        {
+          line_id: cancelled.id, kind: 'freight_retained',
+          reduction_cents: -500, original_line_cents: 4000, original_shipping_cents: 500,
+        },
+        {
+          line_id: cancelled.id, kind: 'residual_retained',
+          reduction_cents: -10, original_line_cents: 4000, original_shipping_cents: 500,
+        },
+      ],
+      refund_entries: [
+        { line_id: cancelled.id, amount_cents: 3490, refunded_on: '2026-11-01' },
+      ],
+    };
+    const adjusted = applyPurchasePartialAdjustments(raw, [adjustment]);
+    const rows = buildUnifiedFinancePayments([adjusted], []);
+    const report = auditUnifiedFinanceProjection([adjusted], [], rows);
+    expect(report.passed).toBe(true);
+    expect(report.checks.map((check) => check.issues)).toEqual([[], [], [], []]);
+
+    const payment = rows.find((row) => row.status === 'paid');
+    expect(payment?.amountCents).toBe(6510n);
+    expect(payment?.refundCents).toBe(3490n);
+    expect(payment?.adjustmentEntries?.reduce((total, entry) => total + entry.amountCents, 0n)).toBe(-3490n);
+    expect(payment?.storeAllocations.reduce((total, entry) => total + entry.amountCents, 0n)).toBe(6510n);
+    const decorated = decorateFinancePaymentsWithOccurrences(rows, []);
+    expect(decorated[0].occurrenceSumCents).toBe(6510n);
+    expect(decorated[0].paymentOccurrences.map((event) => event.amountCents)).toEqual([10000n, -3490n]);
+
+    const corruptedPurchase: PurchaseV2 = {
+      ...adjusted,
+      payments: adjusted.payments.map((part) => part.status === 'paid'
+        ? { ...part, refundedAmount: '34.91' } : part),
+    };
+    const invalid = auditUnifiedFinanceProjection([corruptedPurchase], [], rows);
+    expect(invalid.checks[1].passed).toBe(false);
+    expect(invalid.checks[1].issues.length).toBeGreaterThan(0);
+  });
+
+  it('confere rateio de cinco centavos entre três lojas e detecta perda de centavos', () => {
+    const pilot = purchase({ id: 'rateio', code: 'CMP-RATEIO', total: '0.05', paid: '0.05', planned: '0.00' });
+    pilot.payments[1].status = 'cancelled';
+    const first = pilot.orders[0].lines[0];
+    first.lineTotal = '0.05';
+    first.unitPrice = '0.05';
+    const originalStore = first.stores[0];
+    first.stores = ['store-b', 'store-a', 'store-c'].map((storeId) => ({
+      ...originalStore, id: 'rateio-' + storeId, storeId,
+      code: 'LOJ-' + storeId.slice(-1).toUpperCase(), quantity: '1',
+    }));
+    pilot.stores = first.stores.map((store) => ({
+      id: store.id, storeId: store.storeId, code: store.code,
+      name: store.name, city: store.city, state: store.state,
+      address: null, addressSnapshotSource: null,
+    }));
+    const rows = buildUnifiedFinancePayments([pilot], []);
+    const report = auditUnifiedFinanceProjection([pilot], [], rows);
+    expect(report.passed).toBe(true);
+    const actual = Object.fromEntries(rows[0].storeAllocations.map((allocation) =>
+      [allocation.storeId, allocation.amountCents]));
+    expect(actual).toEqual({ 'store-a': 2n, 'store-b': 2n, 'store-c': 1n });
+
+    const wrongRows = [{ ...rows[0], storeAllocations: rows[0].storeAllocations.map((entry) =>
+      entry.storeId === 'store-c' ? { ...entry, amountCents: 0n } : entry) }];
+    expect(auditUnifiedFinanceProjection([pilot], [], wrongRows).checks[2].passed).toBe(false);
+  });
+
+  it('não marca pagamentos gerais não distribuídos por pedido como paridade completa', () => {
+    const pilot = purchase({ id: 'general', code: 'CMP-GERAL', total: '50.00', paid: '25.00', planned: '0.00' });
+    pilot.payments[1].status = 'cancelled';
+    pilot.payments[0].purchaseOrderId = null;
+    const rows = buildUnifiedFinancePayments([pilot], []);
+    const report = auditUnifiedFinanceProjection([pilot], [], rows);
+    expect(report.passed).toBe(true);
+    expect(report.checks[3].warnings.join(' ')).toContain('pagamento geral');
+    expect(rows.find((row) => row.status === 'unscheduled')?.amountCents).toBe(2500n);
   });
 });
