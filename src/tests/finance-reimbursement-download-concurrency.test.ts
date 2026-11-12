@@ -82,7 +82,7 @@ describe('downloads do ZIP de reembolso com concorrência limitada', () => {
       ok: false,
       status: 404,
       arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
-    })));
+    }));
     vi.stubGlobal('fetch', fakeFetch);
     const result = await fetchReimbursementZipAttachments(
       documents,
