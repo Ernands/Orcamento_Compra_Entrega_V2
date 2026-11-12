@@ -94,7 +94,7 @@ export async function listFinanceAccountDays(): Promise<FinanceAccountDayRecord[
     .select('*')
     .order('reconciliation_date', { ascending: true })
     .order('id')
-    .range(from, to) as never);
+    .range(from, to));
   return rows.map((row) => ({
     id: row.id,
     date: row.reconciliation_date,
@@ -113,7 +113,7 @@ export async function listFinanceAccountEntries(): Promise<FinanceAccountManualE
     .order('entry_date', { ascending: true })
     .order('created_at', { ascending: true })
     .order('id')
-    .range(from, to) as never);
+    .range(from, to));
 
   // Only fetch attachments belonging to entries visible through RLS.
   const attachments = await fetchAllPagesForIds<AttachmentRow>(
@@ -124,7 +124,7 @@ export async function listFinanceAccountEntries(): Promise<FinanceAccountManualE
       .in('entry_id', ids)
       .order('created_at', { ascending: true })
       .order('id')
-      .range(from, to) as never,
+      .range(from, to),
   );
   const attachmentsByEntry = new Map<string, AttachmentRow[]>();
   for (const attachment of attachments) {

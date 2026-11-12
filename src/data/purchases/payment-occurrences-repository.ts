@@ -63,7 +63,7 @@ export async function listSupplyPurchasePaymentOccurrencesV2(): Promise<Purchase
     .order('position')
     .order('occurred_on')
     .order('id')
-    .range(from, to) as never);
+    .range(from, to));
   return data.map((row) => ({
     id: row.id,
     paymentId: row.payment_id,
