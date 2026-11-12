@@ -329,6 +329,9 @@ export function FinancePaymentsPage() {
     supplierFilter,
   ]);
 
+  const hasRefundsOutsideOccurrenceScope = occurrenceValueScopeActive &&
+    summaryRows.some((row) => (row.refundCents || 0n) > 0n);
+
   const totals = useMemo(() => financePaymentTotals(summaryRows), [summaryRows]);
   const originSummary = useMemo(() => financePaymentOriginSummary(summaryRows), [summaryRows]);
   const filteredRows = useMemo(
@@ -757,6 +760,12 @@ export function FinancePaymentsPage() {
               />
               Considerar somente os valores das ocorrências dentro do período filtrado
             </label>
+            {hasRefundsOutsideOccurrenceScope && (
+              <p className="finance-payments-occurrence-warning" role="status">
+                Atenção: pagamentos com reembolso permanecem pelo valor líquido integral
+                para manter a conciliação financeira, mesmo neste filtro por ocorrências.
+              </p>
+            )}
             <label className="finance-payments-search">
               <Search size={17} />
               <input
