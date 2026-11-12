@@ -61,8 +61,10 @@ select ok(5001::bigint+5101::bigint+1::bigint=10103::bigint,
  'Valor alocado por origem mais nao distribuido conserva centavos'
 );
 select ok(
- (select (r->>'prosecdef') is null from (select '{}'::jsonb as r) q),
- 'Sem uso de metadados de usuario para autorizar acessos financeiros'
+ (select p.prorettype='pg_catalog.jsonb'::regtype
+ from pg_proc p
+ where p.oid='public.finance_purchase_payment_store_origins_page_v1(integer,integer)'::regprocedure),
+ 'A RPC possui contrato JSONB, sem expor tabelas internas'
 );
 select * from finish();
 rollback;
