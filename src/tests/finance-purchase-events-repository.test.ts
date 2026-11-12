@@ -65,6 +65,25 @@ describe('API paginada dos eventos de pagamento de Compras', () => {
     await expect(listFinancePurchaseEventsPage()).rejects.toThrow('indicador de integridade');
   });
 
+  it('preserva reembolso parcial com bruto R$ 100 e líquido R$ 65,10', async () => {
+    mock.rpc.mockResolvedValue({ data: raw({
+      paid_cents: '6510', gross_paid_cents: '10000', refunds_cents: '3490',
+      rows: [{ ...raw().rows[0], amount_cents: '6510',
+        gross_amount_cents: '10000', refund_cents: '3490' }],
+    }), error: null });
+    const page = await listFinancePurchaseEventsPage();
+    expect(page.paidCents).toBe(6510n);
+    expect(page.grossPaidCents).toBe(10000n);
+    expect(page.refundedCents).toBe(3490n);
+    expect(page.rows[0].refundCents).toBe(3490n);
+    expect(page.rows[0].grossAmountCents).toBe(10000n);
+  });
+
+  it('rejeita totais de reembolso incoerentes mesmo com is_complete=true', async () => {
+    mock.rpc.mockResolvedValue({ data: raw({ refunds_cents: '1' }), error: null });
+    await expect(listFinancePurchaseEventsPage()).rejects.toThrow('não conciliam');
+  });
+
   it('propaga falhas de Supabase e contratos inválidos', async () => {
     mock.rpc.mockResolvedValueOnce({ data: raw({ rows: null }), error: null });
     await expect(listFinancePurchaseEventsPage()).rejects.toThrow('contrato inválido');

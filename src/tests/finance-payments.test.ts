@@ -776,3 +776,39 @@ describe('comparação imutável SQL dos reembolsos', () => {
     )).toThrow('exigem conciliação manual');
   });
 });
+
+describe('evento SQL v2 em compra com reembolso parcial', () => {
+  it('mantém valor líquido, bruto e crédito de forma independente', () => {
+    const pilot = purchase({
+      id: 'cmp-v2-refund', code: 'CMP-REFUND', total: '100.00',
+      paid: '100.00', planned: '0.00',
+    });
+    pilot.payments[1].status = 'cancelled';
+    pilot.payments[0].grossAmount = '100.00';
+    pilot.payments[0].amount = '65.10';
+    pilot.payments[0].refundedAmount = '34.90';
+    const payment = pilot.payments[0];
+    const row: FinancePurchaseEvent = {
+      id: 'purchase:' + payment.id + ':paid',
+      paymentId: payment.id, purchaseId: pilot.id,
+      orderId: pilot.orders[0].id,
+      referenceCode: pilot.code, counterpart: pilot.supplierName,
+      status: 'paid', date: '2026-09-11',
+      amountCents: 6510n, grossAmountCents: 10000n, refundCents: 3490n,
+      paymentMethod: payment.paymentMethod, sourceLabel: payment.sourceLabel,
+      installmentLabel: 'Pagamento realizado',
+    };
+    const totals = {
+      isComplete: true, totalCount: 1,
+      paidCents: 6510n, grossPaidCents: 10000n,
+      refundedCents: 3490n, plannedCents: 0n,
+    };
+    expect(() => assertPurchaseEventParity([pilot], totals, [row])).not.toThrow();
+    expect(() => assertPurchaseEventParity(
+      [pilot], totals, [{ ...row, refundCents: 3489n }],
+    )).toThrow('Histórico bruto-líquido SQL divergente');
+    expect(() => assertPurchaseEventParity(
+      [pilot], { ...totals, grossPaidCents: 9999n }, [row],
+    )).toThrow('Divergência de centavos');
+  });
+});
