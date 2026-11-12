@@ -218,7 +218,7 @@ function mapAttachmentStore(row: AttachmentStoreRow): PurchaseAttachmentStoreV2 
     name: row.store_name_snapshot, city: row.store_city_snapshot, state: row.store_state_snapshot };
 }
 
-export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Promise<PurchaseV2[]> {
+export async function listSupplyPurchasesV2(options?: { allRows?: boolean; includeAttachments?: boolean }): Promise<PurchaseV2[]> {
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult] = await Promise.all([
     fetchPagedResult<PurchaseRow>((from, to) => supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseRow>>),
@@ -249,9 +249,9 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
     fetchPagedResult<OrderLineRow>((from, to) => supabase.from('supply_purchase_order_items' as never).select('*').order('created_at').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineRow>>),
     fetchPagedResult<OrderLineStoreRow>((from, to) => supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineStoreRow>>),
     fetchPagedResult<PaymentRow>((from, to) => supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PaymentRow>>),
-    fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>),
-    fetchPagedResult<AttachmentStoreRow>((from, to) => supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>),
-    options?.allRows ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<QuoteAttachmentRow>((from, to) => supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<QuoteAttachmentRow>>),
+    options?.includeAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>),
+    options?.includeAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<AttachmentStoreRow>((from, to) => supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>),
+    options?.allRows || options?.includeAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<QuoteAttachmentRow>((from, to) => supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<QuoteAttachmentRow>>),
     fetchPagedResult<PartialAdjustmentRecord>((from, to) => supabase
       .from('supply_purchase_partial_adjustments' as never)
       .select('*').order('created_at').order('id')

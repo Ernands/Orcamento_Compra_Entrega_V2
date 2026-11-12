@@ -153,7 +153,7 @@ function mapService(
   };
 }
 
-export async function listWorkServices(options?: { allRows?: boolean }): Promise<WorkService[]> {
+export async function listWorkServices(options?: { allRows?: boolean; includeDocuments?: boolean; includeComponents?: boolean }): Promise<WorkService[]> {
   const servicesQuery = () => supabase
     .from('works_services')
     .select('*')
@@ -191,14 +191,18 @@ export async function listWorkServices(options?: { allRows?: boolean }): Promise
       serviceIds,
       (ids, from, to) => paymentsQuery().in('service_id', ids).range(from, to) as never,
     ),
-    fetchAllPagesForIds<WorkDocumentRow>(
-      serviceIds,
-      (ids, from, to) => documentsQuery().in('service_id', ids).range(from, to),
-    ),
-    fetchAllPagesForIds<WorkComponentRow>(
-      serviceIds,
-      (ids, from, to) => componentsQuery().in('service_id', ids).range(from, to),
-    ),
+    options?.includeDocuments === false
+      ? Promise.resolve([] as WorkDocumentRow[])
+      : fetchAllPagesForIds<WorkDocumentRow>(
+        serviceIds,
+        (ids, from, to) => documentsQuery().in('service_id', ids).range(from, to),
+      ),
+    options?.includeComponents === false
+      ? Promise.resolve([] as WorkComponentRow[])
+      : fetchAllPagesForIds<WorkComponentRow>(
+        serviceIds,
+        (ids, from, to) => componentsQuery().in('service_id', ids).range(from, to),
+      ),
   ]);
 
   const paymentsByService = groupRowsBy(paymentRows, (payment) => payment.service_id);

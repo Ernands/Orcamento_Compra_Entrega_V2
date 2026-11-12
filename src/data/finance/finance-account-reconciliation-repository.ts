@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { moneyToCents } from '../../domain/supply-calculations';
 import type {
   FinanceAccountAttachment,
@@ -88,12 +89,13 @@ function mapAttachment(row: AttachmentRow): FinanceAccountAttachment {
 }
 
 export async function listFinanceAccountDays(): Promise<FinanceAccountDayRecord[]> {
-  const { data, error } = await supabase
+  const rows = await fetchAllPages<DayRow>((from, to) => supabase
     .from('finance_account_days' as never)
     .select('*')
-    .order('reconciliation_date', { ascending: true });
-  if (error) throw error;
-  return ((data || []) as unknown as DayRow[]).map((row) => ({
+    .order('reconciliation_date', { ascending: true })
+    .order('id')
+    .range(from, to) as never);
+  return rows.map((row) => ({
     id: row.id,
     date: row.reconciliation_date,
     bankPaymentsCents: cents(row.bank_payments_amount),
@@ -105,22 +107,33 @@ export async function listFinanceAccountDays(): Promise<FinanceAccountDayRecord[
 }
 
 export async function listFinanceAccountEntries(): Promise<FinanceAccountManualEntry[]> {
-  const [entryResult, attachmentResult] = await Promise.all([
-    supabase
-      .from('finance_account_entries' as never)
-      .select('*')
-      .order('entry_date', { ascending: true })
-      .order('created_at', { ascending: true }),
-    supabase
+  const entries = await fetchAllPages<EntryRow>((from, to) => supabase
+    .from('finance_account_entries' as never)
+    .select('*')
+    .order('entry_date', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id')
+    .range(from, to) as never);
+
+  // Only fetch attachments belonging to entries visible through RLS.
+  const attachments = await fetchAllPagesForIds<AttachmentRow>(
+    entries.map((entry) => entry.id),
+    (ids, from, to) => supabase
       .from('finance_account_entry_attachments' as never)
       .select('*')
-      .order('created_at', { ascending: true }),
-  ]);
-  if (entryResult.error) throw entryResult.error;
-  if (attachmentResult.error) throw attachmentResult.error;
+      .in('entry_id', ids)
+      .order('created_at', { ascending: true })
+      .order('id')
+      .range(from, to) as never,
+  );
+  const attachmentsByEntry = new Map<string, AttachmentRow[]>();
+  for (const attachment of attachments) {
+    const group = attachmentsByEntry.get(attachment.entry_id);
+    if (group) group.push(attachment);
+    else attachmentsByEntry.set(attachment.entry_id, [attachment]);
+  }
 
-  const attachments = (attachmentResult.data || []) as unknown as AttachmentRow[];
-  return ((entryResult.data || []) as unknown as EntryRow[]).map((row) => ({
+  return entries.map((row) => ({
     id: row.id,
     date: row.entry_date,
     type: row.entry_type,
@@ -132,7 +145,7 @@ export async function listFinanceAccountEntries(): Promise<FinanceAccountManualE
     cancelledAt: row.cancelled_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    attachments: attachments.filter((attachment) => attachment.entry_id === row.id).map(mapAttachment),
+    attachments: (attachmentsByEntry.get(row.id) || []).map(mapAttachment),
   }));
 }
 

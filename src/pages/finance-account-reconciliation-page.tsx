@@ -154,8 +154,10 @@ export function FinanceAccountReconciliationPage() {
     try {
       const [nextPurchases, nextWorks, nextStores, nextOccurrences, nextDays, nextEntries] =
         await Promise.all([
-          listSupplyPurchasesV2(),
-          listWorkServices(),
+          // Reconciliation only uses purchase lines, payments and work payments.
+          // Invoices, document evidence and work components are not used in balance formulas.
+          listSupplyPurchasesV2({ includeAttachments: false }),
+          listWorkServices({ includeDocuments: false, includeComponents: false }),
           listStores(),
           listSupplyPurchasePaymentOccurrencesV2(),
           listFinanceAccountDays(),
