@@ -4,6 +4,12 @@ import { assertPurchaseUnscheduledParity } from '../../domain/finance-purchase-u
 import { assertPurchaseStoreCostParity } from '../../domain/finance-purchase-store-cost-parity';
 import { assertCombinedPurchaseParity } from '../../domain/finance-purchase-combined-parity';
 import { assertPurchasePaymentOriginParity } from '../../domain/finance-purchase-payment-origin-parity';
+import { assertFinancePaymentStoreParity } from '../../domain/finance-purchase-payment-store-parity';
+import {
+  listFinancePaymentStoreOriginsPage,
+  type FinancePaymentStoreOriginSqlEvent,
+  type FinancePaymentStoreOriginSqlPage,
+} from './finance-purchase-payment-store-origins-repository';
 import {
   listFinancePurchasePaymentOriginsPage,
   type FinancePurchaseOriginEvent,
@@ -68,6 +74,10 @@ export interface FinancePreviewParityReport {
   originSqlCheckedEvents: number;
   originSqlExcludedPurchases: number;
   originSqlDetail: string;
+  storePaymentSqlStatus: SqlParityStatus;
+  storePaymentSqlCheckedEvents: number;
+  storePaymentSqlExcludedPurchases: number;
+  storePaymentSqlDetail: string;
   /** The full four-stage conservation audit and SQL event parity both passed. */
   passed: boolean;
 }
@@ -369,6 +379,65 @@ async function checkPaymentOriginParity(
   };
 }
 
+async function checkStorePaymentParity(
+  canonicalRows: UnifiedFinancePaymentRow[],
+): Promise<{
+  storePaymentSqlStatus: SqlParityStatus;
+  storePaymentSqlCheckedEvents: number;
+  storePaymentSqlExcludedPurchases: number;
+  storePaymentSqlDetail: string;
+}> {
+  const first = await listFinancePaymentStoreOriginsPage({
+    page: 1, pageSize: PAGE_SIZE, allowIncomplete: true,
+  });
+  const base = { storePaymentSqlExcludedPurchases: first.unsupportedPurchaseCount };
+  if (!first.isComplete) return {
+    ...base,
+    storePaymentSqlStatus: 'incomplete',
+    storePaymentSqlCheckedEvents: 0,
+    storePaymentSqlDetail: 'Consulta de pagamentos por loja/origem possui compras ou parcelas excluídas.',
+  };
+  const pages = Math.ceil(first.totalCount / PAGE_SIZE);
+  if (pages > MAX_PAGES) return {
+    ...base,
+    storePaymentSqlStatus: 'incomplete',
+    storePaymentSqlCheckedEvents: 0,
+    storePaymentSqlDetail: 'Quantidade de eventos de loja excede limite de auditoria.',
+  };
+  const events: FinancePaymentStoreOriginSqlEvent[] = [...first.rows];
+  let problem: string | null = null;
+  const sameTotals = (next: FinancePaymentStoreOriginSqlPage) =>
+    next.totalCount === first.totalCount &&
+    next.unsupportedPurchaseCount === first.unsupportedPurchaseCount &&
+    next.unsupportedPaymentCount === first.unsupportedPaymentCount &&
+    next.isComplete === first.isComplete;
+  for (let page = 2; page <= pages; page += 1) {
+    const next = await listFinancePaymentStoreOriginsPage({
+      page, pageSize: PAGE_SIZE, allowIncomplete: true,
+    });
+    if (!sameTotals(next) || next.page !== page || next.pageSize !== PAGE_SIZE) {
+      problem = 'Paginação do rateio financeiro por loja/origem variou durante a conferência.';
+      break;
+    }
+    events.push(...next.rows);
+  }
+  if (!problem) {
+    try {
+      assertFinancePaymentStoreParity(canonicalRows, first, events);
+    } catch (error) {
+      problem = error instanceof Error ? error.message :
+        'Divergência no pagamento distribuído entre lojas.';
+    }
+  }
+  return {
+    ...base,
+    storePaymentSqlStatus: problem ? 'failed' : 'matched',
+    storePaymentSqlCheckedEvents: events.length,
+    storePaymentSqlDetail: problem ||
+      events.length+' evento(s) conciliados por loja/origem e valor não alocado.',
+  };
+}
+
 /**
  * Preview-only on-demand shadow comparison, with no write path.
  * All SQL pages are checked against buildFinancePaymentEvents (the current
@@ -380,13 +449,14 @@ export async function runFinancePreviewParity(
   displayedRows?: UnifiedFinancePaymentRow[],
 ): Promise<FinancePreviewParityReport> {
   const domain = auditUnifiedFinanceProjection(purchases, works, displayedRows);
-  const [first, adjustmentSql, unscheduledSql, storeCostSql, combinedSql, originSql] = await Promise.all([
+  const [first, adjustmentSql, unscheduledSql, storeCostSql, combinedSql, originSql, storePaymentSql] = await Promise.all([
     listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true }),
     checkAdjustmentParity(purchases),
     checkUnscheduledParity(purchases, displayedRows),
     checkStoreCostParity(purchases),
     checkCombinedParity(displayedRows || buildUnifiedFinancePayments(purchases, works)),
     checkPaymentOriginParity(displayedRows || buildUnifiedFinancePayments(purchases, works)),
+    checkStorePaymentParity(displayedRows || buildUnifiedFinancePayments(purchases, works)),
   ]);
 
   const base = {
@@ -398,6 +468,7 @@ export async function runFinancePreviewParity(
     ...storeCostSql,
     ...combinedSql,
     ...originSql,
+    ...storePaymentSql,
   };
 
   if (!first.isComplete) {
@@ -463,6 +534,7 @@ export async function runFinancePreviewParity(
       unscheduledSql.unscheduledSqlStatus === 'matched' &&
       storeCostSql.storeCostSqlStatus === 'matched' &&
       combinedSql.combinedSqlStatus === 'matched' &&
-      originSql.originSqlStatus === 'matched',
+      originSql.originSqlStatus === 'matched' &&
+      storePaymentSql.storePaymentSqlStatus === 'matched',
   };
 }
