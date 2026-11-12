@@ -2,6 +2,12 @@ import { assertPurchaseEventParity } from '../../domain/finance-purchase-event-p
 import { assertPurchaseAdjustmentParity } from '../../domain/finance-purchase-adjustment-parity';
 import { assertPurchaseUnscheduledParity } from '../../domain/finance-purchase-unscheduled-parity';
 import { assertPurchaseStoreCostParity } from '../../domain/finance-purchase-store-cost-parity';
+import { assertCombinedPurchaseParity } from '../../domain/finance-purchase-combined-parity';
+import {
+  listFinancePurchaseCombinedGroupsPage,
+  type FinancePurchaseCombinedGroup,
+  type FinancePurchaseCombinedPage,
+} from './finance-purchase-combined-repository';
 import {
   listFinancePurchaseStoreCostsPage,
   type FinancePurchaseOrderCostPage,
@@ -20,7 +26,7 @@ import {
 import { auditUnifiedFinanceProjection, type FinanceAuditReport } from '../../domain/finance-projection-audit';
 import type { PurchaseV2 } from '../../domain/purchase-v2-types';
 import type { WorkService } from '../../domain/works-types';
-import type { UnifiedFinancePaymentRow } from '../../domain/finance-payments';
+import { buildUnifiedFinancePayments, type UnifiedFinancePaymentRow } from '../../domain/finance-payments';
 import {
   listFinancePurchaseEventsPage,
   type FinancePurchaseEvent,
@@ -49,6 +55,10 @@ export interface FinancePreviewParityReport {
   storeCostSqlChecked: number;
   storeCostSqlExcludedPurchases: number;
   storeCostSqlDetail: string;
+  combinedSqlStatus: SqlParityStatus;
+  combinedSqlChecked: number;
+  combinedSqlExcludedPayments: number;
+  combinedSqlDetail: string;
   /** The full four-stage conservation audit and SQL event parity both passed. */
   passed: boolean;
 }
@@ -232,6 +242,66 @@ async function checkStoreCostParity(
   };
 }
 
+async function checkCombinedParity(
+  currentRows: UnifiedFinancePaymentRow[],
+): Promise<{
+  combinedSqlStatus: SqlParityStatus;
+  combinedSqlChecked: number;
+  combinedSqlExcludedPayments: number;
+  combinedSqlDetail: string;
+}> {
+  const first = await listFinancePurchaseCombinedGroupsPage({
+    page: 1, pageSize: PAGE_SIZE, allowIncomplete: true,
+  });
+  const base = { combinedSqlExcludedPayments: first.unsupportedPaymentCount };
+  if (!first.isComplete) return {
+    ...base,
+    combinedSqlStatus: 'incomplete',
+    combinedSqlChecked: 0,
+    combinedSqlDetail: first.unsupportedPaymentCount +
+      ' pagamento(s) de compras combinadas possuem ajustes ou parcelamento não suportado.',
+  };
+  const pages = Math.ceil(first.totalCount / PAGE_SIZE);
+  if (pages > MAX_PAGES) return {
+    ...base,
+    combinedSqlStatus: 'incomplete',
+    combinedSqlChecked: 0,
+    combinedSqlDetail: 'Quantidade de grupos excede o limite de segurança.',
+  };
+  const rows: FinancePurchaseCombinedGroup[] = [...first.rows];
+  let mismatch: string | null = null;
+  const sameTotals = (next: FinancePurchaseCombinedPage) =>
+    next.totalCount === first.totalCount &&
+    next.amountCentsTotal === first.amountCentsTotal &&
+    next.unsupportedPaymentCount === first.unsupportedPaymentCount &&
+    next.isComplete === first.isComplete;
+  for (let page = 2; page <= pages; page += 1) {
+    const next = await listFinancePurchaseCombinedGroupsPage({
+      page, pageSize: PAGE_SIZE, allowIncomplete: true,
+    });
+    if (!sameTotals(next) || next.page !== page || next.pageSize !== PAGE_SIZE) {
+      mismatch = 'A paginação de grupos entre CMPs mudou durante a consulta.';
+      break;
+    }
+    rows.push(...next.rows);
+  }
+  if (!mismatch) {
+    try {
+      assertCombinedPurchaseParity(currentRows, first, rows);
+    } catch (error) {
+      mismatch = error instanceof Error ? error.message : 'Grupos combinados divergentes.';
+    }
+  }
+  return {
+    ...base,
+    combinedSqlStatus: mismatch ? 'failed' : 'matched',
+    combinedSqlChecked: rows.length,
+    combinedSqlDetail: mismatch ||
+      (rows.length ? rows.length + ' grupo(s) combinado(s) reconciliado(s).' :
+        'Nenhuma CMP combinada no DEV; verificação real de agrupamento ainda pendente.'),
+  };
+}
+
 /**
  * Preview-only on-demand shadow comparison, with no write path.
  * All SQL pages are checked against buildFinancePaymentEvents (the current
@@ -243,11 +313,12 @@ export async function runFinancePreviewParity(
   displayedRows?: UnifiedFinancePaymentRow[],
 ): Promise<FinancePreviewParityReport> {
   const domain = auditUnifiedFinanceProjection(purchases, works, displayedRows);
-  const [first, adjustmentSql, unscheduledSql, storeCostSql] = await Promise.all([
+  const [first, adjustmentSql, unscheduledSql, storeCostSql, combinedSql] = await Promise.all([
     listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true }),
     checkAdjustmentParity(purchases),
     checkUnscheduledParity(purchases, displayedRows),
     checkStoreCostParity(purchases),
+    checkCombinedParity(displayedRows || buildUnifiedFinancePayments(purchases, works)),
   ]);
 
   const base = {
@@ -257,6 +328,7 @@ export async function runFinancePreviewParity(
     ...adjustmentSql,
     ...unscheduledSql,
     ...storeCostSql,
+    ...combinedSql,
   };
 
   if (!first.isComplete) {
@@ -320,6 +392,7 @@ export async function runFinancePreviewParity(
     passed: domain.passed && sqlStatus === 'matched' &&
       adjustmentSql.adjustmentSqlStatus === 'matched' &&
       unscheduledSql.unscheduledSqlStatus === 'matched' &&
-      storeCostSql.storeCostSqlStatus === 'matched',
+      storeCostSql.storeCostSqlStatus === 'matched' &&
+      combinedSql.combinedSqlStatus === 'matched',
   };
 }

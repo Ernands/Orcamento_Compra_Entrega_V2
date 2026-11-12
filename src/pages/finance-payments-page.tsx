@@ -579,6 +579,9 @@ export function FinancePaymentsPage() {
                 <li>Custos por loja (SQL): {financeParity.storeCostSqlStatus === 'matched'
                   ? financeParity.storeCostSqlDetail
                   : 'Pendente — ' + financeParity.storeCostSqlDetail}</li>
+                <li>CMPs combinadas (SQL): {financeParity.combinedSqlStatus === 'matched'
+                  ? financeParity.combinedSqlDetail
+                  : 'Pendente — ' + financeParity.combinedSqlDetail}</li>
                 <li>SQL paginado: {financeParity.sqlStatus === 'matched'
                   ? financeParity.sqlCheckedEvents + ' eventos conferidos'
                   : financeParity.sqlDetail}</li>
