@@ -219,7 +219,7 @@ export function FinancePaymentsPage() {
     setFinanceParityError(null);
     setFinanceParity(null);
     void import('../data/finance/finance-parity-comparison')
-      .then(({ runFinancePreviewParity }) => runFinancePreviewParity(purchases, works))
+      .then(({ runFinancePreviewParity }) => runFinancePreviewParity(purchases, works, rows))
       .then((report) => {
         if (active) setFinanceParity(report);
       })
@@ -230,7 +230,7 @@ export function FinancePaymentsPage() {
         if (active) setFinanceParityLoading(false);
       });
     return () => { active = false; };
-  }, [financeParityEnabled, loading, error, purchases, works]);
+  }, [financeParityEnabled, loading, error, purchases, works, rows]);
 
   const storesById = useMemo(
     () => new Map(stores.map((store) => [store.id, store])),

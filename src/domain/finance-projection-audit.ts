@@ -275,7 +275,7 @@ export function auditUnifiedFinanceProjection(
   checks.forEach((check) => { check.passed = check.issues.length === 0; });
 
   return {
-    passed: checks.every((check) => check.passed),
+    passed: checks.every((check) => check.passed && check.warnings.length === 0),
     checkedAt,
     purchaseCount: purchases.length,
     workCount: works.length,

@@ -2,6 +2,7 @@ import { assertPurchaseEventParity } from '../../domain/finance-purchase-event-p
 import { auditUnifiedFinanceProjection, type FinanceAuditReport } from '../../domain/finance-projection-audit';
 import type { PurchaseV2 } from '../../domain/purchase-v2-types';
 import type { WorkService } from '../../domain/works-types';
+import type { UnifiedFinancePaymentRow } from '../../domain/finance-payments';
 import {
   listFinancePurchaseEventsPage,
   type FinancePurchaseEvent,
@@ -31,8 +32,9 @@ export interface FinancePreviewParityReport {
 export async function runFinancePreviewParity(
   purchases: PurchaseV2[],
   works: WorkService[],
+  displayedRows?: UnifiedFinancePaymentRow[],
 ): Promise<FinancePreviewParityReport> {
-  const domain = auditUnifiedFinanceProjection(purchases, works);
+  const domain = auditUnifiedFinanceProjection(purchases, works, displayedRows);
   const first = await listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true });
 
   const base = {

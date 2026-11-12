@@ -599,7 +599,8 @@ describe('auditoria conservativa das quatro etapas financeiras', () => {
     pilot.payments[0].purchaseOrderId = null;
     const rows = buildUnifiedFinancePayments([pilot], []);
     const report = auditUnifiedFinanceProjection([pilot], [], rows);
-    expect(report.passed).toBe(true);
+    expect(report.passed).toBe(false);
+    expect(report.checks[3].passed).toBe(true);
     expect(report.checks[3].warnings.join(' ')).toContain('pagamento geral');
     expect(rows.find((row) => row.status === 'unscheduled')?.amountCents).toBe(2500n);
   });
