@@ -1127,3 +1127,127 @@ describe('paridade SQL de pagamentos por loja, origem e CMP consolidada', () => 
       .toThrow('Vínculo de compra/pedido/status/data divergente');
   });
 });
+
+describe('regressão financeira com estrutura real CMP-00038 e CMP-00002/00003', () => {
+  it('preserva o ajuste parcial da CMP-00038 em centavos, com dois reembolsos por item', () => {
+    // Valores de conciliação agregados; nenhuma linha ou anexo PROD é copiado ao DEV.
+    const raw = purchase({
+      id: 'shape-cmp-38', code: 'CMP-00038',
+      total: '13897.59', paid: '13897.59', planned: '0.00',
+    });
+    raw.payments[1].status = 'cancelled';
+    const order = raw.orders[0];
+    const retained = order.lines[0];
+    retained.lineTotal = '12613.96';
+    retained.unitPrice = '12613.96';
+    const cancelledA = {
+      ...retained, id: 'shape-38-cancel-a', itemCode: 'ITM-A',
+      itemName: 'Item cancelado A', unitPrice: '634.00',
+      shippingAmount: '132.73', lineTotal: '766.73',
+      stores: retained.stores.map(store => ({ ...store, id: store.id + '-cancel-a' })),
+    };
+    const cancelledB = {
+      ...retained, id: 'shape-38-cancel-b', itemCode: 'ITM-B',
+      itemName: 'Item cancelado B', unitPrice: '427.42',
+      shippingAmount: '89.48', lineTotal: '516.90',
+      stores: retained.stores.map(store => ({ ...store, id: store.id + '-cancel-b' })),
+    };
+    order.lines.push(cancelledA, cancelledB);
+    const adjustment: PartialAdjustmentRecord = {
+      id: 'shape-refund-38', purchase_id: raw.id, order_id: order.id,
+      payment_id: raw.payments[0].id, refund_attachment_id: 'proof-test-38',
+      original_cents: 1389759, cancelled_cents: 128363,
+      freight_reduction_cents: -6323, refund_cents: 122040,
+      remaining_cents: 1267719, refunded_on: '2026-11-01',
+      reference: 'REEMB-TEST-38', reason: 'Dois itens e frete retido',
+      created_at: '2026-11-01T12:00:00Z',
+      line_adjustments: [
+        {
+          line_id: cancelledA.id, kind: 'cancelled',
+          reduction_cents: 76673, original_line_cents: 76673,
+          original_shipping_cents: 13273,
+        },
+        {
+          line_id: cancelledB.id, kind: 'cancelled',
+          reduction_cents: 51690, original_line_cents: 51690,
+          original_shipping_cents: 8948,
+        },
+        {
+          line_id: cancelledA.id, kind: 'freight_retained',
+          reduction_cents: -6323, original_line_cents: 76673,
+          original_shipping_cents: 13273,
+        },
+      ],
+      refund_entries: [
+        { line_id: cancelledA.id, amount_cents: 65199, refunded_on: '2026-11-01' },
+        { line_id: cancelledB.id, amount_cents: 56841, refunded_on: '2026-11-01' },
+      ],
+    };
+    const adjusted = applyPurchasePartialAdjustments(raw, [adjustment]);
+    const rows = buildUnifiedFinancePayments([adjusted], []);
+    const paid = rows.find(row => row.status === 'paid');
+    expect(paid?.amountCents).toBe(1267719n);
+    expect(paid?.refundCents).toBe(122040n);
+    expect(paid?.refundEntries?.map(entry => entry.amountCents).sort()).toEqual([56841n, 65199n]);
+    expect(paid?.adjustmentEntries?.reduce((sum, e) => sum + e.amountCents, 0n)).toBe(-122040n);
+    expect(paid?.storeAllocations.reduce((sum, s) => sum + s.amountCents, 0n)).toBe(1267719n);
+    const recorded = decorateFinancePaymentsWithOccurrences(rows, []);
+    expect(recorded[0].occurrenceSumCents).toBe(1267719n);
+    expect(recorded[0].paymentOccurrences
+      .reduce((sum, e) => sum + e.amountCents, 0n)).toBe(1267719n);
+    expect(auditUnifiedFinanceProjection([adjusted], [], rows).checks.every(check => check.passed))
+      .toBe(true);
+    const corrupted: PurchaseV2 = {
+      ...adjusted,
+      payments: adjusted.payments.map(payment => payment.status === 'paid'
+        ? { ...payment, refundedAmount: '1220.41' } : payment),
+    };
+    expect(auditUnifiedFinanceProjection([corrupted], [], rows).checks[1].passed).toBe(false);
+  });
+
+  it('preserva os seis grupos de entrada e boletos das CMP-00002/00003', () => {
+    const two = purchase({
+      id: 'shape-cmp02', code: 'CMP-00002',
+      total: '104664.00', paid: '31399.20', planned: '0.00',
+    });
+    const three = purchase({
+      id: 'shape-cmp03', code: 'CMP-00003',
+      total: '40600.00', paid: '12180.00', planned: '0.00',
+    });
+    const due = ['2026-11-09', '2026-12-09', '2027-01-08', '2027-02-08'];
+    for (const [p, paymentCents] of [[two, '14652.96'], [three, '5684.00']] as const) {
+      const original = p.payments[1];
+      const paid = {
+        ...original, id: p.id + '-boleto-1', paymentMethod: 'boleto',
+        sourceLabel: 'Boleto Miranda 1/5', status: 'paid' as const,
+        amount: paymentCents, paidAt: '2026-10-08T12:00:00Z',
+        firstDueDate: '2026-10-13',
+      };
+      const future = due.map((date, i) => ({
+        ...original, id: p.id + '-boleto-' + (i + 2),
+        paymentMethod: 'boleto', sourceLabel: 'Boleto Miranda ' + (i + 2) + '/5',
+        status: 'planned' as const, amount: paymentCents,
+        firstDueDate: date, paidAt: null,
+      }));
+      p.payments = [p.payments[0], paid, ...future];
+    }
+    const rows = buildUnifiedFinancePayments([two, three], []);
+    const grouped = rows.filter(row => row.id.startsWith('combined:'));
+    expect(grouped).toHaveLength(6);
+    expect(grouped.every(row =>
+      row.purchaseIds.length === 2 && row.referenceCodes.includes('CMP-00002') &&
+      row.referenceCodes.includes('CMP-00003'))).toBe(true);
+    const paidGroups = grouped.filter(row => row.status === 'paid');
+    const plannedGroups = grouped.filter(row => row.status === 'planned');
+    expect(paidGroups).toHaveLength(2);
+    expect(plannedGroups).toHaveLength(4);
+    expect(paidGroups.map(row => row.amountCents).sort()).toEqual([2033696n, 4357920n]);
+    expect(plannedGroups.map(row => row.amountCents)).toEqual(
+      [2033696n, 2033696n, 2033696n, 2033696n],
+    );
+    expect(grouped.reduce((sum, row) => sum + row.amountCents, 0n)).toBe(14526400n);
+    expect(grouped.reduce((sum, row) => sum + row.unallocatedCents +
+      row.storeAllocations.reduce((s, allocation) => s + allocation.amountCents, 0n), 0n))
+      .toBe(14526400n);
+  });
+});
