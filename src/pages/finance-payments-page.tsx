@@ -585,6 +585,9 @@ export function FinancePaymentsPage() {
                 <li>Origem dos pagamentos (SQL): {financeParity.originSqlStatus === 'matched'
                   ? financeParity.originSqlDetail
                   : 'Pendente — ' + financeParity.originSqlDetail}</li>
+                <li>Pagamentos por loja/origem (SQL): {financeParity.storePaymentSqlStatus === 'matched'
+                  ? financeParity.storePaymentSqlDetail
+                  : 'Pendente — ' + financeParity.storePaymentSqlDetail}</li>
                 <li>SQL paginado: {financeParity.sqlStatus === 'matched'
                   ? financeParity.sqlCheckedEvents + ' eventos conferidos'
                   : financeParity.sqlDetail}</li>
