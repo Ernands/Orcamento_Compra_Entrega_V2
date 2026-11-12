@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { runFinancePreviewParity } from '../data/finance/finance-parity-comparison';
 
 const mock = vi.hoisted(() => ({
-  rpc: vi.fn(), adjustments: vi.fn(), unscheduled: vi.fn(), storeCosts: vi.fn(), combined: vi.fn(), origins: vi.fn(),
+  rpc: vi.fn(), adjustments: vi.fn(), unscheduled: vi.fn(), storeCosts: vi.fn(), combined: vi.fn(), origins: vi.fn(), storePayments: vi.fn(),
 }));
 vi.mock('../data/supabase/client', () => ({
   supabase: {
@@ -17,7 +17,9 @@ vi.mock('../data/supabase/client', () => ({
               ? mock.combined(name, args)
               : name === 'finance_purchase_payment_origins_page_v1'
                 ? mock.origins(name, args)
-                : mock.rpc(name, args),
+                : name === 'finance_purchase_payment_store_origins_page_v1'
+                  ? mock.storePayments(name, args)
+                  : mock.rpc(name, args),
   },
 }));
 
@@ -59,6 +61,7 @@ const emptyOriginPage = {
   page_amount_cents: '0', page_origin_allocated_cents: '0', rows: [],
 };
 beforeEach(() => {
+  mock.storePayments.mockReset();
   mock.rpc.mockReset();
   mock.adjustments.mockReset();
   mock.unscheduled.mockReset();
@@ -66,6 +69,11 @@ beforeEach(() => {
   mock.combined.mockReset();
   mock.origins.mockReset();
   mock.origins.mockResolvedValue({ data: emptyOriginPage, error: null });
+  mock.storePayments.mockResolvedValue({ data: {
+    page: 1, page_size: 100, total_count: 0,
+    unsupported_purchase_count: 0, unsupported_payment_count: 0,
+    is_complete: true, page_amount_cents: '0', page_allocated_cents: '0', rows: [],
+  }, error: null });
   mock.combined.mockResolvedValue({ data: emptyCombinedPage, error: null });
   mock.storeCosts.mockResolvedValue({ data: emptyStoreCostPage, error: null });
   mock.unscheduled.mockResolvedValue({ data: emptyUnscheduledPage, error: null });
@@ -89,6 +97,8 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.combinedSqlChecked).toBe(0);
     expect(report.originSqlStatus).toBe('matched');
     expect(report.originSqlCheckedEvents).toBe(0);
+    expect(report.storePaymentSqlStatus).toBe('matched');
+    expect(report.storePaymentSqlCheckedEvents).toBe(0);
     expect(report.domain.checks.map((entry) => entry.passed)).toEqual([true, true, true, true]);
     expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v2', {
       p_page: 1, p_page_size: 100, p_status: null,
@@ -238,6 +248,32 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.passed).toBe(false);
     expect(report.originSqlStatus).toBe('failed');
     expect(report.originSqlDetail).toContain('páginas faltantes');
+  });
+
+  it('não aprova pagamento por loja/origem se uma compra é excluída', async () => {
+    mock.rpc.mockResolvedValue({ data: emptyPage, error: null });
+    mock.storePayments.mockResolvedValue({ data: {
+      page: 1, page_size: 100, total_count: 0, rows: [],
+      unsupported_purchase_count: 1, unsupported_payment_count: 0,
+      is_complete: false, page_amount_cents: '0', page_allocated_cents: '0',
+    }, error: null });
+    const report = await runFinancePreviewParity([], []);
+    expect(report.passed).toBe(false);
+    expect(report.storePaymentSqlStatus).toBe('incomplete');
+    expect(report.storePaymentSqlExcludedPurchases).toBe(1);
+  });
+
+  it('recusa evento SQL de loja omitido, mesmo com valores zerados', async () => {
+    mock.rpc.mockResolvedValue({ data: emptyPage, error: null });
+    mock.storePayments.mockResolvedValue({ data: {
+      page: 1, page_size: 100, total_count: 1, rows: [],
+      unsupported_purchase_count: 0, unsupported_payment_count: 0,
+      is_complete: true, page_amount_cents: '0', page_allocated_cents: '0',
+    }, error: null });
+    const report = await runFinancePreviewParity([], []);
+    expect(report.passed).toBe(false);
+    expect(report.storePaymentSqlStatus).toBe('failed');
+    expect(report.storePaymentSqlDetail).toContain('faltantes');
   });
 
   it('preserva erro de permissão/conexão para diagnóstico seguro', async () => {
