@@ -1,6 +1,12 @@
 import { assertPurchaseEventParity } from '../../domain/finance-purchase-event-parity';
 import { assertPurchaseAdjustmentParity } from '../../domain/finance-purchase-adjustment-parity';
 import { assertPurchaseUnscheduledParity } from '../../domain/finance-purchase-unscheduled-parity';
+import { assertPurchaseStoreCostParity } from '../../domain/finance-purchase-store-cost-parity';
+import {
+  listFinancePurchaseStoreCostsPage,
+  type FinancePurchaseOrderCostPage,
+  type FinancePurchaseOrderCostRow,
+} from './finance-purchase-store-costs-repository';
 import {
   listFinancePurchaseUnscheduledPage,
   type FinancePurchaseUnscheduledPage,
@@ -39,6 +45,10 @@ export interface FinancePreviewParityReport {
   unscheduledSqlChecked: number;
   unscheduledSqlExcludedPurchases: number;
   unscheduledSqlDetail: string;
+  storeCostSqlStatus: SqlParityStatus;
+  storeCostSqlChecked: number;
+  storeCostSqlExcludedPurchases: number;
+  storeCostSqlDetail: string;
   /** The full four-stage conservation audit and SQL event parity both passed. */
   passed: boolean;
 }
@@ -160,6 +170,68 @@ async function checkUnscheduledParity(
   };
 }
 
+async function checkStoreCostParity(
+  purchases: PurchaseV2[],
+): Promise<{
+  storeCostSqlStatus: SqlParityStatus;
+  storeCostSqlChecked: number;
+  storeCostSqlExcludedPurchases: number;
+  storeCostSqlDetail: string;
+}> {
+  const first = await listFinancePurchaseStoreCostsPage({
+    page: 1, pageSize: PAGE_SIZE, allowIncomplete: true,
+  });
+  const base = { storeCostSqlExcludedPurchases: first.unsupportedPurchaseCount };
+  if (!first.isComplete) return {
+    ...base,
+    storeCostSqlStatus: 'incomplete',
+    storeCostSqlChecked: 0,
+    storeCostSqlDetail: first.unsupportedPurchaseCount +
+      ' compra(s) excluída(s) por ajustes, linhas sem valor ou rateio duplicado.',
+  };
+  const pages = Math.ceil(first.totalCount / PAGE_SIZE);
+  if (pages > MAX_PAGES) return {
+    ...base,
+    storeCostSqlStatus: 'incomplete',
+    storeCostSqlChecked: 0,
+    storeCostSqlDetail: 'Quantidade de pedidos supera o limite de auditoria.',
+  };
+  const rows: FinancePurchaseOrderCostRow[] = [...first.rows];
+  let problem: string | null = null;
+  const sameTotals = (next: FinancePurchaseOrderCostPage) =>
+    next.totalCount === first.totalCount &&
+    next.totalContractedCents === first.totalContractedCents &&
+    next.totalAllocatedCents === first.totalAllocatedCents &&
+    next.unsupportedPurchaseCount === first.unsupportedPurchaseCount &&
+    next.isComplete === first.isComplete;
+
+  for (let page = 2; page <= pages; page += 1) {
+    const next = await listFinancePurchaseStoreCostsPage({
+      page, pageSize: PAGE_SIZE, allowIncomplete: true,
+    });
+    if (!sameTotals(next) || next.page !== page || next.pageSize !== PAGE_SIZE) {
+      problem = 'A paginação SQL dos custos por loja mudou durante a leitura.';
+      break;
+    }
+    rows.push(...next.rows);
+  }
+
+  if (!problem) {
+    try {
+      assertPurchaseStoreCostParity(purchases, first, rows);
+    } catch (error) {
+      problem = error instanceof Error ? error.message : 'Rateios por loja divergentes.';
+    }
+  }
+  return {
+    ...base,
+    storeCostSqlStatus: problem ? 'failed' : 'matched',
+    storeCostSqlChecked: rows.length,
+    storeCostSqlDetail: problem || rows.length +
+      ' pedido(s) com custo por loja conciliado(s) em centavos.',
+  };
+}
+
 /**
  * Preview-only on-demand shadow comparison, with no write path.
  * All SQL pages are checked against buildFinancePaymentEvents (the current
@@ -171,10 +243,11 @@ export async function runFinancePreviewParity(
   displayedRows?: UnifiedFinancePaymentRow[],
 ): Promise<FinancePreviewParityReport> {
   const domain = auditUnifiedFinanceProjection(purchases, works, displayedRows);
-  const [first, adjustmentSql, unscheduledSql] = await Promise.all([
+  const [first, adjustmentSql, unscheduledSql, storeCostSql] = await Promise.all([
     listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true }),
     checkAdjustmentParity(purchases),
     checkUnscheduledParity(purchases, displayedRows),
+    checkStoreCostParity(purchases),
   ]);
 
   const base = {
@@ -183,6 +256,7 @@ export async function runFinancePreviewParity(
     excludedPayments: first.unsupportedPaymentCount,
     ...adjustmentSql,
     ...unscheduledSql,
+    ...storeCostSql,
   };
 
   if (!first.isComplete) {
@@ -245,6 +319,7 @@ export async function runFinancePreviewParity(
     sqlDetail: mismatch || 'Eventos SQL comparados, sem divergência, com o cálculo atual.',
     passed: domain.passed && sqlStatus === 'matched' &&
       adjustmentSql.adjustmentSqlStatus === 'matched' &&
-      unscheduledSql.unscheduledSqlStatus === 'matched',
+      unscheduledSql.unscheduledSqlStatus === 'matched' &&
+      storeCostSql.storeCostSqlStatus === 'matched',
   };
 }

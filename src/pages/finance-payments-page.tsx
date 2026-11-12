@@ -576,6 +576,9 @@ export function FinancePaymentsPage() {
                 <li>Saldos sem programação (SQL): {financeParity.unscheduledSqlStatus === 'matched'
                   ? financeParity.unscheduledSqlDetail
                   : 'Pendente — ' + financeParity.unscheduledSqlDetail}</li>
+                <li>Custos por loja (SQL): {financeParity.storeCostSqlStatus === 'matched'
+                  ? financeParity.storeCostSqlDetail
+                  : 'Pendente — ' + financeParity.storeCostSqlDetail}</li>
                 <li>SQL paginado: {financeParity.sqlStatus === 'matched'
                   ? financeParity.sqlCheckedEvents + ' eventos conferidos'
                   : financeParity.sqlDetail}</li>
