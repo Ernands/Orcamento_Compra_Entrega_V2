@@ -149,7 +149,34 @@ Foram adicionados testes unitários para paginação por IDs, deduplicação, lo
 A consulta de contagem em produção encontrou **1.001 registros em `works_service_documents`**. O carregador antigo consultava essa coleção sem paginação e poderia retornar no máximo 1.000 registros. A nova implementação pagina os documentos e restringe a consulta aos `service_id` carregados, evitando a omissão do registro excedente. Também foram verificados os índices existentes que suportam os filtros por `service_id`, `quote_id`, `quote_item_id` e `quote_destination_id`; não foi necessário criar índices redundantes nesta etapa.
 
 
-### CI e Preview
-- GitHub Actions Quality: **Tests, Lint, Typecheck e Build — aprovados na revisão anterior**. O último commit com código (`2d3f36a`) disparou o run #785, que permanece na fila sem jobs iniciados; portanto, ainda não há resultado de CI para essa revisão.
-- Netlify `deploy-preview-85`: **deploy concluído com sucesso** para o último commit com código — https://deploy-preview-85--implanta-27.netlify.app/. O commit posterior (`36a3fce`) alterou somente esta documentação.
-- A PR #85 continua em rascunho; nenhum merge ou deploy de produção foi executado.
+### CI e Preview (histórico)
+- Os testes de 11/11 concluídos antes das novas alterações de Financeiro não certificam a revisão atual; acompanhar o workflow Quality do commit mais recente.
+- Deploy Preview #85: https://deploy-preview-85--implanta-27.netlify.app/.
+- PR #85 continua em rascunho; sem autorização para merge ou deploy de produção.
+
+## Continuação da Fase C — Financeiro, 12/11/2026
+
+### Conciliação — redução de carregamento
+- `FinanceAccountReconciliationPage` passou a chamar `listSupplyPurchasesV2({ includeAttachments: false })` e `listWorkServices({ includeDocuments: false, includeComponents: false })`.
+- As funções de montagem de eventos financeiros `buildUnifiedFinancePayments`, `financePaymentOccurrences`, `buildFinanceAccountDaySummaries` e `buildFinanceAccountConsolidated` permanecem **inalteradas**. Seus insumos de valores, parcelas, rateios por loja, datas, ocorrências e status continuam completos.
+- Anexos de lançamentos manuais da conta permanecem disponíveis através do repositório específico de Conciliação, respeitando o escopo dos registros visíveis por RLS.
+- Os caminhos de Pagamentos, Reembolso e Conferência **não** foram alterados para o modo sem documentos: seguem carregando notas/recibos/comprovantes necessários para status fiscal e reembolso.
+- Contagem somente de inventário em PROD (sem escrita): `works_service_documents` = 1.002, `works_service_components` = 44, anexos ativos de Compras = 647, vínculos de anexos a lojas = 1.078. O novo caminho de Conciliação evita solicitar essas coleções de anexos/componentes, reduzindo até 2.771 linhas potenciais de leitura, além dos anexos de Cotações. O número efetivamente visível depende de RLS; **não** é uma medição de latência.
+
+### Paginação e correção de integridade de leitura
+- `listFinanceAccountDays`, `listFinanceAccountEntries` e `listSupplyPurchasePaymentOccurrencesV2` agora usam `fetchAllPages` com ordenação determinística por ID adicional. Evitam truncamento após 1.000 resultados.
+- Anexos de lançamentos manuais são consultados por `entry_id` dos lançamentos visíveis, em lotes/páginas com `fetchAllPagesForIds`, em vez de uma consulta integral seguida de filtros quadráticos no navegador.
+- Tabelas de **Financeiro > Pagamentos** e **Financeiro > Conciliação Conta** exibem até **50 linhas por página**. O conjunto original permanece em memória para indicadores, filtros, demonstrativos, exportações, detalhes e saldos globais. Os testes unitários verificam limites e navegação entre páginas.
+- A paginação da **renderização** ainda é local, não paginação SQL do conjunto financeiro. Para trazer poucas linhas do banco, é necessário construir um read model consolidado no servidor sem perder as regras de rateio, reembolso e ocorrências.
+
+### Isolamento da Deploy Preview
+- Adicionada verificação em tempo de execução na URL padrão `deploy-preview-N--implanta-27.netlify.app`: se `VITE_SUPABASE_URL` não for o hostname do Supabase DEV `wiynrfblfigngkvleyqg.supabase.co`, a aplicação lança erro antes de criar o cliente Supabase.
+- Testes automatizados cobrem DEV permitido, PROD bloqueado na Preview e não interferência nas URLs de produção/local.
+- **Limite:** a verificação não comprova como as variáveis estão configuradas no painel Netlify nem cobre eventuais domínios alternativos; ainda é necessário conferir presencialmente a configuração da Preview.
+
+### Validação, riscos remanescentes e próximas etapas
+- O CI inicial desta entrega encontrou quatro asserções de tipos redundantes em repositórios paginados e um teste visual acoplado à sintaxe da lista anterior. As correções foram feitas na branch; conferir conclusão de **Tests, Lint, Typecheck e Build** para o head mais recente antes da liberação.
+- Contratos `as never` das novas RPCs dos Dashboards ainda precisam ser substituídos pela tipagem gerada do schema DEV, após reconciliar o histórico de migrations.
+- Histórico remoto observado na revisão: DEV = 120 migrations, PROD = 111; 73 nomes comuns têm números de versão distintos. Não presumir que as histories são intercambiáveis. Comparar definições/efeitos e planejar a promoção de DDL sem aplicar novamente migrações já existentes em PROD.
+- **Próxima etapa:** read model financeiro paginado no banco para Pagamentos/Conciliação, com filtros, contagem e totais globais reproduzíveis; agregações de Previsão Orçamentária, Composição Financeira e Reembolso; cenários RLS, conciliação e documentação financeira com massa representativa.
+- **Nenhuma escrita em PROD ou dado financeiro foi realizada nesta entrega.** PR #85 segue em rascunho; não mesclar sem autorização.
