@@ -1014,6 +1014,22 @@ describe('rateio financeiro de eventos combinados por origem', () => {
         index === 0 ? { ...event, equipmentCents: event.equipmentCents - 1n } : event),
     )).toThrow('Classificação por origem financeira diverge');
     expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 4 }, events.map((event, index) =>
+        index === 0 ? { ...event, referenceCode: 'CMP-INEXISTENTE' } : event),
+    )).toThrow('Vínculo CMP/pedido divergente');
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 4 }, events.map((event, index) =>
+        index === 0 ? { ...event, purchaseId: 'compra-inexistente' } : event),
+    )).toThrow('Vínculo CMP/pedido divergente');
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 4 }, events.map((event, index) =>
+        index === 0 ? { ...event, orderId: 'pedido-inexistente' } : event),
+    )).toThrow('Vínculo CMP/pedido divergente');
+    expect(() => assertPurchasePaymentOriginParity(canonical,
+      { isComplete: true, totalCount: 4 }, events.map((event, index) =>
+        index === 0 ? { ...event, unallocatedOriginCents: 1n } : event),
+    )).toThrow('Conservação de centavos por origem inválida');
+    expect(() => assertPurchasePaymentOriginParity(canonical,
       { isComplete: false, totalCount: 4 }, events),
     ).toThrow('exclui compras');
   });
