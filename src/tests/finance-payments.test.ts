@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assertPurchaseEventParity } from '../domain/finance-purchase-event-parity';
+import { assertPurchaseAdjustmentParity } from '../domain/finance-purchase-adjustment-parity';
+import type { FinancePurchaseAdjustmentSnapshot } from '../data/finance/finance-purchase-adjustment-repository';
 import { auditUnifiedFinanceProjection } from '../domain/finance-projection-audit';
 import { applyPurchasePartialAdjustments, type PartialAdjustmentRecord } from '../domain/purchase-partial-adjustments';
 import { decorateFinancePaymentsWithOccurrences } from '../domain/finance-payment-occurrences';
@@ -712,5 +714,56 @@ describe('crédito residual de frete sem classificação fiscal indevida', () =>
     expect(adjusted.orders[0].lines.some((line) => line.itemCode === 'AJ-CREDITO')).toBe(true);
     expect(adjusted.orders[0].lines.some((line) =>
       line.itemCode === 'AJ-CREDITO' && line.lineTotal === '-3.00')).toBe(true);
+  });
+});
+
+
+describe('comparação imutável SQL dos reembolsos', () => {
+  it('reconcilia o histórico de CMP-00038 e identifica diferença de um centavo', () => {
+    const p = purchase({
+      id: 'cmp38', code: 'CMP-00038', total: '100.00', paid: '100.00', planned: '0.00',
+    });
+    const payment = p.payments[0];
+    p.payments[1].status = 'cancelled';
+    payment.grossAmount = '100.00';
+    payment.amount = '65.10';
+    payment.refundedAmount = '34.90';
+    payment.refundedOn = '2026-11-01';
+    payment.refundEntries = [
+      { lineId: 'cancel-a', amountCents: 2000n, refundedOn: '2026-11-01' },
+      { lineId: 'cancel-b', amountCents: 1490n, refundedOn: '2026-11-01' },
+    ];
+    p.adjustments = [{
+      id: 'adjustment-38', orderId: p.orders[0].id, paymentId: payment.id,
+      refundAttachmentId: 'document-38', grossCents: 10000n, cancelledCents: 4000n,
+      freightReductionCents: -510n, residualCents: -10n, refundedCents: 3490n,
+      netCents: 6510n, refundedOn: '2026-11-01', reference: 'REF-38',
+      reason: 'Cancelamento parcial',
+      refundEntries: payment.refundEntries,
+      createdAt: '2026-11-01T12:00:00Z',
+      cancelledLines: [], freightLines: [],
+    }];
+    const row: FinancePurchaseAdjustmentSnapshot = {
+      id: 'adjustment-38', purchaseId: p.id, orderId: p.orders[0].id,
+      paymentId: payment.id, referenceCode: p.code, reference: 'REF-38',
+      refundedOn: '2026-11-01', grossCents: 10000n,
+      netCents: 6510n, refundedCents: 3490n, cancelledCents: 4000n,
+      freightReductionCents: -510n, residualCents: -10n,
+      refundEntryCents: 3490n, entryCount: 2, isValid: true,
+    };
+    const totals = {
+      totalCount: 1, invalidCount: 0, isComplete: true,
+      grossCents: 10000n, netCents: 6510n, refundedCents: 3490n,
+    };
+    expect(() => assertPurchaseAdjustmentParity([p], totals, [row])).not.toThrow();
+    expect(() => assertPurchaseAdjustmentParity(
+      [p], totals, [{ ...row, refundedCents: 3491n }],
+    )).toThrow('Centavos, histórico ou crédito divergentes');
+    expect(() => assertPurchaseAdjustmentParity(
+      [p], totals, [row, row],
+    )).toThrow('todas as páginas');
+    expect(() => assertPurchaseAdjustmentParity(
+      [p], { ...totals, invalidCount: 1, isComplete: false }, [row],
+    )).toThrow('exigem conciliação manual');
   });
 });
