@@ -322,3 +322,24 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Revalidada por SQL read-only em DEV a projeção básica: 9 eventos pagos de Compras = R$ 5.192,70 e 9 eventos de Obras = R$ 20.900,00 (4 pagos, 3 programados, 2 sem programação). Esta validação SQL NÃO significa homologação dos fixtures complexos por execução de Vitest.
 - A projeção SQL de Compras continua sem rateios por loja, créditos de cancelamento e consolidação entre CMPs. A auditoria atual protege a migração para esse futuro modelo, **mas não é a própria substituição SQL integral**.
 - PROD não recebeu migrations ou dados desta PR. A cópia integral de PROD para DEV/backup permanece **suspensa conforme orientação do usuário**.
+
+
+## Projeção SQL v2 de reembolsos — 12/11/2026
+
+### Implementação, somente DEV e Preview #85
+- Migration `20261112185940_finance_purchase_adjustment_reconciliation_v1.sql`: função SQL estável, somente leitura, RLS/SECURITY INVOKER, verifica registro imutável do pagamento original, componentes de cancelamento, frete retido, residual, créditos por item e bruto − reembolso = líquido; identifica ajustes repetidos ou inconsistentes.
+- Migration `20261112190731_finance_purchase_events_page_v2_reconciled_refunds.sql`: nova versão paginada, preservando v1, com `gross_amount_cents` e `refund_cents` por evento, e totais globais `gross_paid_cents`, `refunds_cents`, `paid_cents`. Pagamentos com exatamente um ajuste financeiramente conciliado entram pelo valor líquido; situações inválidas ou múltiplas geram `is_complete=false` e contagens excluídas.
+- Dupla auditoria na Preview: `assertPurchaseAdjustmentParity` compara cada ajuste com `PurchaseV2.adjustments`; `assertPurchaseEventParity` compara eventos v2 contra `buildFinancePaymentEvents`. Ambas checam páginas completas, IDs, valores BigInt, status, datas e diferenças de centavos. Falhas impedem aprovação global. A nova consulta não substitui a fonte oficial das KPIs ou dos relatórios.
+- A tela Financeiro → Pagamentos da Preview #85 mostra o resultado desses dois testes, sem ações de escrita.
+- Todas as novas funções têm `SECURITY INVOKER`, `STABLE`, autorização `finance.payments_view`, RLS das tabelas base, execução concedida somente a `authenticated`. `anon` e `PUBLIC` não possuem `EXECUTE`.
+
+### Evidência DEV
+- Comparação real v1 vs v2 no usuário autorizado: **9 eventos**, **R$ 5.192,70**, 0 divergências; v2 bruto 519270 centavos, crédito 0 e líquido 519270. Usuário sem permissão financeira: 0 eventos e 0 valores.
+- O DEV possui **0 registros reais de ajustes parciais**; por isso não há homologação real da nova função nesse cenário. Testes sintéticos conferem R$ 100,00 bruto − R$ 34,90 reembolsado = R$ 65,10 líquido, incluindo frete retido assinado.
+- Arquivos de teste `supabase/tests/finance_purchase_adjustment_reconciliation.test.sql` e `supabase/tests/finance_purchase_events_page_v2.test.sql` executados em DEV: 10 verificações cada. Casos Vitest adicionados para reembolso, distorção de centavo e recusa de registros inválidos.
+- Netlify compilou a Preview para o HEAD verificado; **não houve execução recente confirmada do GitHub Actions para as novas alterações**. CI continua pendente.
+
+### Próximas restrições
+- V2 cobre o valor líquido do evento e tem auditoria do histórico, mas **ainda não produz rateios SQL por loja/origem, saldo sem programação de Compras, agrupamentos de CMPs nem desmembramento de ocorrências**.
+- Antes de integrar a tela oficial, exige-se paridade completa e CI, além de validação com registros reais de ajuste. A cópia da produção para DEV permanece suspensa por orientação do usuário.
+- Sem migração, alteração de dados ou publicação em PROD. PR #85 ainda DRAFT.
