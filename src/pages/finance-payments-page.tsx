@@ -582,6 +582,9 @@ export function FinancePaymentsPage() {
                 <li>CMPs combinadas (SQL): {financeParity.combinedSqlStatus === 'matched'
                   ? financeParity.combinedSqlDetail
                   : 'Pendente — ' + financeParity.combinedSqlDetail}</li>
+                <li>Origem dos pagamentos (SQL): {financeParity.originSqlStatus === 'matched'
+                  ? financeParity.originSqlDetail
+                  : 'Pendente — ' + financeParity.originSqlDetail}</li>
                 <li>SQL paginado: {financeParity.sqlStatus === 'matched'
                   ? financeParity.sqlCheckedEvents + ' eventos conferidos'
                   : financeParity.sqlDetail}</li>
