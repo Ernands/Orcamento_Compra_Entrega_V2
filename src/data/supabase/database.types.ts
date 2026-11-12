@@ -3453,6 +3453,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finance_purchase_events_page_v1: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+          p_status?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_query?: string | null
+        }
+        Returns: Json
+      }
       finance_work_commitments_page_v1: {
         Args: {
           p_page?: number | null
