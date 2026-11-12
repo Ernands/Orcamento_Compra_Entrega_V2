@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { runFinancePreviewParity } from '../data/finance/finance-parity-comparison';
 
-const mock = vi.hoisted(() => ({ rpc: vi.fn(), adjustments: vi.fn() }));
+const mock = vi.hoisted(() => ({
+  rpc: vi.fn(), adjustments: vi.fn(), unscheduled: vi.fn(),
+}));
 vi.mock('../data/supabase/client', () => ({
   supabase: {
     rpc: (name: string, args: unknown) =>
       name === 'finance_purchase_adjustment_reconciliation_v1'
         ? mock.adjustments(name, args)
-        : mock.rpc(name, args),
+        : name === 'finance_purchase_unscheduled_page_v1'
+          ? mock.unscheduled(name, args)
+          : mock.rpc(name, args),
   },
 }));
 
@@ -30,9 +34,15 @@ const emptyAdjustmentPage = {
   is_complete: true, original_cents_total: '0',
   remaining_cents_total: '0', refund_cents_total: '0', rows: [],
 };
+const emptyUnscheduledPage = {
+  page: 1, page_size: 100, total_count: 0, is_complete: true,
+  unsupported_purchase_count: 0, unscheduled_cents: '0', rows: [],
+};
 beforeEach(() => {
   mock.rpc.mockReset();
   mock.adjustments.mockReset();
+  mock.unscheduled.mockReset();
+  mock.unscheduled.mockResolvedValue({ data: emptyUnscheduledPage, error: null });
   mock.adjustments.mockResolvedValue({ data: emptyAdjustmentPage, error: null });
 });
 
@@ -45,6 +55,8 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.sqlCheckedEvents).toBe(0);
     expect(report.adjustmentSqlStatus).toBe('matched');
     expect(report.adjustmentSqlChecked).toBe(0);
+    expect(report.unscheduledSqlStatus).toBe('matched');
+    expect(report.unscheduledSqlChecked).toBe(0);
     expect(report.domain.checks.map((entry) => entry.passed)).toEqual([true, true, true, true]);
     expect(mock.rpc).toHaveBeenCalledWith('finance_purchase_events_page_v2', {
       p_page: 1, p_page_size: 100, p_status: null,
@@ -106,6 +118,28 @@ describe('auditoria automática paginada Preview #85', () => {
     expect(report.passed).toBe(false);
     expect(report.adjustmentSqlStatus).toBe('failed');
     expect(report.adjustmentSqlDetail).toContain('todas as páginas');
+  });
+
+  it('não aprova saldo SQL quando uma compra foi excluída do cálculo', async () => {
+    mock.rpc.mockResolvedValue({ data: emptyPage, error: null });
+    mock.unscheduled.mockResolvedValue({ data: {
+      ...emptyUnscheduledPage, unsupported_purchase_count: 1, is_complete: false,
+    }, error: null });
+    const report = await runFinancePreviewParity([], []);
+    expect(report.passed).toBe(false);
+    expect(report.unscheduledSqlStatus).toBe('incomplete');
+    expect(report.unscheduledSqlExcludedPurchases).toBe(1);
+  });
+
+  it('bloqueia divergência na contagem de saldos sem programação', async () => {
+    mock.rpc.mockResolvedValue({ data: emptyPage, error: null });
+    mock.unscheduled.mockResolvedValue({ data: {
+      ...emptyUnscheduledPage, total_count: 1,
+    }, error: null });
+    const report = await runFinancePreviewParity([], []);
+    expect(report.passed).toBe(false);
+    expect(report.unscheduledSqlStatus).toBe('failed');
+    expect(report.unscheduledSqlDetail).toContain('páginas');
   });
 
   it('preserva erro de permissão/conexão para diagnóstico seguro', async () => {
