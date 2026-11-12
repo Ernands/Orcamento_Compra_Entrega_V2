@@ -192,3 +192,35 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Inventário **somente leitura de PROD** em 12/11: 1.330 registros de destinos de Compras, 1.330 vínculos destinos/lojas, 6 anexos ativos de cotações. **Potencial redução:** até 2.666 registros consultados/transferidos por abertura dessas telas para perfis com acesso a todos os dados; resultado real depende da RLS e do payload de cada tabela. São quantidades, não métricas de duração.
 - **Não houve migration nova, escrita no banco, alteração de permissões nem qualquer atualização de PROD.**
 - Próximo estágio: materializar um read model financeiro SQL com paginação/filtros/totais consistentes no servidor; exigir antes comparação exata com os cálculos em centavos (inclusive reembolsos, ajustes parciais e lançamentos de múltiplas lojas) e escopo RLS, para evitar regressões.
+
+
+## Read model de fontes de pagamento — experimento controlado em DEV (12/11/2026)
+
+### Escopo implementado
+- Migration `20261112135448_finance_payment_sources_page_v1.sql`, aplicada **somente ao Supabase DEV**.
+- RPC read-only `public.finance_payment_sources_page_v1(p_page, p_page_size, p_status, p_source, p_date_from, p_date_to, p_query)`, com `STABLE SECURITY INVOKER` e `search_path` restrito.
+- Fontes: `supply_purchase_payments` + `supply_purchases` e `works_service_payments` + `works_services`, respeitando a RLS de todas as tabelas e exigindo `app.can('finance','payments_view')`.
+- Paginação SQL estável por data decrescente, origem e ID de pagamento; até 100 registros por chamada, mais contagem total, somas **brutas das origens** e filtros por origem, situação, período e referência/prestador.
+- Valores são transmitidos como inteiros de centavos em **string**, e convertidos para `bigint` no novo repositório `src/data/finance/finance-payment-sources-repository.ts`. Assinatura da função incluída na tipagem do Supabase, sem `as never`.
+- Arquivo de 7 verificações pgTAP: `supabase/tests/finance_payment_sources_page.test.sql`. Testes unitários cobrem contrato RPC, conversão exata de centavos, propagação de falhas e parâmetros de filtros.
+
+### Paridade de fontes e segurança (dados pequenos de DEV)
+- Com perfil autenticado autorizado: contagem de origens não canceladas **16/16** (9 pagamentos de Compras + 7 pagamentos de Obras), de acordo com SELECTs sob o mesmo contexto RLS.
+- Soma bruta de origem **2.359.270 centavos** = **R$ 23.592,70** tanto na RPC quanto nas consultas originais, sob o mesmo usuário.
+- A página 1 e a página 2 de tamanho 1 devolvem IDs distintos, o parâmetro de tamanho 9.999 é limitado a 100, e os filtros por pagamentos de compras, período e referência foram testados.
+- Dois perfis DEV com permissão financeira obtiveram a mesma contagem de 16; um terceiro sem `finance.payments_view` recebeu **0 registros**, 0 centavos e nenhum detalhe.
+- `prosecdef=false`; `authenticated` pode executar, `anon` e `PUBLIC` não podem executar.
+- A função não foi sinalizada como `SECURITY DEFINER` pelo advisor; existem avisos históricos em funções antigas, separados deste experimento.
+
+### Limites deliberados — **NÃO substituir o financeiro oficial ainda**
+- Esta é uma **API de fontes brutas**, não o read model completo nem a soma oficial das telas.
+- Não expande parcelas, não cria saldos sem programação, não consolida pagamentos multi-CMP, não calcula rateios por loja, não incorpora ocorrências detalhadas por data e **não líquida créditos de reembolso**. Por exemplo, a soma bruta de R$ 23.592,70 não é apresentada como valor contábil do Financeiro.
+- A interface de **Pagamentos, Conciliação, Reembolso e Dashboard Gerencial** permanece ligada à implementação financeira anterior; **não foi trocada pela RPC**.
+- A consulta inicial validou apenas o conjunto DEV de pequeno volume; faltam cenários de dezenas de milhares de registros, perfis com concessões/negações por loja, estornos e ajustes parciais com datas reais.
+- Para substituição gradual, a próxima etapa deve criar um **modelo completo de eventos e alocações** com equivalência linha a linha e centavo a centavo contra `buildUnifiedFinancePayments` e `decorateFinancePaymentsWithOccurrences`. Exigir também paginação sem perda de totais, filtros e relatório completo.
+- Até a compatibilidade ser demonstrada, a RPC tem uso restrito ao repositório técnico e testes, evitando regressões nas telas.
+
+### Segurança de implantação
+- Migration adicional somente DEV; PROD não recebeu esta função. A PR #85 segue rascunho e não foi mesclada.
+- O histórico de migrations DEV/PROD continua divergente e deverá ser reconciliado antes de qualquer promoção.
+- Testes do GitHub Actions para a revisão de código com a nova RPC devem ser conferidos separadamente dos testes manuais do banco.
