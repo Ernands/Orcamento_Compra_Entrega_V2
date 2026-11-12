@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { purchaseOrderFinancialSummary, purchaseOrderStoreCosts } from '../domain/purchase-v2-calculations';
+import { buildUnifiedFinancePayments } from '../domain/finance-payments';
 import { PurchasePartialAdjustmentPanel } from '../components/purchase-partial-adjustment-panel';
 
 // Reproduces the Supabase/PostgREST 1000-row response limit in the regular
@@ -123,8 +124,37 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
       }],
       supply_purchase_items: items,
       supply_items: [],
-      supply_purchase_destinations: [],
-      supply_purchase_destination_stores: [],
+      supply_purchase_destinations: [{
+        id: 'destination-97',
+        purchase_item_id: 'item-0',
+        source_quote_destination_id: null,
+        destination_type: 'store',
+        profile_id: null,
+        store_id: storeId,
+        label_snapshot: 'LOJ-008 BAEPENDI',
+        state_snapshot: 'MG',
+        destination_count: 1,
+        quantity: '1',
+        unit: 'un',
+        quoted_shipping_type: 'free',
+        quoted_shipping_amount: '0',
+        quoted_delivery_days: null,
+        notes_snapshot: null,
+        position: 0,
+        distribution_status: 'confirmed',
+        snapshot_source: 'manual',
+      }],
+      supply_purchase_destination_stores: [{
+        id: 'destination-store-97',
+        purchase_destination_id: 'destination-97',
+        store_id: storeId,
+        store_code_snapshot: 'LOJ-008',
+        store_name_snapshot: 'BAEPENDI - MG',
+        store_city_snapshot: 'BAEPENDI',
+        store_state_snapshot: 'MG',
+        allocated_quantity: '1',
+        allocation_source: 'manual',
+      }],
       supply_purchase_orders: [{
         id: orderId,
         purchase_id: purchaseId,
@@ -159,7 +189,17 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
       }],
       supply_purchase_attachments: [],
       supply_purchase_attachment_stores: [],
-      supply_quote_attachments: [],
+      supply_quote_attachments: [{
+        id: 'quote-attachment-97',
+        quote_id: 'quote-241',
+        original_name: 'proposta.pdf',
+        storage_path: 'cotacoes/quote-241/proposta.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 999,
+        document_type: 'other',
+        created_at: '2026-11-01T00:00:00Z',
+        deleted_at: null,
+      }],
       supply_purchase_partial_adjustments: [],
     };
 
@@ -172,6 +212,8 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
     if (!order) throw new Error('A CMP-00097 perdeu o pedido ativo');
 
     expect(order.lines).toHaveLength(8);
+    expect(purchase.items[0].destinations).toHaveLength(1);
+    expect(purchase.quoteAttachments).toHaveLength(1);
     expect(order.lines.reduce((sum, line) => sum + Math.round(Number(line.lineTotal) * 100), 0)).toBe(340858);
     expect(purchase.stores).toHaveLength(1);
     const stores = purchaseOrderStoreCosts(order);
@@ -195,5 +237,27 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
     expect(screen.getByRole('button', { name: 'Ajustar compra / Cancelamento parcial' }))
       .toBeInTheDocument();
     expect(screen.queryByText(/Operações com múltiplos pagamentos exigem/)).not.toBeInTheDocument();
+
+    const readsBeforeFinance = testDatabase.reads.length;
+    const financePurchases = await listSupplyPurchasesV2({
+      includeAttachments: false,
+      includeDestinations: false,
+      includeQuoteAttachments: false,
+    });
+    const financeReads = testDatabase.reads.slice(readsBeforeFinance).map((entry) => entry.table);
+    expect(financeReads).not.toContain('supply_purchase_destinations');
+    expect(financeReads).not.toContain('supply_purchase_destination_stores');
+    expect(financeReads).not.toContain('supply_quote_attachments');
+    expect(financeReads).not.toContain('supply_purchase_attachments');
+    expect(financeReads).toContain('supply_purchase_order_items');
+    expect(financeReads).toContain('supply_purchase_payments');
+
+    const compact = financePurchases[0];
+    expect(compact.items[0].destinations).toEqual([]);
+    expect(compact.quoteAttachments).toEqual([]);
+    expect(compact.orders).toEqual(purchase.orders);
+    expect(compact.payments).toEqual(purchase.payments);
+    expect(purchaseOrderFinancialSummary(compact, compact.orders[0])).toEqual(financial);
+    expect(buildUnifiedFinancePayments(financePurchases, [])).toEqual(buildUnifiedFinancePayments(purchases, []));
   });
 });

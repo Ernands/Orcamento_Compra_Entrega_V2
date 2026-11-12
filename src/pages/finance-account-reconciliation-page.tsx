@@ -159,7 +159,11 @@ export function FinanceAccountReconciliationPage() {
         await Promise.all([
           // Reconciliation only uses purchase lines, payments and work payments.
           // Invoices, document evidence and work components are not used in balance formulas.
-          listSupplyPurchasesV2({ includeAttachments: false }),
+          listSupplyPurchasesV2({
+            includeAttachments: false,
+            includeDestinations: false,
+            includeQuoteAttachments: false,
+          }),
           listWorkServices({ includeDocuments: false, includeComponents: false }),
           listStores(),
           listSupplyPurchasePaymentOccurrencesV2(),

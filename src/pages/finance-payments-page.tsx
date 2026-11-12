@@ -173,8 +173,10 @@ export function FinancePaymentsPage() {
     setError(null);
     try {
       const [nextPurchases, nextWorks, nextStores, nextOccurrences] = await Promise.all([
-        listSupplyPurchasesV2(),
-        listWorkServices(),
+        // Payment totals depend on order line allocations and fiscal documents,
+        // not quotation attachments, purchase destinations or work components.
+        listSupplyPurchasesV2({ includeDestinations: false, includeQuoteAttachments: false }),
+        listWorkServices({ includeComponents: false }),
         listStores(),
         listSupplyPurchasePaymentOccurrencesV2(),
       ]);
