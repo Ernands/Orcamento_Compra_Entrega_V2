@@ -42,7 +42,9 @@ describe('layout compacto das ações de Pagamentos', () => {
   });
 
   it('alterna branco e verde suave por lançamento inteiro, inclusive sua faixa de ações', () => {
-    expect(page).toContain('filteredRows.map((row, index)');
+    expect(page).toContain('pagedPayments.items.map((row, index)');
+    expect(page).toContain('financeTablePage(filteredRows, tablePage)');
+    expect(page).toContain('<FinanceTablePager');
     expect((page.match(/index % 2 === 1 \? 'finance-payment-entry--striped'/g) || []).length).toBe(2);
     expect(styles).toContain('.finance-payments-table .finance-payment-entry--striped {');
     expect(styles).toContain('--finance-payment-card-bg: #edf6f1');
