@@ -287,3 +287,38 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - A validação de pagamento parcelado ainda precisa de fixtures integradas na RPC com controle de RLS, além dos testes de fórmula e testes TypeScript.
 - Código TypeScript recente ainda sem execução própria do GitHub Actions identificável no momento desta atualização; não considerar CI homologado.
 - Não trocar `finance-payments-page.tsx` ou dashboards pela nova RPC antes da paridade integral; nenhuma publicação em PROD, merge ou migração em PROD.
+
+
+## Auditoria automática das quatro etapas na Preview #85 — 12/11/2026
+
+### Implementação sem substituição dos saldos oficiais
+- Nova auditoria pura `src/domain/finance-projection-audit.ts`: faz verificações de conservação por pagamento, rateio, crédito e consolidação, confrontando `buildFinancePaymentEvents` com o resultado efetivamente exibido por `buildUnifiedFinancePayments`.
+- Novo executor `src/data/finance/finance-parity-comparison.ts`: carrega todas as páginas elegíveis de `finance_purchase_events_page_v1` em lotes de 100; valida totais, contagem de páginas, ausência de linhas perdidas/duplicadas e confronta campo a campo com o algoritmo atual por `assertPurchaseEventParity`.
+- Na tela **Financeiro → Pagamentos** (`src/pages/finance-payments-page.tsx`), ativa automaticamente **somente** em `deploy-preview-85--*`, em modo somente leitura, após o carregamento da tela. Consulta SQL executada como o usuário autenticado, com `SECURITY INVOKER` e RLS, sem SQL de escrita. `?financeParity=0` desativa o diagnóstico.
+- O executor reutiliza as linhas já calculadas para a tela; não repete o processamento do consolidado no diagnóstico.
+- A **PR #85 permanece em rascunho**; as telas de produção não foram alteradas e o Financeiro continua usando os cálculos originais em todas as KPIs e exports.
+
+### Verificações e limites por etapa
+1. **Parcelamentos e pagamentos:** cada ID de evento legado deve existir uma vez (inclusive nos grupos combinados), manter data/status/centavos e conciliar a soma dos eventos por pagamento; eventuais entradas e parcelas permanecem sob o algoritmo atual.
+2. **Cancelamentos e créditos:** confirma bruto = líquido + reembolso, crédito por item, cancelamento + redução líquida de frete = reembolso, registro histórico preservado e reembolso consolidado sem dupla dedução. Não altera a classificação de frete ou o histórico fiscal.
+3. **Rateios:** soma por loja + não alocado deve bater centavo a centavo com cada evento; valida classificação por origem, ausência de loja duplicada e valor inalterado ao aplicar filtro de loja individual.
+4. **CMPs combinadas:** verifica que os eventos individuais são representados uma única vez no pagamento consolidado, que as referências das CMPs estão corretas, e que os pedidos sem pagamento geral tenham saldos sem programação calculados por contrato menos registros.
+
+**Avisos bloqueiam resultado global "aprovado".** Pagamentos gerais sem vinculação a pedidos e itens sem origem válida não são considerados plenamente homologados por esta auditoria. Divergências também bloqueiam. O SQL não aprovado por compras com ajuste parcial retorna `incomplete`, com contagens excluídas — nunca é interpretado como valor zero ou paridade completa.
+
+### Matriz de testes adicionada
+- Consolidação CMP-00002 + CMP-00003 com pagamento e parcela combinados; injeção de discrepância de R$ 0,01 para testar detecção.
+- Parcela em 31/jan (31/jan → 28/fev → 31/mar), entrada prevista e total de R$ 100,01.
+- Cancelamento parcial de CMP-00038 (fixture sintética, não dados reais): pagamento bruto R$ 100,00, cancelamento R$ 40,00, frete retido R$ 5,00 e residual retido R$ 0,10; crédito R$ 34,90, saldo R$ 65,10; ocorrência original + crédito; injeção de divergência para exigir falha.
+- Crédito residual acima do frete comprovado: cancelamento R$ 40,00, frete R$ 10,00 e crédito residual R$ 3,00, reembolso total R$ 53,00, saldo líquido R$ 47,00. Ajuste virtual `AJ-CREDITO` separado, não registrado falsamente como frete.
+- Rateio de R$ 0,05 para três lojas (R$ 0,02 + R$ 0,02 + R$ 0,01), inclusive detecção de centavo perdido.
+- Rateio misto Equipamentos/Mobiliário de R$ 101,03 em três lojas, com origem Equipamentos R$ 50,01 e Mobiliário R$ 51,02.
+- Pagamento geral sem pedido específico: a auditoria apresenta ressalva, sem indicar paridade completa.
+- Executor SQL: caso sem dados, exclusões por ajustes, divergência de paginação, página incompleta e falha de permissão/conexão.
+
+### Evidência e pendências
+- Netlify Preview para commits da PR #85 compila `npm run build` (`tsc -b && vite build`); deploy confirmado como `success` após integrar o diagnóstico.
+- **Os casos Vitest recém-adicionados ainda não tiveram execução do GitHub Actions para o HEAD mais recente**; não marcar regressões novas como executadas/homologadas. Execução manual/CI é pré-requisito antes de qualquer merge.
+- Revalidada por SQL read-only em DEV a projeção básica: 9 eventos pagos de Compras = R$ 5.192,70 e 9 eventos de Obras = R$ 20.900,00 (4 pagos, 3 programados, 2 sem programação). Esta validação SQL NÃO significa homologação dos fixtures complexos por execução de Vitest.
+- A projeção SQL de Compras continua sem rateios por loja, créditos de cancelamento e consolidação entre CMPs. A auditoria atual protege a migração para esse futuro modelo, **mas não é a própria substituição SQL integral**.
+- PROD não recebeu migrations ou dados desta PR. A cópia integral de PROD para DEV/backup permanece **suspensa conforme orientação do usuário**.
