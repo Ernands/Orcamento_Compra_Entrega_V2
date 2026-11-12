@@ -58,6 +58,7 @@ import {
   filterInactiveStoresWithoutFinancialValues,
 } from '../domain/finance-store-visibility';
 import type { PurchasePaymentOccurrenceV2 } from '../domain/payment-occurrences';
+import type { FinancePreviewParityReport } from '../data/finance/finance-parity-comparison';
 import { formatBRL } from '../domain/supply-calculations';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
@@ -137,6 +138,12 @@ export function FinancePaymentsPage() {
   const canReconciliation = can('finance.account_reconciliation_view');
   const canManageFinance = can('finance.manage');
   const [searchParams] = useSearchParams();
+  const financeParityEnabled = typeof window !== 'undefined' &&
+    window.location.hostname.startsWith('deploy-preview-85--') &&
+    searchParams.get('financeParity') !== '0';
+  const [financeParity, setFinanceParity] = useState<FinancePreviewParityReport | null>(null);
+  const [financeParityError, setFinanceParityError] = useState<string | null>(null);
+  const [financeParityLoading, setFinanceParityLoading] = useState(false);
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -203,6 +210,28 @@ export function FinancePaymentsPage() {
     () => decorateFinancePaymentsWithOccurrences(buildUnifiedFinancePayments(purchases, works), occurrences),
     [occurrences, purchases, works],
   );
+  // Only Netlify Preview #85 runs the shadow read-only comparison.
+  // It does not replace the current finance calculation or modify data.
+  useEffect(() => {
+    if (!financeParityEnabled || loading || error) return;
+    let active = true;
+    setFinanceParityLoading(true);
+    setFinanceParityError(null);
+    setFinanceParity(null);
+    void import('../data/finance/finance-parity-comparison')
+      .then(({ runFinancePreviewParity }) => runFinancePreviewParity(purchases, works))
+      .then((report) => {
+        if (active) setFinanceParity(report);
+      })
+      .catch((cause: unknown) => {
+        if (active) setFinanceParityError(cause instanceof Error ? cause.message : 'Falha na conferência.');
+      })
+      .finally(() => {
+        if (active) setFinanceParityLoading(false);
+      });
+    return () => { active = false; };
+  }, [financeParityEnabled, loading, error, purchases, works]);
+
   const storesById = useMemo(
     () => new Map(stores.map((store) => [store.id, store])),
     [stores],
@@ -522,6 +551,33 @@ export function FinancePaymentsPage() {
       </header>
 
       {error && <ErrorState message={error} onRetry={() => void load()} />}
+      {financeParityEnabled && !loading && (
+        <section className="finance-parity-preview" aria-label="Auditoria financeira Preview 85"
+          style={{ padding: 16, borderRadius: 8, border: '1px solid #94a3b8' }}>
+          <strong>Auditoria financeira · Preview #85 (somente leitura)</strong>
+          {financeParityLoading && <p role="status">Comparando os lançamentos e o SQL paginado…</p>}
+          {financeParityError && <p role="alert">Falha na auditoria: {financeParityError}</p>}
+          {financeParity && (
+            <div role="status">
+              <p>{financeParity.passed ? 'Conferência sem divergências nos cenários cobertos.'
+                : 'Conferência parcial ou com divergências; os valores oficiais não foram alterados.'}</p>
+              <ul>
+                {financeParity.domain.checks.map((check) => (
+                  <li key={check.stage}>
+                    Etapa {check.stage} · {check.title}: {check.passed ? 'sem divergência detectada' : 'divergência detectada'}
+                    {' '}({check.checked} verificações)
+                    {check.issues.length > 0 && ' — ' + check.issues.slice(0, 2).join(' | ')}
+                    {check.warnings.length > 0 && ' — ' + check.warnings.length + ' ressalva(s)'}
+                  </li>
+                ))}
+                <li>SQL paginado: {financeParity.sqlStatus === 'matched'
+                  ? financeParity.sqlCheckedEvents + ' eventos conferidos'
+                  : financeParity.sqlDetail}</li>
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
       {loading ? (
         <InlineLoading label="Carregando pagamentos" />
       ) : (
