@@ -1,5 +1,11 @@
 import { assertPurchaseEventParity } from '../../domain/finance-purchase-event-parity';
 import { assertPurchaseAdjustmentParity } from '../../domain/finance-purchase-adjustment-parity';
+import { assertPurchaseUnscheduledParity } from '../../domain/finance-purchase-unscheduled-parity';
+import {
+  listFinancePurchaseUnscheduledPage,
+  type FinancePurchaseUnscheduledPage,
+  type FinancePurchaseUnscheduledRow,
+} from './finance-purchase-unscheduled-repository';
 import {
   listFinancePurchaseAdjustmentsPage,
   type FinancePurchaseAdjustmentPage,
@@ -29,6 +35,10 @@ export interface FinancePreviewParityReport {
   adjustmentSqlStatus: SqlParityStatus;
   adjustmentSqlChecked: number;
   adjustmentSqlDetail: string;
+  unscheduledSqlStatus: SqlParityStatus;
+  unscheduledSqlChecked: number;
+  unscheduledSqlExcludedPurchases: number;
+  unscheduledSqlDetail: string;
   /** The full four-stage conservation audit and SQL event parity both passed. */
   passed: boolean;
 }
@@ -88,6 +98,68 @@ async function checkAdjustmentParity(
   };
 }
 
+async function checkUnscheduledParity(
+  purchases: PurchaseV2[],
+  rows?: UnifiedFinancePaymentRow[],
+): Promise<{
+  unscheduledSqlStatus: SqlParityStatus;
+  unscheduledSqlChecked: number;
+  unscheduledSqlExcludedPurchases: number;
+  unscheduledSqlDetail: string;
+}> {
+  const first = await listFinancePurchaseUnscheduledPage({
+    page: 1, pageSize: PAGE_SIZE, allowIncomplete: true,
+  });
+  const base = { unscheduledSqlExcludedPurchases: first.unsupportedPurchaseCount };
+  if (!first.isComplete) return {
+    ...base,
+    unscheduledSqlStatus: 'incomplete',
+    unscheduledSqlChecked: 0,
+    unscheduledSqlDetail: first.unsupportedPurchaseCount +
+      ' compra(s) com ajustes ou pedidos sem valor completo foram excluídas do SQL.',
+  };
+  const pages = Math.ceil(first.totalCount / PAGE_SIZE);
+  if (pages > MAX_PAGES) return {
+    ...base,
+    unscheduledSqlStatus: 'incomplete',
+    unscheduledSqlChecked: 0,
+    unscheduledSqlDetail: 'Saldos sem programação acima do limite de conferência.',
+  };
+
+  const projected: FinancePurchaseUnscheduledRow[] = [...first.rows];
+  let mismatch: string | null = null;
+  const sameTotals = (next: FinancePurchaseUnscheduledPage) =>
+    next.totalCount === first.totalCount &&
+    next.unscheduledCents === first.unscheduledCents &&
+    next.unsupportedPurchaseCount === first.unsupportedPurchaseCount &&
+    next.isComplete === first.isComplete;
+
+  for (let page = 2; page <= pages; page += 1) {
+    const next = await listFinancePurchaseUnscheduledPage({
+      page, pageSize: PAGE_SIZE, allowIncomplete: true,
+    });
+    if (!sameTotals(next) || next.page !== page || next.pageSize !== PAGE_SIZE) {
+      mismatch = 'A consulta SQL de saldos mudou durante a paginação.';
+      break;
+    }
+    projected.push(...next.rows);
+  }
+  if (!mismatch) {
+    try {
+      assertPurchaseUnscheduledParity(purchases, first, projected, rows);
+    } catch (error) {
+      mismatch = error instanceof Error ? error.message : 'Saldos SQL divergentes.';
+    }
+  }
+  return {
+    ...base,
+    unscheduledSqlStatus: mismatch ? 'failed' : 'matched',
+    unscheduledSqlChecked: projected.length,
+    unscheduledSqlDetail: mismatch || projected.length +
+      ' saldo(s) sem programação conciliados com o cálculo atual.',
+  };
+}
+
 /**
  * Preview-only on-demand shadow comparison, with no write path.
  * All SQL pages are checked against buildFinancePaymentEvents (the current
@@ -99,9 +171,10 @@ export async function runFinancePreviewParity(
   displayedRows?: UnifiedFinancePaymentRow[],
 ): Promise<FinancePreviewParityReport> {
   const domain = auditUnifiedFinanceProjection(purchases, works, displayedRows);
-  const [first, adjustmentSql] = await Promise.all([
+  const [first, adjustmentSql, unscheduledSql] = await Promise.all([
     listFinancePurchaseEventsPage({ page: 1, pageSize: PAGE_SIZE, allowIncomplete: true }),
     checkAdjustmentParity(purchases),
+    checkUnscheduledParity(purchases, displayedRows),
   ]);
 
   const base = {
@@ -109,6 +182,7 @@ export async function runFinancePreviewParity(
     excludedPurchases: first.unsupportedPurchaseCount,
     excludedPayments: first.unsupportedPaymentCount,
     ...adjustmentSql,
+    ...unscheduledSql,
   };
 
   if (!first.isComplete) {
@@ -170,6 +244,7 @@ export async function runFinancePreviewParity(
     sqlCheckedEvents: pageRows.length,
     sqlDetail: mismatch || 'Eventos SQL comparados, sem divergência, com o cálculo atual.',
     passed: domain.passed && sqlStatus === 'matched' &&
-      adjustmentSql.adjustmentSqlStatus === 'matched',
+      adjustmentSql.adjustmentSqlStatus === 'matched' &&
+      unscheduledSql.unscheduledSqlStatus === 'matched',
   };
 }
