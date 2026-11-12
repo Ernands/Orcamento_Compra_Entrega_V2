@@ -132,7 +132,8 @@ describe('paridade da projeção financeira paginada de Obras', () => {
       commitment_cents: '0', rows: [],
     }, error: null });
     await listFinanceWorkCommitmentsPage({ storeIds: [] });
-    expect(mock.rpc.mock.calls[0][1].p_store_ids).toEqual([]);
+    const rpcArguments = mock.rpc.mock.calls[0][1] as { p_store_ids: string[] };
+    expect(rpcArguments.p_store_ids).toEqual([]);
   });
 
   it('falha fechado em divergência de valores financeiros', async () => {
