@@ -7,6 +7,20 @@
   align-items: center;
 }
 
+.finance-parity-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.finance-parity-preview__actions small {
+  font-size: 0.73rem;
+  color: var(--muted);
+}
+
 .finance-payments-filter-indicator {
   width: fit-content;
   display: inline-flex;
