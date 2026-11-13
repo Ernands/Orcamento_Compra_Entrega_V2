@@ -140,7 +140,7 @@ describe('seleção e acesso da conferência', () => {
     await user.selectOptions(storeSelect, 'store-a');
 
     expect(await screen.findByText(
-      'Não foi possível carregar todas as compras e obras da loja. Atualize e tente novamente.',
+      'Não foi possível verificar possíveis notas e recibos duplicados em outras lojas. A conferência foi bloqueada para evitar relatório incompleto. Atualize e tente novamente.',
     )).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Gerar conferência/ })).not.toBeInTheDocument();
     expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(1);
