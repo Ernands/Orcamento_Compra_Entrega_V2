@@ -219,6 +219,62 @@ function mapAttachmentStore(row: AttachmentStoreRow): PurchaseAttachmentStoreV2 
 }
 
 /**
+ * Financial adjustments reference immutable order-line IDs. If the bulk read
+ * is incomplete, recover those lines (and their store allocations) before
+ * projecting refunds. Never silently skip an adjusted line or alter the DB.
+ */
+async function recoverAdjustmentOrderLines(
+  lines: OrderLineRow[],
+  stores: OrderLineStoreRow[],
+  adjustments: PartialAdjustmentRecord[],
+): Promise<{ lines: OrderLineRow[]; stores: OrderLineStoreRow[] }> {
+  const knownLines = new Set(lines.map((line) => line.id));
+  const referenced = new Set(adjustments.flatMap((adjustment) =>
+    Array.isArray(adjustment.line_adjustments)
+      ? adjustment.line_adjustments.map((line) => line.line_id).filter((id): id is string =>
+        typeof id === 'string' && id.length > 0)
+      : []));
+  const missing = [...referenced].filter((id) => !knownLines.has(id));
+  if (!missing.length) return { lines, stores };
+
+  const restoredLines = [...lines];
+  const restoredStores = [...stores];
+  const knownStores = new Set(stores.map((store) => store.id));
+  // Bound each IN query to avoid URL size and PostgREST row-limit issues.
+  for (let offset = 0; offset < missing.length; offset += 100) {
+    const chunk = missing.slice(offset, offset + 100);
+    const { data, error } = await supabase
+      .from('supply_purchase_order_items' as never).select('*').in('id', chunk);
+    if (error) throw new Error('Falha ao recuperar itens vinculados aos ajustes: ' + error.message);
+    const fetched = (data || []) as unknown as OrderLineRow[];
+    const newLines = fetched.filter((line) => !knownLines.has(line.id));
+    for (const line of newLines) {
+      knownLines.add(line.id);
+      restoredLines.push(line);
+    }
+    if (!newLines.length) continue;
+    const { data: storeData, error: storeError } = await supabase
+      .from('supply_purchase_order_line_stores' as never).select('*')
+      .in('order_line_id', newLines.map((line) => line.id));
+    if (storeError) throw new Error('Falha ao recuperar lojas dos itens ajustados: ' + storeError.message);
+    for (const store of (storeData || []) as unknown as OrderLineStoreRow[]) {
+      if (knownStores.has(store.id)) continue;
+      knownStores.add(store.id);
+      restoredStores.push(store);
+    }
+  }
+  const unresolved = missing.filter((id) => !knownLines.has(id));
+  if (unresolved.length) {
+    throw new Error(
+      'Existem ' + unresolved.length +
+      ' item(ns) de ajustes financeiros indisponíveis na leitura. ' +
+      'Confira as permissões e a integridade dos pedidos antes de calcular o reembolso.',
+    );
+  }
+  return { lines: restoredLines, stores: restoredStores };
+}
+
+/**
  * Preview audit: choose purchases by store membership inside the database, then
  * load ALL their rows (including allocations for other stores). Filtering
  * individual lines by the selected store would corrupt shared CMP totals.
@@ -344,13 +400,18 @@ export async function listSupplyPurchasesV2(options?: {
   const destinations = destinationResult.data as unknown as DestinationRow[];
   const destinationStores = destinationStoreResult.data as unknown as DestinationStoreRow[];
   const orders = orderResult.data as unknown as OrderRow[];
-  const lines = orderLineResult.data as unknown as OrderLineRow[];
-  const lineStores = orderLineStoreResult.data as unknown as OrderLineStoreRow[];
+  const originalLines = orderLineResult.data as unknown as OrderLineRow[];
+  const originalLineStores = orderLineStoreResult.data as unknown as OrderLineStoreRow[];
   const payments = paymentResult.data as unknown as PaymentRow[];
   const attachments = attachmentResult.data as unknown as AttachmentRow[];
   const attachmentStores = attachmentStoreResult.data as unknown as AttachmentStoreRow[];
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
   const adjustments = adjustmentResult.data as unknown as PartialAdjustmentRecord[];
+  // Retain main's safety gate: never project financial refunds if their
+  // immutable adjusted order lines disappeared from the paginated read.
+  const { lines, stores: lineStores } = await recoverAdjustmentOrderLines(
+    originalLines, originalLineStores, adjustments,
+  );
 
   const storesByPurchase = groupRowsBy(stores, (row) => row.purchase_id);
   const itemsByPurchase = groupRowsBy(items, (row) => row.purchase_id);
