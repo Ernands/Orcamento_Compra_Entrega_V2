@@ -29,11 +29,18 @@ vi.mock('../data/supabase/client', () => ({
         is() { return query; },
         in(column: string, values: string[]) {
           testDatabase.recovered.push({ table, column, values });
-          return Promise.resolve({
-            data: (testDatabase.tables[table] || []).filter((row) =>
-              values.includes(String(row[column]))),
-            error: null,
+          const data = (testDatabase.tables[table] || []).filter((row) =>
+            values.includes(String(row[column])));
+          // Support both the one-shot recovery lookup and the bounded,
+          // paginated association read used by Compras V2.
+          const filteredQuery = Object.assign(Promise.resolve({ data, error: null }), {
+            order() { return filteredQuery; },
+            range(from: number, to: number) {
+              testDatabase.reads.push({ table, from, to });
+              return Promise.resolve({ data: data.slice(from, to + 1), error: null });
+            },
           });
+          return filteredQuery;
         },
         range(from: number, to: number) {
           testDatabase.reads.push({ table, from, to });
@@ -249,6 +256,10 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
         { table: 'supply_purchase_order_items', from: 500, to: 999 },
         { table: 'supply_purchase_order_items', from: 1000, to: 1499 },
       ]);
+    // The purchase has no fiscal attachments, so avoid the expensive
+    // global link-table scan entirely.
+    expect(testDatabase.reads.some((request) =>
+      request.table === 'supply_purchase_attachment_stores')).toBe(false);
 
     render(<PurchasePartialAdjustmentPanel purchase={purchase} order={order}
       canEdit onSaved={async () => {}} onAttachRefundProof={() => {}} />);
