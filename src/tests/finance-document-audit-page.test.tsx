@@ -68,7 +68,9 @@ describe('seleção e acesso da conferência', () => {
     await user.click(screen.getByRole('button', { name: 'Selecionar todos' }));
     expect(button).toBeEnabled();
     await user.selectOptions(select, 'store-b');
-    expect(button).toBeDisabled();
+    // Loading swaps out the previous store's table/button; do not assert on a
+    // detached node belonging to the previous store's selection.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Gerar conferência/ })).toBeDisabled());
     await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({
       allRows: true, storeId: 'store-b',
     }));
