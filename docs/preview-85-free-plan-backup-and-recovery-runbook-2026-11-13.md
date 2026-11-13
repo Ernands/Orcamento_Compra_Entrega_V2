@@ -66,3 +66,11 @@ Verificar códigos de saída, integridade e conteúdo dos arquivos (não aceitar
 **Não comprovado:** arquivos de dump criados, download integral de Storage, cobertura Auth/Storage, restauração de ensaio, responsável/janela. Portanto **NO-GO**.
 
 Como a atual conversa não tem uma sessão de terminal com CLI/Docker e credenciais de banco, não é possível executar nem certificar esses procedimentos aqui. O projeto continua sem alterações pela preparação deste runbook.
+
+## Manifesto automatizado para comparação pré/pós
+
+Foi criado e **testado por SELECT em DEV/PROD** o script [`docs/sql/preview85-backup-coverage-manifest-readonly.sql`](sql/preview85-backup-coverage-manifest-readonly.sql). Retorna apenas contagem de usuários Auth/app, buckets, quantidade e bytes declarados de objetos por bucket, sem dados pessoais nem caminhos de arquivos.
+
+**Observação de volatilidade real:** a primeira consulta ao PROD encontrou **2.052 objetos (354.163.344 bytes declarados)**. Uma nova leitura da mesma base durante esta preparação apontou **2.053 objetos (354.360.522 bytes declarados)**, com um novo objeto em `works-documents`. Isso pode representar atividade normal de usuários, não uma exclusão/erro da PR. **Não comparar snapshots de horários diferentes como prova de equivalência**; o snapshot de release exige pausa de gravações e registro dos resultados no mesmo intervalo.
+
+Nenhuma das duas leituras criou backup, baixou arquivo ou alterou a produção. Registros/fingerprints devem ser guardados fora do GitHub, em local seguro.
