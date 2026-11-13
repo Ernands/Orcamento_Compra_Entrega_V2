@@ -34,9 +34,11 @@ vi.mock('../data/supabase/client', () => ({
           const rows = candidates.filter((row) => {
             if (row.document_type !== 'invoice' && row.document_type !== 'receipt') return false;
             if (row.source === 'purchase' && row.deleted_at != null) return false;
-            const value = String(row.document_number || '').replace(/[ \t\r\n\f\v]+/g, '').toUpperCase();
+            const rawNumber = typeof row.document_number === 'string' ? row.document_number : '';
+            const storagePath = typeof row.storage_path === 'string' ? row.storage_path : '';
+            const value = rawNumber.replace(/[ \t\r\n\f\v]+/g, '').toUpperCase();
             return (value && params.p_numbers.includes(value)) ||
-              params.p_paths.includes(String(row.storage_path || ''));
+              params.p_paths.includes(storagePath);
           }).sort((a,b) => String(a.source).localeCompare(String(b.source)) ||
             String(a.id).localeCompare(String(b.id)));
           return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
