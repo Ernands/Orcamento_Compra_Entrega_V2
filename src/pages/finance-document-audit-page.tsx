@@ -109,7 +109,9 @@ export function FinanceDocumentAuditPage() {
         const baseRecords = buildAuditRecords(storeId, nextPurchases, nextWorks);
         // Cross-store fiscal hints are read-only and RLS scoped. Failure must
         // block generating a report rather than silently implying no duplicates.
-        const candidates = await listAuditDocumentCandidates(baseRecords);
+        const candidates = await listAuditDocumentCandidates(baseRecords).catch(() => {
+          throw new Error('Falha ao verificar documentos semelhantes em outras lojas.');
+        });
         if (current !== sourceGeneration.current) return;
         const next: AuditStoreSnapshot = {
           storeId,
@@ -123,9 +125,11 @@ export function FinanceDocumentAuditPage() {
         }
         setSourceSnapshot(next);
       })
-      .catch(() => {
-        if (current === sourceGeneration.current)
-          setError('Não foi possível carregar todas as compras e obras da loja. Atualize e tente novamente.');
+      .catch((cause: unknown) => {
+        if (current !== sourceGeneration.current) return;
+        setError(cause instanceof Error && cause.message.startsWith('Falha ao verificar documentos')
+          ? 'Não foi possível verificar possíveis notas e recibos duplicados em outras lojas. A conferência foi bloqueada para evitar relatório incompleto. Atualize e tente novamente.'
+          : 'Não foi possível carregar todas as compras e obras da loja. Atualize e tente novamente.');
       })
       .finally(() => {
         if (current === sourceGeneration.current) setLoadingSources(false);
