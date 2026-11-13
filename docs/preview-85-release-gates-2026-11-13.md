@@ -115,6 +115,35 @@ Testes negativos de permissão por consultas read-only com troca de papel local:
 
 Referência oficial: https://supabase.com/docs/guides/platform/backups
 
+### Comparação de acesso com os 13 perfis ativos do PROD (read-only)
+
+Foi simulada, **sem gravar no banco**, a projeção da nova função
+`private.readable_supply_purchase_ids_for` contra a função atualmente
+instalada `app.can_read_supply_purchase`, mantendo o mesmo `auth.uid()`
+por perfil e percorrendo as **87 compras**. Resultado: **zero
+ampliações ou perdas previstas** nos 13 perfis examinados (7 tinham 87/87
+compras; 6 tinham 0/87).
+
+Comparação análoga entre
+`app.can_store('finance','document_audit_view', store)` e a regra nova
+`private.readable_store_ids_for('finance.document_audit_view')`, com o
+gate `app.can('finance','view')`: **13 perfis × 28 lojas**, também com
+**zero ampliações ou perdas previstas**. Um perfil tinha acesso a 28/28
+lojas; os outros 12, a 0/28. Não havia overrides ativos de **grant
+por loja** para as permissões analisadas; regras de bloqueio/concessão
+globais foram consideradas.
+
+**Escopo limitado:** as consultas foram executadas como leitura
+administrativa com contexto `auth.uid()` simulado, sem login real
+no navegador. Esses 13 perfis atuais não exercitam cenários futuros
+de acesso apenas a parte das lojas. Nenhuma função ou política foi
+alterada em PROD; o resultado **não substitui** homologação após
+migrações.
+
+Checklist de interface com critérios de aceite:
+[`docs/preview-85-browser-homologation-checklist.md`](preview-85-browser-homologation-checklist.md).
+Os itens de navegador continuam pendentes até teste autenticado real.
+
 ## Gate 3 — Homologação com login real (BLOQUEADO)
 
 Em uma única rodada de testes autenticados na Preview #85, com dados preparados e perfis legítimos:
