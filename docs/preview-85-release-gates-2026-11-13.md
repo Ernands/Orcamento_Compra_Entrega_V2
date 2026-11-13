@@ -198,3 +198,12 @@ O CI **não** substitui essa homologação nem a validação de abertura de URL 
 - **Próxima necessidade técnica:** benchmark com sessão autenticada e dados representativos, com registro de número de queries, bytes transportados, número de linhas, tempo p50/p95 e timeout por módulo. Os read models financeiros da #85 permanecem `shadow`, sem substituição das somas canônicas.
 
 **Decisão:** Produção continua **NO-GO** até recuperação real validada, reconciliação das migrações e homologação autenticada. Nenhuma alteração em dados/estrutura de PROD nesta continuidade.
+
+## Evidência incremental de pré-publicação — 13/11/2026 (rodada final)
+
+- O HEAD `b6827c2` passou em Quality #43370441115 e Netlify Preview com `success`; nenhum merge ocorreu. **O CI do commit de documentação mais recente deve ser checado novamente.**
+- Consultas SELECT repetidas em PROD confirmaram 10 ajustes, 120 linhas referenciadas e nenhum erro nas invariantes consultadas; anexos com metadados encontrados: Compras 653/653, Cotações 6/6, Obras 1.011/1.011. Esses resultados não garantem backup dos bytes de Storage.
+- Conferência de histórico × SQL: 130 arquivos versionados, 139 migrations no DEV e 111 no PROD; nomes antigos e *versões* divergem. 17 nomes DEV e 11 nomes PROD não estão presentes como arquivos de mesmo nome no repositório, enquanto as 26 migrations da PR estão versionadas. Quatro outros SQLs legados estão sem registro de mesmo nome no PROD; principais funções de reembolso/auditoria/financeiro já apresentam hash igual nos bancos. **Não tentar sincronizar tudo.**
+- O DEV tem 54/26/954 linhas nas três tabelas `purchase_delivery_items`, `purchase_delivery_destinations`, `purchase_delivery_cells`, inexistentes no PROD; não confundir esse conjunto anterior com as 26 migrations novas.
+- Revisão estática dos 26 arquivos concluiu que Bloco A altera várias policies RLS, Bloco B contém `ALTER POLICY` sobre duas policies presentes em ambos e Blocos C/D são predominantemente RPCs de leitura/índices. Sem ensaio em cópia do esquema PROD e sem login real, os gates 1–4 permanecem BLOQUEADOS.
+- [Registro completo e reproduzível desta rodada](preview-85-final-preflight-evidence-2026-11-13.md). **Nenhuma migração ou dado de PROD foi modificado.**
