@@ -289,6 +289,48 @@ describe('origem e rateio do sistema', () => {
     expect(record.totalCents).toBeNull();
     expect(record.storeCents).toBeNull();
   });
+  it('mantém vínculos e alertas de documento compartilhado com 320 obras sintéticas', () => {
+    const works = Array.from({ length: 320 }, (_, index) => ({
+      id: 'work-' + index,
+      code: 'OBR-TESTE-' + index,
+      storeId: 'store-a',
+      status: 'contracted',
+      providerName: index < 2 ? 'Fornecedor comum' : 'Fornecedor ' + index,
+      contractedAmount: '100.00',
+      budgetAmount: '100.00',
+      description: 'Serviço ' + index,
+      payments: [],
+      components: [],
+      documents: [{
+        id: 'receipt-' + index,
+        documentType: 'receipt',
+        originalName: 'recibo.pdf',
+        documentNumber: index < 2 ? '123' : String(index),
+        storagePath: 'obras/store-a/' + index + '/recibo.pdf',
+        documentAmount: '100.00',
+        mimeType: null,
+        status: 'verified',
+      }],
+    })) as unknown as WorkService[];
+    const records = buildAuditRecords('store-a', [], works);
+    expect(records).toHaveLength(320);
+    expect(records.every((record) => record.documents.length === 1)).toBe(true);
+    expect(records[0].documents[0].possibleLinks?.map((link) => link.recordId))
+      .toEqual(['work:work-1']);
+    expect(records[1].documents[0].possibleLinks?.map((link) => link.recordId))
+      .toEqual(['work:work-0']);
+    expect(records[319].documents[0].possibleLinks).toEqual([]);
+
+    // A physically shared original is indexed once but remains visible for both OBRs.
+    works[1].documents[0].storagePath = works[0].documents[0].storagePath;
+    const shared = buildAuditRecords('store-a', [], works);
+    expect(shared[0].documents).toHaveLength(1);
+    expect(shared[1].documents).toHaveLength(1);
+    expect(shared[0].documents[0]).toBe(shared[1].documents[0]);
+    expect(shared[0].documents[0].links.map((link) => link.recordId))
+      .toEqual(['work:work-0', 'work:work-1']);
+  });
+
   it('inclui obras sem pagamento e preserva contratado e componentes sem repetição', () => {
     const work = {
       id: 'w1',
