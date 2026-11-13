@@ -10,6 +10,39 @@ const database = vi.hoisted<{
 
 vi.mock('../data/supabase/client', () => ({
   supabase: {
+    rpc(name: string, params: { p_numbers: string[]; p_paths: string[] }) {
+      if (name !== 'finance_document_audit_fiscal_candidates_v1')
+        throw new Error('Unexpected RPC: ' + name);
+      const response = {
+        order() { return response; },
+        range(from: number, to: number) {
+          database.calls.push({
+            table: 'rpc:' + name,
+            filters: [
+              { kind: 'rpc_numbers', column: 'document_number', value: params.p_numbers },
+              { kind: 'rpc_paths', column: 'storage_path', value: params.p_paths },
+            ],
+          });
+          const rows = [
+            ...(database.tables.supply_purchase_attachments || []).map((row) => ({
+              ...row, source: 'purchase', service_id: null,
+            })),
+            ...(database.tables.works_service_documents || []).map((row) => ({
+              ...row, source: 'work', purchase_id: null, purchase_order_id: null,
+            })),
+          ].filter((row) => {
+            if (row.document_type !== 'invoice' && row.document_type !== 'receipt') return false;
+            if (row.source === 'purchase' && row.deleted_at != null) return false;
+            const value = String(row.document_number || '').replace(/[ \t\r\n\f\v]+/g, '').toUpperCase();
+            return (value && params.p_numbers.includes(value)) ||
+              params.p_paths.includes(String(row.storage_path || ''));
+          }).sort((a,b) => String(a.source).localeCompare(String(b.source)) ||
+            String(a.id).localeCompare(String(b.id)));
+          return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+        },
+      };
+      return response;
+    },
     from(table: string) {
       const filters: Array<{ kind: string; column: string; value: unknown }> = [];
       const query = {
@@ -86,14 +119,40 @@ describe('consulta externa de indícios fiscais via RLS', () => {
       link: { reference: 'OBR-EXTERNA', storeIds: ['store-c'], explicitStores: true },
     });
     expect(database.calls.filter((call) =>
-      call.table === 'supply_purchase_attachments',
-    ).every((call) => call.filters.some((filter) =>
-      filter.column === 'deleted_at' && filter.kind === 'is' && filter.value === null,
+      call.table === 'rpc:finance_document_audit_fiscal_candidates_v1',
+    ).some((call) => call.filters.some((filter) =>
+      filter.kind === 'rpc_numbers' && (filter.value as string[]).includes('NF-123'),
     ))).toBe(true);
-    expect(database.calls.some((call) => call.filters.some((filter) =>
-      filter.column === 'document_number' &&
-      (filter.value as string[]).includes('NF-123'),
-    ))).toBe(true);
+    // The invoker SQL, not the browser, excludes deleted attachments.
+    expect(result.every((row) => row.link.reference !== 'CMP-EXCLUIDA')).toBe(true);
+  });
+
+  it('recupera o mesmo número fiscal com caixa e espaços diferentes via consulta normalizada', async () => {
+    database.tables = {
+      supply_purchase_attachments: [{
+        id: 'different-spacing', purchase_id: 'p2', purchase_order_id: null,
+        storage_path: 'other.pdf', document_type: 'invoice', document_number: '  nf - 1 2 3  ',
+        deleted_at: null,
+      }],
+      supply_purchases: [{
+        id: 'p2', codigo_negocio: 'CMP-EXTERNA', supplier_name_snapshot: 'Fornecedor',
+      }],
+      supply_purchase_stores: [{
+        id: 'store-link', purchase_id: 'p2', store_id: 'store-b',
+      }],
+      supply_purchase_attachment_stores: [],
+      works_service_documents: [], works_services: [],
+    };
+    const results = await listAuditDocumentCandidates([selected()]);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      number: '  nf - 1 2 3  ',
+      link: { reference: 'CMP-EXTERNA' },
+    });
+    expect(database.calls.some((call) => call.table.startsWith('rpc:') &&
+      call.filters.some((filter) =>
+        filter.kind === 'rpc_numbers' &&
+        (filter.value as string[]).includes('NF-123')))).toBe(true);
   });
 
   it('não consulta banco sem número ou caminho e não inventa indícios', async () => {
