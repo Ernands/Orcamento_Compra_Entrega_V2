@@ -56,8 +56,12 @@ describe('seleção e acesso da conferência', () => {
     expect(listSupplyPurchasesV2).not.toHaveBeenCalled();
     expect(listWorkServices).not.toHaveBeenCalled();
     await user.selectOptions(select, 'store-a');
-    await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({ allRows: true }));
-    expect(listWorkServices).toHaveBeenCalledWith({ allRows: true, includeComponents: true });
+    await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({
+      allRows: true, storeId: 'store-a',
+    }));
+    expect(listWorkServices).toHaveBeenCalledWith({
+      allRows: true, includeComponents: true, storeId: 'store-a',
+    });
     expect(await screen.findByText('Serviço sem pagamentos')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: /Gerar conferência/ });
     expect(button).toBeDisabled();
@@ -65,12 +69,18 @@ describe('seleção e acesso da conferência', () => {
     expect(button).toBeEnabled();
     await user.selectOptions(select, 'store-b');
     expect(button).toBeDisabled();
-    expect(screen.queryByText('Serviço sem pagamentos')).not.toBeInTheDocument();
+    await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({
+      allRows: true, storeId: 'store-b',
+    }));
+    expect(listWorkServices).toHaveBeenCalledWith({
+      allRows: true, includeComponents: true, storeId: 'store-b',
+    });
+    await waitFor(() => expect(screen.queryByText('Serviço sem pagamentos')).not.toBeInTheDocument());
     await user.selectOptions(select, 'store-a');
-    expect(screen.getByText('Serviço sem pagamentos')).toBeInTheDocument();
-    // Switching stores reuses the complete RLS-scoped snapshot already loaded.
-    expect(listSupplyPurchasesV2).toHaveBeenCalledTimes(1);
-    expect(listWorkServices).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Serviço sem pagamentos')).toBeInTheDocument();
+    // Per-user cache avoids a second RLS query when revisiting a loaded store.
+    expect(listSupplyPurchasesV2).toHaveBeenCalledTimes(2);
+    expect(listWorkServices).toHaveBeenCalledTimes(2);
   });
   it('alerta sobre recibo cadastrado sem arquivo, antes de permitir a conferência', async () => {
     vi.mocked(listWorkServices).mockResolvedValue([{
