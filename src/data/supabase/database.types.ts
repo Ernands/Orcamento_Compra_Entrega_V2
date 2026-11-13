@@ -3453,6 +3453,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finance_document_audit_fiscal_candidates_v1: {
+        Args: { p_numbers?: string[] | null; p_paths?: string[] | null }
+        Returns: {
+          source: string
+          id: string
+          purchase_id: string | null
+          service_id: string | null
+          purchase_order_id: string | null
+          document_type: string
+          document_number: string | null
+          storage_path: string | null
+        }[]
+      }
       finance_purchase_payment_origins_page_v1: {
         Args: { p_page?: number | null; p_page_size?: number | null }
         Returns: Json
