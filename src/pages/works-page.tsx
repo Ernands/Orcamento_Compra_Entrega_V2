@@ -32,6 +32,7 @@ import {
 } from '../data/works/works-repository';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import { serviceTotals } from '../domain/works-calculations';
+import { openSignedDocumentInNewTab } from '../lib/signed-document-window';
 import { workDocumentDisplayStatus } from '../domain/work-document-display-status';
 import type { Store } from '../domain/types';
 import type {
@@ -1302,13 +1303,11 @@ export function WorksPage() {
     setOpeningDocumentId(document.id);
     setError(null);
     try {
-      window.open(
-        await createWorkDocumentSignedUrl(document.storagePath),
-        '_blank',
-        'noopener,noreferrer',
-      );
-    } catch {
-      setError('Não foi possível abrir o documento.');
+      await openSignedDocumentInNewTab(() => createWorkDocumentSignedUrl(document.storagePath));
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message.includes('pop-ups')
+        ? cause.message
+        : 'Não foi possível abrir o documento. Confira o anexo e tente novamente.');
     } finally {
       setOpeningDocumentId(null);
     }
