@@ -98,7 +98,7 @@ select jsonb_build_object(
   ), '[]'::jsonb)
 )
 from summary;
-$function$
+$function$;
 
 
 revoke all on function public.finance_payment_sources_page_v1(integer,integer,text,text,date,date,text) from public, anon;
