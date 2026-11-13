@@ -36,6 +36,30 @@ São **ambientes com massas diferentes**. Comparar seus valores monetários como
 - DEV: zero ajustes reais, portanto não é um teste comparativo dos dez casos de PROD.
 - Essa verificação é somente **integridade referencial/aritmética básica**, não garante que o rateio, lançamentos ou reembolsos sejam interpretados da mesma maneira pelo código novo.
 
+### Decisão operacional — seguir sem ambiente isolado (13/11/2026)
+
+O usuário optou por **não contratar/criar uma branch ou projeto adicional de homologação**. A tentativa de criação exigiu uma confirmação adicional de custo e **não criou ambiente**. Portanto:
+
+- **Não** executar migrações em PROD para simular seu resultado; **não** sobrescrever DEV, criar contas de teste em PROD, copiar dados reais ou iniciar uma restauração.
+- Continuar apenas com revisões estáticas, testes de código/CI, consultas **SELECT** em DEV/PROD, preparação de backup e uma rodada de homologação autenticada na Preview.
+- A ausência de ensaio das migrações sobre um esquema correspondente ao PROD **permanece um risco residual material**; não pode ser compensada somente com os 612 testes de JavaScript. A decisão de não criar ambiente **não equivale à aprovação do deploy**.
+
+**Pré-verificação repetível:** [`docs/sql/preview85-preflight-schema-readonly.sql`](sql/preview85-preflight-schema-readonly.sql), executada com sucesso em DEV e PROD, sem escritas:
+
+| Verificação | DEV | PROD |
+|---|---:|---:|
+| Funções esperadas na versão final da #85 | 23 | 23 |
+| Funções ausentes | 0 | **22** |
+| Tabelas de Compras verificadas | 14 | 14 |
+| Tabelas verificadas sem RLS | 0 | 0 |
+| Políticas do conjunto de Compras | 27 | 27 |
+
+As **24 de 27** políticas de Compras com mesmo nome possuem regras distintas entre DEV e PROD; essas alterações são compatíveis com as otimizações de RLS da #85, mas exigem revisão de autorização antes de eventual implantação. **Não há evidência de paridade real de permissões após migração no PROD**.
+
+Testes negativos de permissão por consultas read-only com troca de papel local: papel `anon` recebeu erro de acesso à tabela `supply_purchases` em ambos; `authenticated` sem identidade de usuário retornou **zero** registros de compras, pagamentos, anexos, obras e documentos de obras nos dois. São controles básicos, **não** testes de perfis reais e não garantem permissão correta para cada usuário.
+
+**Restrições e gates mantidos:** sem cópia isolada, não há teste da aplicação das migrações nem de reversão de esquema. Backup **restaurável** do banco e **arquivos físicos** do Storage continuam sem confirmação; não há homologação autenticada do fluxo completo. Necessária **autorização separada e expressa antes de qualquer publicação em PROD**, com ciência do risco residual e plano de recuperação. O status continua **NO-GO**.
+
 ## Gate 1 — Compatibilidade das migrações (BLOQUEADO)
 
 - [ ] Inventariar esquemas e dependências de `public`, `app`, `private` e políticas RLS de PROD, comparando com a origem histórica das 26 migrações.
