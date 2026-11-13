@@ -18,18 +18,24 @@ import type { Store } from '../domain/types';
 import type { AuditFinding } from '../domain/document-audit-types';
 import './finance-document-audit-page.css';
 
+interface AuditStoreSnapshot {
+  storeId: string;
+  purchases: PurchaseV2[];
+  works: WorkService[];
+}
+
 export function FinanceDocumentAuditPage() {
-  const { can } = useSession();
+  const { can, session } = useSession();
+  const userId = session?.user?.id || '';
   const allowed = can('finance.view') && can('finance.document_audit_view');
   const [stores, setStores] = useState<Store[]>([]);
-  const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
-  const [works, setWorks] = useState<WorkService[]>([]);
+  const [sourceSnapshot, setSourceSnapshot] = useState<AuditStoreSnapshot | null>(null);
+  const cachedSources = useRef<Map<string, AuditStoreSnapshot>>(new Map());
   const [storeId, setStoreId] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingSources, setLoadingSources] = useState(false);
-  const [sourcesReady, setSourcesReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ocr, setOcr] = useState(true);
@@ -50,11 +56,10 @@ export function FinanceDocumentAuditPage() {
     const current = ++generation.current;
     // Ignore any previously running financial load after an explicit refresh.
     sourceGeneration.current += 1;
+    cachedSources.current.clear();
     setLoading(true);
     setLoadingSources(false);
-    setSourcesReady(false);
-    setPurchases([]);
-    setWorks([]);
+    setSourceSnapshot(null);
     setError(null);
     setSelected(new Set());
     setResult(null);
@@ -73,7 +78,7 @@ export function FinanceDocumentAuditPage() {
     } finally {
       if (current === generation.current) setLoading(false);
     }
-  }, [allowed]);
+  }, [allowed, userId]);
   useEffect(() => {
     const counter = generation;
     void load();
@@ -85,32 +90,49 @@ export function FinanceDocumentAuditPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!allowed || loading || loadingSources || !storeId || sourcesReady || error) return;
+    if (!allowed || loading || !storeId || error) return;
     const current = ++sourceGeneration.current;
+    const cacheKey = `${userId}:${storeId}`;
+    const cached = cachedSources.current.get(cacheKey);
+    if (cached) {
+      setSourceSnapshot(cached);
+      setLoadingSources(false);
+      return;
+    }
+    setSourceSnapshot(null);
     setLoadingSources(true);
     void Promise.all([
-      listSupplyPurchasesV2({ allRows: true }),
-      listWorkServices({ allRows: true, includeComponents: true }),
+      listSupplyPurchasesV2({ allRows: true, storeId }),
+      listWorkServices({ allRows: true, includeComponents: true, storeId }),
     ])
       .then(([nextPurchases, nextWorks]) => {
         if (current !== sourceGeneration.current) return;
-        setPurchases(nextPurchases);
-        setWorks(nextWorks);
-        setSourcesReady(true);
+        const next: AuditStoreSnapshot = { storeId, purchases: nextPurchases, works: nextWorks };
+        cachedSources.current.set(cacheKey, next);
+        // Bound both client memory and sensitive per-session cached snapshots.
+        if (cachedSources.current.size > 3) {
+          const oldest = cachedSources.current.keys().next().value;
+          if (oldest) cachedSources.current.delete(oldest);
+        }
+        setSourceSnapshot(next);
       })
       .catch(() => {
         if (current === sourceGeneration.current)
-          setError('Não foi possível carregar todas as compras e obras. Atualize e tente novamente.');
+          setError('Não foi possível carregar todas as compras e obras da loja. Atualize e tente novamente.');
       })
       .finally(() => {
         if (current === sourceGeneration.current) setLoadingSources(false);
       });
-  }, [allowed, loading, loadingSources, storeId, sourcesReady, error]);
+    return () => { sourceGeneration.current++; };
+  }, [allowed, loading, storeId, userId]);
 
   const store = stores.find((entry) => entry.id === storeId);
+  const sourcesReady = Boolean(sourceSnapshot && sourceSnapshot.storeId === storeId);
   const records = useMemo(
-    () => (sourcesReady && storeId ? buildAuditRecords(storeId, purchases, works) : []),
-    [sourcesReady, storeId, purchases, works],
+    () => (sourceSnapshot?.storeId === storeId && storeId
+      ? buildAuditRecords(storeId, sourceSnapshot.purchases, sourceSnapshot.works)
+      : []),
+    [storeId, sourceSnapshot],
   );
   const filtered = useMemo(
     () =>
@@ -225,7 +247,7 @@ export function FinanceDocumentAuditPage() {
           <select
             aria-label="Loja"
             value={storeId}
-            disabled={loading || loadingSources || busy}
+            disabled={loading || busy}
             onChange={(event) => {
               setStoreId(event.target.value);
               setSelected(new Set());
@@ -253,7 +275,7 @@ export function FinanceDocumentAuditPage() {
         <InlineLoading label={loadingSources
           ? 'Carregando compras, obras e vínculos documentais da seleção…'
           : 'Carregando lojas e vínculos documentais…'} />
-      ) : !store ? (
+      ) : error && !sourcesReady ? null : !store ? (
         <EmptyState
           title="Selecione uma loja para começar"
           detail="Todas as compras e obras vinculadas serão listadas, independentemente do pagamento."
