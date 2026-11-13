@@ -52,10 +52,13 @@ describe('seleção e acesso da conferência', () => {
     render(<FinanceDocumentAuditPage />);
     const select = screen.getByLabelText('Loja');
     await waitFor(() => expect(select).toBeEnabled());
-    expect(listSupplyPurchasesV2).toHaveBeenCalledWith({ allRows: true });
-    expect(listWorkServices).toHaveBeenCalledWith({ allRows: true });
+    // Never fetch all purchases and works just to render the store selector.
+    expect(listSupplyPurchasesV2).not.toHaveBeenCalled();
+    expect(listWorkServices).not.toHaveBeenCalled();
     await user.selectOptions(select, 'store-a');
-    expect(screen.getByText('Serviço sem pagamentos')).toBeInTheDocument();
+    await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({ allRows: true }));
+    expect(listWorkServices).toHaveBeenCalledWith({ allRows: true, includeComponents: true });
+    expect(await screen.findByText('Serviço sem pagamentos')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: /Gerar conferência/ });
     expect(button).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Selecionar todos' }));
@@ -63,6 +66,11 @@ describe('seleção e acesso da conferência', () => {
     await user.selectOptions(select, 'store-b');
     expect(button).toBeDisabled();
     expect(screen.queryByText('Serviço sem pagamentos')).not.toBeInTheDocument();
+    await user.selectOptions(select, 'store-a');
+    expect(screen.getByText('Serviço sem pagamentos')).toBeInTheDocument();
+    // Switching stores reuses the complete RLS-scoped snapshot already loaded.
+    expect(listSupplyPurchasesV2).toHaveBeenCalledTimes(1);
+    expect(listWorkServices).toHaveBeenCalledTimes(1);
   });
   it('alerta sobre recibo cadastrado sem arquivo, antes de permitir a conferência', async () => {
     vi.mocked(listWorkServices).mockResolvedValue([{
@@ -92,7 +100,7 @@ describe('seleção e acesso da conferência', () => {
     await waitFor(() => expect(storeSelect).toBeEnabled());
     await user.selectOptions(storeSelect, 'store-a');
 
-    expect(screen.getByText('Sem arquivo fiscal vinculado')).toBeInTheDocument();
+    expect(await screen.findByText('Sem arquivo fiscal vinculado')).toBeInTheDocument();
     expect(screen.getByText('1 cadastro(s) sem arquivo — regularizar')).toBeInTheDocument();
     expect(screen.queryByText(/Atenção: 1 documento\(s\)/)).not.toBeInTheDocument();
 
