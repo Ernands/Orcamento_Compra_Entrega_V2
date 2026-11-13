@@ -403,7 +403,7 @@ export function FinanceDocumentAuditPage() {
             <button
               className="button button--primary"
               disabled={busy || !chosen.length || loading || loadingSources}
-              onClick={() => void generate()
+              onClick={() => void generate()}
             >
               <FileArchive size={18} /> Gerar conferência — ZIP + Excel
             </button>
