@@ -423,3 +423,13 @@ A consulta de contagem em produção encontrou **1.001 registros em `works_servi
 - Teste de regressão `finance-reimbursement.test.ts` reproduz anexo de compra ausente no download e confirma que a planilha apresenta `Falha ao obter arquivo` e a aba `Pendências Documentais`, sem alterar o total solicitado. O exportador existente já captura falhas dos downloads e registra as ausências no ZIP.
 - Homologação visual com login real na hospedagem e clique de abertura de arquivos permanece pendente; as verificações acima são testes JSDOM/Excel e SQL com perfis autenticados simulados, não navegação end-to-end em um navegador com sessão real.
 - Nenhuma migration, documento ou pagamento alterado nesta etapa. **PROD intacto**, PR #85 continua draft sem merge.
+
+
+## Preview #85 — conferência de registros de documentos sem arquivo (12/11/2026)
+
+- Consulta de metadados DEV em `works_service_documents`: **4 documentos** (1 nota e 3 recibos), com `storage_path = NULL` em todos os quatro; 3 registros possuem `status = verified`, 1 `status = pending`. Também não possuem `original_name` nem `size_bytes`. Logo **não são arquivos perdidos de um bucket existente**: no DEV, os registros não possuem vínculo com objeto físico. Os buckets estão privados. Nenhuma cópia de produção deve ocorrer sem autorização.
+- A classificação financeira existente em `serviceTotals` já desconsidera `storagePath` nulo, vazio ou somente espaços; nenhuma alteração nos cálculos oficiais foi necessária.
+- Ajustada apresentação de Obras e Serviços: onde o cadastro consta `verified` mas não há arquivo, a etiqueta passa de verde `Conferido` para `Sem arquivo — regularizar` (tom de alerta); o botão `Arquivo` não é oferecido nesses casos. Os registros não são apagados nem mudam de status no banco.
+- Novo helper `workDocumentDisplayStatus` em `src/domain/work-document-display-status.ts`, com testes para caminho nulo, vazio ou espaço e para status com arquivo válido. Abertura protegida por `storagePath?.trim()`.
+- Teste de estresse SQL **somente leitura no DEV** com **20.000 eventos sintéticos, 110.000 posições e 8 cardinalidades distintas**, pesos financeiros variáveis e método de maiores restos: **zero divergências de centavos e zero alocações negativas**; soma esperada e alocada coincidem. Isso valida a aritmética simulada, **não** o desempenho real do frontend ou downloads com sessão.
+- Homologação de abertura física de documentos usando navegador com login continua pendente. Nenhuma migration, alteração de dados ou arquivo em DEV/PROD nesta etapa, e PR #85 permanece draft.
