@@ -78,7 +78,7 @@ export async function listAuditDocumentCandidates(
         .rpc('finance_document_audit_fiscal_candidates_v1', {
           p_numbers: field === 'numbers' ? chunk : [],
           p_paths: field === 'paths' ? chunk : [],
-        } as never)
+        })
         .order('source')
         .order('id')
         .range(from, to) as unknown as PromiseLike<{ data: CandidateRow[] | null; error: unknown }>,
