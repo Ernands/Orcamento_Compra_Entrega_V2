@@ -60,6 +60,41 @@ Testes negativos de permissão por consultas read-only com troca de papel local:
 
 **Restrições e gates mantidos:** sem cópia isolada, não há teste da aplicação das migrações nem de reversão de esquema. Backup **restaurável** do banco e **arquivos físicos** do Storage continuam sem confirmação; não há homologação autenticada do fluxo completo. Necessária **autorização separada e expressa antes de qualquer publicação em PROD**, com ciência do risco residual e plano de recuperação. O status continua **NO-GO**.
 
+### Validação estrutural ampliada — somente consultas (13/11/2026)
+
+- Das **18 tabelas principais** de Compras, Obras e Financeiro,
+  DEV e PROD possuem **321 definições de coluna** equivalentes, e **230
+  constraints** (chaves, checks e integridade referencial) equivalentes.
+- Índices dessas tabelas: **92 no DEV / 88 no PROD**; os **quatro extras**
+  no DEV são os índices fiscais criados pela #85; os 88 demais coincidem.
+- Revisão estática das 26 migrações: foram identificadas **26 relações
+  referenciadas por nome**, todas encontradas no PROD. Isso não garante
+  que a execução SQL completa seja compatível nem que as permissões
+  pós-migração funcionem.
+- 15 nomes de funções auxiliares foram identificados em referências;
+  as funções atualmente compartilhadas entre os ambientes não
+  apresentam divergências de assinatura, resultado ou atributo
+  SECURITY DEFINER. As auxiliares ausentes de PROD ainda serão criadas
+  pela sequência de migrações.
+- Verificação read-only de Storage:
+  **653/653** anexos ativos de Compras, **6/6** anexos ativos de
+  Cotações e **1.010/1.010** documentos de Obras em PROD possuem
+  metadados de objeto correspondentes. Não prova bytes existentes,
+  downloads funcionais nem recuperação de arquivos.
+- Script de integridade do Storage, testado em DEV e PROD:
+  [`docs/sql/preview85-storage-links-integrity-readonly.sql`](sql/preview85-storage-links-integrity-readonly.sql).
+  Gera também fingerprint de vínculos por tipo para comparação
+  pré/pós-publicação, sem mostrar nomes de arquivos.
+- Script que captura as **27 definições de política e o helper
+  original da PROD** (somente leitura, validado em DEV/PROD):
+  [`docs/sql/preview85-rollback-rls-source-readonly.sql`](sql/preview85-rollback-rls-source-readonly.sql).
+  Guardar seu resultado **fora do GitHub** em local protegido. Ele é
+  fonte para recuperação DBA, não SQL de rollback executável.
+- Ordem condicionada, **sem autorização para executar**:
+  [`docs/preview-85-controlled-migration-sequence.md`](preview-85-controlled-migration-sequence.md).
+  Quatro blocos de 4 + 3 + 17 + 2 migrações, com gates de
+  autorização, disponibilidade e paridade financeira.
+
 ## Gate 1 — Compatibilidade das migrações (BLOQUEADO)
 
 - [ ] Inventariar esquemas e dependências de `public`, `app`, `private` e políticas RLS de PROD, comparando com a origem histórica das 26 migrações.
