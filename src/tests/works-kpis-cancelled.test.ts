@@ -10,15 +10,47 @@ function makeService(
   contractedAmount: string,
   paidAmount: string,
 ): WorkService {
+  const createdAt = '2026-11-13T00:00:00Z';
   return {
     id: code,
     code,
+    storeId: 'store-1',
+    storeCode: 'LOJ-001',
+    storeName: 'Loja de teste',
+    storeCity: 'Natal',
+    storeState: 'RN',
+    category: 'Serviços Diversos de Obra',
+    description: 'Serviço de teste',
+    providerName: null,
+    providerTaxId: null,
+    providerPhone: null,
     status,
     budgetAmount,
     contractedAmount,
-    payments: [{ id: code + '-payment', status: 'paid', amount: paidAmount }],
+    progressPercent: 0,
+    plannedStartDate: null,
+    plannedEndDate: null,
+    notes: null,
+    createdAt,
+    updatedAt: createdAt,
+    payments: [{
+      id: code + '-payment',
+      serviceId: code,
+      storeId: 'store-1',
+      label: 'Pagamento',
+      paymentMethod: 'pix',
+      sourceLabel: null,
+      dueDate: null,
+      amount: paidAmount,
+      status: 'paid',
+      paidAt: createdAt,
+      notes: null,
+      createdAt,
+      updatedAt: createdAt,
+    }],
     documents: [],
-  } as WorkService;
+    components: [],
+  };
 }
 
 describe('Obras e Serviços: indicadores operacionais sem serviços cancelados', () => {
