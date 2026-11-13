@@ -23,14 +23,15 @@ vi.mock('../data/supabase/client', () => ({
               { kind: 'rpc_paths', column: 'storage_path', value: params.p_paths },
             ],
           });
-          const rows = [
+          const candidates: Row[] = [
             ...(database.tables.supply_purchase_attachments || []).map((row) => ({
               ...row, source: 'purchase', service_id: null,
             })),
             ...(database.tables.works_service_documents || []).map((row) => ({
               ...row, source: 'work', purchase_id: null, purchase_order_id: null,
             })),
-          ].filter((row) => {
+          ];
+          const rows = candidates.filter((row) => {
             if (row.document_type !== 'invoice' && row.document_type !== 'receipt') return false;
             if (row.source === 'purchase' && row.deleted_at != null) return false;
             const value = String(row.document_number || '').replace(/[ \t\r\n\f\v]+/g, '').toUpperCase();
