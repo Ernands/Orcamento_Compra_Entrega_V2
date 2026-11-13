@@ -64,6 +64,46 @@ describe('seleção e acesso da conferência', () => {
     expect(button).toBeDisabled();
     expect(screen.queryByText('Serviço sem pagamentos')).not.toBeInTheDocument();
   });
+  it('alerta sobre recibo cadastrado sem arquivo, antes de permitir a conferência', async () => {
+    vi.mocked(listWorkServices).mockResolvedValue([{
+      id: 'w1',
+      code: 'OBR-TESTE',
+      storeId: 'store-a',
+      status: 'contracted',
+      providerName: 'Prestador',
+      contractedAmount: '100.00',
+      budgetAmount: '120.00',
+      description: 'Serviço de instalação',
+      payments: [],
+      documents: [{
+        id: 'document-without-file',
+        documentType: 'receipt',
+        status: 'verified',
+        storagePath: null,
+        originalName: null,
+        documentAmount: '100.00',
+      }],
+      components: [],
+    } as unknown as WorkService]);
+
+    const user = userEvent.setup();
+    render(<FinanceDocumentAuditPage />);
+    const storeSelect = screen.getByLabelText('Loja');
+    await waitFor(() => expect(storeSelect).toBeEnabled());
+    await user.selectOptions(storeSelect, 'store-a');
+
+    expect(screen.getByText('Sem arquivo fiscal vinculado')).toBeInTheDocument();
+    expect(screen.getByText('1 cadastro(s) sem arquivo — regularizar')).toBeInTheDocument();
+    expect(screen.queryByText(/Atenção: 1 documento\(s\)/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Selecionar OBR-TESTE' }));
+    expect(screen.getByText(/Atenção: 1 documento\(s\) cadastrado\(s\) sem arquivo/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gerar conferência/ })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Limpar seleção' }));
+    expect(screen.queryByText(/Atenção: 1 documento\(s\)/)).not.toBeInTheDocument();
+  });
+
   it('direciona o usuário com acesso exclusivo à conferência para a nova tela', () => {
     expect(authorizedHomePath(['finance.view', 'finance.document_audit_view'])).toBe(
       '/financeiro/conferencia-compras-obras',
