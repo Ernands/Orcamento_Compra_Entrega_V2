@@ -638,6 +638,12 @@
   border-color: #badccb;
 }
 
+.works-document-tag--missing {
+  color: #8d3229 !important;
+  background: #fff0ed;
+  border-color: #ecc7c0;
+}
+
 .works-document-tag--pending {
   color: #7b5b15 !important;
   background: #fff7df;
