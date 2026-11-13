@@ -65,14 +65,14 @@ export async function listAuditDocumentCandidates(
     const [numberRows, pathRows] = await Promise.all([
       numbers.length
         ? fetchAllPagesForIds<T>(numbers, (chunk, from, to) => {
-          let query = supabase.from(table).select(select).in('document_number', chunk);
+          let query = supabase.from(table).select(select).in('document_number', chunk).in('document_type', ['invoice', 'receipt']);
           if (table === 'supply_purchase_attachments') query = query.is('deleted_at', null);
           return query.order('id').range(from, to) as never;
         })
         : Promise.resolve([] as T[]),
       paths.length
         ? fetchAllPagesForIds<T>(paths, (chunk, from, to) => {
-          let query = supabase.from(table).select(select).in('storage_path', chunk);
+          let query = supabase.from(table).select(select).in('storage_path', chunk).in('document_type', ['invoice', 'receipt']);
           if (table === 'supply_purchase_attachments') query = query.is('deleted_at', null);
           return query.order('id').range(from, to) as never;
         })
