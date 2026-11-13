@@ -4,6 +4,13 @@
 -- securely before/after release. Does NOT validate object bytes or backups.
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
 
+-- Supabase SQL interface usually returns the last result set. Keep the
+-- per-document integrity and fingerprint query LAST, after bucket counts.
+SELECT bucket_id, count(*) AS object_metadata_count
+FROM storage.objects
+GROUP BY bucket_id
+ORDER BY bucket_id;
+
 WITH refs AS (
   SELECT 'purchase' AS document_source,
          a.id::text AS document_id,
@@ -41,9 +48,4 @@ GROUP BY document_source
 ORDER BY document_source;
 
 -- Bucket metadata presence does not prove the physical object can be downloaded.
-SELECT bucket_id, count(*) AS object_metadata_count
-FROM storage.objects
-GROUP BY bucket_id
-ORDER BY bucket_id;
-
 COMMIT;
