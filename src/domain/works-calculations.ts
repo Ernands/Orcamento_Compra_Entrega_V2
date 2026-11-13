@@ -60,3 +60,31 @@ export function serviceTotals(service: WorkService) {
     hasPaymentProof,
   };
 }
+
+
+/**
+ * Operational KPIs exclude cancelled services, matching Financeiro.
+ * Their original payments and documents remain untouched and available in history.
+ */
+export function activeWorkServiceKpis(services: WorkService[]) {
+  return services
+    .filter((service) => service.status !== 'cancelled')
+    .reduce(
+      (sum, service) => {
+        const current = serviceTotals(service);
+        sum.budgetCents += current.budgetCents;
+        sum.contractedCents += current.contractedCents;
+        sum.paidCents += current.paidCents;
+        sum.payableCents += current.payableCents;
+        sum.missingDocumentsCents += current.missingDocumentsCents;
+        return sum;
+      },
+      {
+        budgetCents: 0n,
+        contractedCents: 0n,
+        paidCents: 0n,
+        payableCents: 0n,
+        missingDocumentsCents: 0n,
+      },
+    );
+}
