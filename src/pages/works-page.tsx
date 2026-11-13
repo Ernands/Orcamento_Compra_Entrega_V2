@@ -1299,11 +1299,12 @@ export function WorksPage() {
   const openDocument = async (service: WorkService, documentId: string) => {
     if (!canDocuments) return;
     const document = service.documents.find((entry) => entry.id === documentId);
-    if (!document?.storagePath?.trim()) return;
+    const storagePath = document?.storagePath?.trim();
+    if (!document || !storagePath) return;
     setOpeningDocumentId(document.id);
     setError(null);
     try {
-      await openSignedDocumentInNewTab(() => createWorkDocumentSignedUrl(document.storagePath));
+      await openSignedDocumentInNewTab(() => createWorkDocumentSignedUrl(storagePath));
     } catch (cause) {
       setError(cause instanceof Error && cause.message.includes('pop-ups')
         ? cause.message
