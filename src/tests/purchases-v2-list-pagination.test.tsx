@@ -34,7 +34,7 @@ vi.mock('../data/supabase/client', () => ({
           // Support both the one-shot recovery lookup and the bounded,
           // paginated association read used by Compras V2.
           const filteredQuery = Object.assign(Promise.resolve({ data, error: null }), {
-            order() { return filteredQuery; },
+            order() { return this; },
             range(from: number, to: number) {
               testDatabase.reads.push({ table, from, to });
               return Promise.resolve({ data: data.slice(from, to + 1), error: null });
