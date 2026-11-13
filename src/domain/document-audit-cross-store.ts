@@ -1,4 +1,5 @@
 import type { AuditDocument, AuditDocumentLink, AuditRecord } from './document-audit-types';
+import { normalizeFiscalDocumentNumber } from './fiscal-document-number';
 
 export type AuditExternalCandidate = {
   key: string;
@@ -48,7 +49,7 @@ export function supplementAuditCrossStoreLinks(
   for (const doc of byKey.values()) {
     if (!doc.number?.trim()) continue;
     for (const supplier of new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean))) {
-      const key = JSON.stringify([doc.type, normalize(doc.number), supplier]);
+      const key = JSON.stringify([doc.type, normalizeFiscalDocumentNumber(doc.number), supplier]);
       const matches = numberSupplier.get(key) || [];
       matches.push(doc);
       numberSupplier.set(key, matches);
@@ -60,7 +61,7 @@ export function supplementAuditCrossStoreLinks(
     if (!candidate.number?.trim() || !candidate.link.supplier.trim()) continue;
     const key = JSON.stringify([
       candidate.type,
-      normalize(candidate.number),
+      normalizeFiscalDocumentNumber(candidate.number),
       normalize(candidate.link.supplier),
     ]);
     for (const doc of numberSupplier.get(key) || []) {
