@@ -33,7 +33,7 @@ describe('documentos de obras sem arquivo físico', () => {
       paymentId: null, documentAmount: '1000.00',
     };
     const work = {
-      id: 'work-1', contractedAmount: '1000.00', payments: [],
+      id: 'work-1', budgetAmount: '1000.00', contractedAmount: '1000.00', payments: [],
       documents: [document],
     } as unknown as WorkService;
     const totals = serviceTotals(work);
