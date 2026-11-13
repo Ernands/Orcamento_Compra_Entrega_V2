@@ -131,6 +131,21 @@ describe('seleção e acesso da conferência', () => {
     expect(screen.queryByText(/Atenção: 1 documento\(s\)/)).not.toBeInTheDocument();
   });
 
+  it('falha fechado quando não é possível verificar duplicidade externa e não libera ZIP parcial', async () => {
+    vi.mocked(listAuditDocumentCandidates).mockRejectedValue(new Error('403 RLS'));
+    const user = userEvent.setup();
+    render(<FinanceDocumentAuditPage />);
+    const storeSelect = screen.getByLabelText('Loja');
+    await waitFor(() => expect(storeSelect).toBeEnabled());
+    await user.selectOptions(storeSelect, 'store-a');
+
+    expect(await screen.findByText(
+      'Não foi possível carregar todas as compras e obras da loja. Atualize e tente novamente.',
+    )).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Gerar conferência/ })).not.toBeInTheDocument();
+    expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(1);
+  });
+
   it('direciona o usuário com acesso exclusivo à conferência para a nova tela', () => {
     expect(authorizedHomePath(['finance.view', 'finance.document_audit_view'])).toBe(
       '/financeiro/conferencia-compras-obras',
