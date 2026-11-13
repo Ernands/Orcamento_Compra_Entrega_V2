@@ -5,6 +5,7 @@ import { authorizedHomePath } from '../app/guards';
 import { FinanceDocumentAuditPage } from '../pages/finance-document-audit-page';
 import { useSession } from '../app/session-provider';
 import { listAuditStores } from '../data/finance/document-audit-repository';
+import { listAuditDocumentCandidates } from '../data/finance/document-audit-candidates-repository';
 import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listWorkServices } from '../data/works/works-repository';
 import type { WorkService } from '../domain/works-types';
@@ -12,6 +13,9 @@ import { auditStore } from './fixtures/document-audit';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
 vi.mock('../data/finance/document-audit-repository', () => ({ listAuditStores: vi.fn() }));
+vi.mock('../data/finance/document-audit-candidates-repository', () => ({
+  listAuditDocumentCandidates: vi.fn(),
+}));
 vi.mock('../data/purchases/purchases-v2-repository', () => ({
   listSupplyPurchasesV2: vi.fn(),
   createPurchaseAttachmentSignedUrlV2: vi.fn(),
@@ -21,6 +25,7 @@ vi.mock('../data/works/works-repository', () => ({
   createWorkDocumentSignedUrl: vi.fn(),
 }));
 beforeEach(() => {
+  vi.mocked(listAuditDocumentCandidates).mockResolvedValue([]);
   vi.mocked(useSession).mockReturnValue({
     can: (capability: string) =>
       ['finance.view', 'finance.document_audit_view'].includes(capability),
@@ -62,6 +67,7 @@ describe('seleção e acesso da conferência', () => {
     expect(listWorkServices).toHaveBeenCalledWith({
       allRows: true, includeComponents: true, storeId: 'store-a',
     });
+    await waitFor(() => expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Serviço sem pagamentos')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: /Gerar conferência/ });
     expect(button).toBeDisabled();
@@ -83,6 +89,7 @@ describe('seleção e acesso da conferência', () => {
     // Per-user cache avoids a second RLS query when revisiting a loaded store.
     expect(listSupplyPurchasesV2).toHaveBeenCalledTimes(2);
     expect(listWorkServices).toHaveBeenCalledTimes(2);
+    expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(2);
   });
   it('alerta sobre recibo cadastrado sem arquivo, antes de permitir a conferência', async () => {
     vi.mocked(listWorkServices).mockResolvedValue([{
