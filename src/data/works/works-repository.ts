@@ -153,12 +153,20 @@ function mapService(
   };
 }
 
-export async function listWorkServices(options?: { allRows?: boolean; includeDocuments?: boolean; includeComponents?: boolean }): Promise<WorkService[]> {
-  const servicesQuery = () => supabase
-    .from('works_services')
-    .select('*')
-    .order('updated_at', { ascending: false })
-    .order('id');
+export async function listWorkServices(options?: {
+  allRows?: boolean;
+  storeId?: string;
+  includeDocuments?: boolean;
+  includeComponents?: boolean;
+}): Promise<WorkService[]> {
+  const servicesQuery = () => {
+    const query = supabase
+      .from('works_services')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .order('id');
+    return options?.storeId ? query.eq('store_id', options.storeId) : query;
+  };
   const paymentsQuery = () => supabase
     .from('works_service_payments')
     .select('*')
