@@ -1,4 +1,5 @@
 import { purchaseOrderStoreCosts } from './purchase-v2-calculations';
+import { normalizeFiscalDocumentNumber } from './fiscal-document-number';
 import { moneyToCents, quantityToThousandths } from './supply-calculations';
 import type { PurchaseV2 } from './purchase-v2-types';
 import type { WorkService } from './works-types';
@@ -101,7 +102,7 @@ function documentCatalog(
   const catalogOrder = new Map(documents.map((doc, index) => [doc.key, index]));
   const numberSupplierIndex = new Map<string, AuditDocument[]>();
   const candidateKey = (doc: AuditDocument, supplier: string) =>
-    JSON.stringify([doc.type, normalize(doc.number || ''), supplier]);
+    JSON.stringify([doc.type, normalizeFiscalDocumentNumber(doc.number), supplier]);
   for (const doc of documents) {
     if (!doc.number?.trim()) continue;
     for (const supplier of new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean))) {
