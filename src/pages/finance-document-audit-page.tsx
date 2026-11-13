@@ -214,7 +214,7 @@ export function FinanceDocumentAuditPage() {
         <button
           className="button button--secondary"
           disabled={busy || loading || loadingSources}
-          onClick={() => void load()
+          onClick={() => void load()}
         >
           <RefreshCcw size={16} /> Atualizar
         </button>
