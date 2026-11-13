@@ -45,6 +45,7 @@ describe('documentos de obras sem arquivo físico', () => {
     expect(worksPage).toContain('workDocumentDisplayStatus(document).tone');
     expect(worksPage).toContain('workDocumentDisplayStatus(document).label');
     expect(worksPage).toContain('workDocumentDisplayStatus(document).hasFile');
-    expect(worksPage).toContain('if (!document?.storagePath?.trim()) return');
+    expect(worksPage).toContain('const storagePath = document?.storagePath?.trim()');
+    expect(worksPage).toContain('if (!document || !storagePath) return');
   });
 });
