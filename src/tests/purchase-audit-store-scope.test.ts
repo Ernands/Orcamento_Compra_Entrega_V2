@@ -169,6 +169,40 @@ describe('Consulta de auditoria limitada à loja sem cortar a CMP compartilhada'
       (filter.values as string[])[0] === 'att-shared'))).toBe(true);
   });
 
+  it('pagina vínculos de mais de 100 anexos ativos sem omitir documentos nem duplicar associações', async () => {
+    setup();
+    const baseAttachment = db.tables.supply_purchase_attachments[0];
+    const baseLink = db.tables.supply_purchase_attachment_stores[0];
+    db.tables.supply_purchase_attachments = Array.from({ length: 105 }, (_, index) => ({
+      ...baseAttachment,
+      id: 'att-' + index,
+      storage_path: 'compras/p-shared/' + index + '.pdf',
+    }));
+    db.tables.supply_purchase_attachment_stores = Array.from({ length: 105 }, (_, index) => ({
+      ...baseLink,
+      id: 'link-' + index,
+      attachment_id: 'att-' + index,
+    }));
+
+    const purchases = await listSupplyPurchasesV2();
+    const shared = purchases.find((purchase) => purchase.id === 'p-shared');
+    expect(shared?.attachments).toHaveLength(105);
+    expect(shared?.attachments.every((attachment) => attachment.stores.length === 1)).toBe(true);
+
+    const linkRequests = db.requests.filter((request) =>
+      request.table === 'supply_purchase_attachment_stores');
+    expect(linkRequests).toHaveLength(2);
+    expect(linkRequests.map((request) => request.filters.find((filter) =>
+      filter.column === 'attachment_id' && filter.operation === 'in')))
+      .toEqual([
+        expect.objectContaining({ values: expect.arrayContaining(['att-0', 'att-99']) }),
+        expect.objectContaining({ values: expect.arrayContaining(['att-100', 'att-104']) }),
+      ]);
+    expect(linkRequests.map((request) => (request.filters.find((filter) =>
+      filter.column === 'attachment_id' && filter.operation === 'in')?.values as string[]).length))
+      .toEqual([100, 5]);
+  });
+
   it('filtra os IDs de CMP no banco e conserva todas as lojas, rateios e notas das CMPs escolhidas', async () => {
     setup();
     const selected = await listSupplyPurchasesV2({ allRows: true, storeId: 'store-a' });
