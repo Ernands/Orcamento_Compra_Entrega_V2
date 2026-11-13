@@ -152,6 +152,48 @@ describe('Excel e ZIP de conferência', () => {
     const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
     expect(await zip.file('Leia-me.txt')!.async('text')).toContain('Falhas de download: 1');
   });
+  it('registra no ZIP fiscal a OBR sem arquivo sem solicitar URL assinada', async () => {
+    const missing = {
+      ...auditDoc('missing-work', 'work:w1'),
+      key: 'work:missing-work',
+      source: 'work' as const,
+      type: 'receipt' as const,
+      storagePath: '',
+      name: 'Recibo cadastrado sem arquivo',
+    };
+    const work = {
+      ...auditRecord('purchase:p1', missing),
+      id: 'work:w1',
+      source: 'work' as const,
+      reference: 'OBR-00001',
+      documents: [missing],
+      items: [],
+    };
+    const getSignedUrl = vi.fn(() => Promise.resolve('https://storage.example.test/secret'));
+    const fetchDocument = vi.fn(() => Promise.resolve(new ArrayBuffer(2)));
+    const read = vi.fn(() => Promise.resolve(readFiscalXml(auditXml())));
+    const result = await generateAuditPackage({
+      store: auditStore,
+      records: [work],
+      recipients: ACCEPTED_AUDIT_RECIPIENTS,
+      ocr: false,
+      getSignedUrl,
+      fetchDocument,
+      reader: { read, dispose: vi.fn(() => Promise.resolve()) },
+    });
+
+    expect(result.summary.failedFiles).toBe(1);
+    expect(result.files[0].error).toBe('Cadastro do anexo não contém arquivo.');
+    expect(result.files[0].path).toBeNull();
+    expect(getSignedUrl).not.toHaveBeenCalled();
+    expect(fetchDocument).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    expect(await zip.file('Leia-me.txt')!.async('text')).toContain('Falhas de download: 1');
+    expect(Object.keys(zip.files).filter((name) => name.endsWith('.xlsx'))).toHaveLength(1);
+    expect(Object.keys(zip.files).filter((name) => name.startsWith('Notas_e_Recibos/') && !zip.files[name].dir)).toHaveLength(0);
+  });
+
   it('interrompe exportação cancelada sem gerar arquivo parcial como concluído', async () => {
     const abort = new AbortController();
     abort.abort();
