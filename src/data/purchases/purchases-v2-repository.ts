@@ -421,7 +421,7 @@ export async function listSupplyPurchasesV2(options?: {
         .in('attachment_id', attachmentIds)
         .order('store_code_snapshot')
         .order('id')
-        .range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>,
+        .range(from, to),
     );
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
   const adjustments = adjustmentResult.data as unknown as PartialAdjustmentRecord[];
