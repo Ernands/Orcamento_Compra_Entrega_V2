@@ -29,6 +29,13 @@ São **ambientes com massas diferentes**. Comparar seus valores monetários como
 - A consulta no PROD foi apenas SELECT para baseline agregado; **não houve migração, DDL, DML, escrita de Storage ou restauração em PROD**.
 - Script reproduzível e testado no DEV: [`docs/sql/preview85-readonly-prod-snapshot.sql`](sql/preview85-readonly-prod-snapshot.sql). Executar no PROD **imediatamente antes/depois** da janela aprovada, com gravações pausadas, armazenando saídas em local protegido. Divergências não explicadas são **NO-GO**. O script não substitui backup.
 
+### Verificação adicional de ajustes reais (SELECT no PROD)
+
+- Script: [`docs/sql/preview85-prod-adjustments-integrity-readonly.sql`](sql/preview85-prod-adjustments-integrity-readonly.sql).
+- PROD: **10 ajustes parciais**, **120 referências de linhas ajustadas**, **zero vínculos ausentes** a compra/pedido/pagamento/linha, **zero diferenças** na identidade `original_cents - refund_cents = remaining_cents`, zero campos monetários nulos e zero JSONs de linhas/entradas com tipos inválidos.
+- DEV: zero ajustes reais, portanto não é um teste comparativo dos dez casos de PROD.
+- Essa verificação é somente **integridade referencial/aritmética básica**, não garante que o rateio, lançamentos ou reembolsos sejam interpretados da mesma maneira pelo código novo.
+
 ## Gate 1 — Compatibilidade das migrações (BLOQUEADO)
 
 - [ ] Inventariar esquemas e dependências de `public`, `app`, `private` e políticas RLS de PROD, comparando com a origem histórica das 26 migrações.
