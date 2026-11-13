@@ -88,3 +88,14 @@ Inventário diretamente de `list_migrations` nos projetos DEV `wiynrfblfigngkvle
 
 ## Observações
 As 26 migrations da #85 estão enumeradas em [sequência controlada](preview-85-controlled-migration-sequence.md); comparação estrutural, RLS e integridade de arquivos está em [release gates](preview-85-release-gates-2026-11-13.md). Produção permanece **NO-GO**.
+
+## Verificação cruzada de objetos efetivos — realizada em leitura
+
+Consultas `SELECT` aos catálogos `pg_proc`, `pg_policies` e `information_schema.tables` em DEV e PROD, sem executar os objetos analisados:
+
+- Escopo pesquisado: funções com nomes relacionados a `partial`, `delivery`, `reimburse`, `finance_planned` ou `purchase_order`. Foram encontradas **22 assinaturas em cada ambiente**, sem diferença de nome/assinatura ou hash de `pg_get_functiondef` nesta amostra. **Isso não certifica todas as funções do banco nem equivalência de dados ou permissões RLS.**
+- Tabelas relacionadas a entrega, reembolso, ajustes e programação: **7 em DEV e 4 em PROD**. Objetos exclusivos DEV: `public.purchase_delivery_cells`, `public.purchase_delivery_destinations`, `public.purchase_delivery_items`; com quatro políticas RLS por tabela (12 políticas presentes só em DEV). Tratar como **diferença estrutural real**, não simples renome de histórico. Antes da publicação, confirmar se o código da #85 depende desses objetos, se sua criação faz parte de outra release e quem deve autorizá-la.
+- Na política `public.supply_purchase_partial_adjustments.purchase_partial_adjustments_read`, as expressões DEV/PROD diferem. DEV usa conjuntos de `app.readable_supply_purchase_ids()` e `app.readable_supply_purchase_audit_ids()` com wrappers `SELECT`; PROD usa `app.can_read_supply_purchase(purchase_id)` ou `app.can('finance','view')` + `app.can_read_supply_purchase_for(...)`. A mudança pode ser uma otimização planejada da #85, mas **necessita prova de igualdade de visibilidade por perfil/loja**, sobretudo nos dez ajustes reais de PROD.
+- Até aqui foram comparadas **23 políticas relacionadas ao escopo em DEV e 11 em PROD**, sendo 12 exclusivas das três tabelas de entrega. As dez demais com mesmo nome/expressão coincidiram nessa seleção, além da política de ajustes divergente. Essa é uma amostra dirigida, **não** uma auditoria global de policies.
+
+**Gate explícito:** não classificar os 14 DEV-only legados como equivalentes apenas porque parte dos hashes atuais coincide; não mesclar a PR enquanto persistirem diferenças estruturais sem decisão de compatibilidade.
