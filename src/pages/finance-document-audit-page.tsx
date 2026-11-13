@@ -9,6 +9,7 @@ import {
 } from '../data/purchases/purchases-v2-repository';
 import { createWorkDocumentSignedUrl, listWorkServices } from '../data/works/works-repository';
 import { buildAuditRecords } from '../domain/document-audit-records';
+import { auditDocumentCoverage, auditRecordDocumentLabel } from '../domain/document-audit-coverage';
 import { configuredAuditRecipients } from '../domain/document-audit-recipients';
 import { formatBRL } from '../domain/supply-calculations';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
@@ -98,6 +99,7 @@ export function FinanceDocumentAuditPage() {
     [records, query],
   );
   const chosen = records.filter((record) => selected.has(record.id));
+  const chosenCoverage = auditDocumentCoverage(chosen);
   const selectedKnown = chosen
     .filter((record) => record.active)
     .reduce((sum, record) => sum + (record.storeCents ?? 0n), 0n);
@@ -331,20 +333,8 @@ export function FinanceDocumentAuditPage() {
                           </strong>
                         </td>
                         <td>
-                          <span>
-                            {!record.documents.length
-                              ? 'Sem nota ou recibo'
-                              : record.documents.every((doc) => doc.type === 'receipt')
-                                ? 'Documentado por recibo'
-                                : `${record.documents.filter((doc) => doc.type === 'invoice').length} nota(s)`}
-                          </span>
-                          {!!record.documents.length && (
-                            <small>
-                              {record.documents.some((doc) => !doc.storagePath)
-                                ? 'Há cadastro sem arquivo'
-                                : 'Conteúdo será conferido ao gerar'}
-                            </small>
-                          )}
+                          <span>{auditRecordDocumentLabel(record).label}</span>
+                          <small>{auditRecordDocumentLabel(record).detail}</small>
                         </td>
                       </tr>
                     ))}
@@ -370,6 +360,13 @@ export function FinanceDocumentAuditPage() {
                 demorar. Anexos indisponíveis e correspondências incertas ficam sinalizados para
                 revisão, sem presumir valores ou alterar lançamentos.
               </p>
+              {chosenCoverage.withoutPath > 0 && (
+                <p className="document-audit-missing-warning" role="status">
+                  Atenção: {chosenCoverage.withoutPath} documento(s) cadastrado(s) sem arquivo vinculado
+                  na seleção. O ZIP sinalizará essas pendências, mas não poderá incluir os arquivos
+                  ausentes. Regularize os anexos nas telas de Compras ou Obras e Serviços.
+                </p>
+              )}
             </div>
             <button
               className="button button--primary"
