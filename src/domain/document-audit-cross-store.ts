@@ -35,23 +35,28 @@ export function supplementAuditCrossStoreLinks(
         possibleLinks: [...(original.possibleLinks || [])],
       };
       byKey.set(doc.key, doc);
-      if (!doc.number?.trim()) continue;
-      for (const supplier of new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean))) {
-        const key = JSON.stringify([doc.type, normalize(doc.number), supplier]);
-        const matches = numberSupplier.get(key) || [];
-        matches.push(doc);
-        numberSupplier.set(key, matches);
-      }
+    }
+  }
+
+  // Merge physically identical paths before indexing supplier names. A shared
+  // file may be linked to another CMP with a different registered supplier.
+  for (const candidate of candidates) {
+    const exact = byKey.get(candidate.key);
+    if (exact && !exact.links.some((link) => linkKey(link) === linkKey(candidate.link)))
+      exact.links.push(candidate.link);
+  }
+  for (const doc of byKey.values()) {
+    if (!doc.number?.trim()) continue;
+    for (const supplier of new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean))) {
+      const key = JSON.stringify([doc.type, normalize(doc.number), supplier]);
+      const matches = numberSupplier.get(key) || [];
+      matches.push(doc);
+      numberSupplier.set(key, matches);
     }
   }
 
   for (const candidate of candidates) {
-    const exact = byKey.get(candidate.key);
-    if (exact) {
-      if (!exact.links.some((link) => linkKey(link) === linkKey(candidate.link)))
-        exact.links.push(candidate.link);
-      continue;
-    }
+    if (byKey.has(candidate.key)) continue;
     if (!candidate.number?.trim() || !candidate.link.supplier.trim()) continue;
     const key = JSON.stringify([
       candidate.type,
