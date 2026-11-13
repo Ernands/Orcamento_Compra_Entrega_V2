@@ -96,22 +96,37 @@ function documentCatalog(
   // Matching registered number/supplier is a hint, never proof of the same fiscal document.
   const normalize = (value: string) => value.trim().toLocaleUpperCase('pt-BR');
   const documents = [...catalog.values()];
-  documents.forEach((doc) => {
-    if (!doc.number?.trim()) return;
+  // Index possible invoice/receipt matches by registered number and supplier.
+  // This is still only a manual review hint, not proof of fiscal identity.
+  const catalogOrder = new Map(documents.map((doc, index) => [doc.key, index]));
+  const numberSupplierIndex = new Map<string, AuditDocument[]>();
+  const candidateKey = (doc: AuditDocument, supplier: string) =>
+    JSON.stringify([doc.type, normalize(doc.number || ''), supplier]);
+  for (const doc of documents) {
+    if (!doc.number?.trim()) continue;
+    for (const supplier of new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean))) {
+      const key = candidateKey(doc, supplier);
+      const candidates = numberSupplierIndex.get(key);
+      if (candidates) candidates.push(doc);
+      else numberSupplierIndex.set(key, [doc]);
+    }
+  }
+  for (const doc of documents) {
+    if (!doc.number?.trim()) continue;
     const own = new Set(doc.links.map((link) => link.recordId));
     const suppliers = new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean));
-    doc.possibleLinks = documents
-      .filter(
-        (other) =>
-          other.key !== doc.key &&
-          other.type === doc.type &&
-          other.number &&
-          normalize(other.number) === normalize(doc.number!) &&
-          other.links.some((link) => suppliers.has(normalize(link.supplier))),
-      )
+    const matches = new Map<string, AuditDocument>();
+    for (const supplier of suppliers) {
+      for (const other of numberSupplierIndex.get(candidateKey(doc, supplier)) || []) {
+        if (other.key !== doc.key) matches.set(other.key, other);
+      }
+    }
+    // Keep the original catalog order across suppliers for deterministic audits.
+    doc.possibleLinks = [...matches.values()]
+      .sort((a, b) => (catalogOrder.get(a.key) ?? 0) - (catalogOrder.get(b.key) ?? 0))
       .flatMap((other) => other.links)
       .filter((link) => !own.has(link.recordId));
-  });
+  }
   return catalog;
 }
 
