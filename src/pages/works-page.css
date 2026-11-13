@@ -12,6 +12,12 @@
   display:grid;
   gap:12px;
 }
+.works-kpis__note {
+  margin: -8px 0 0;
+  font-size: .82rem;
+  line-height: 1.45;
+  color: #617080;
+}
 .works-kpis--grouped {
   grid-template-columns:minmax(0,1.08fr) minmax(0,1.08fr) minmax(0,.84fr);
   align-items:stretch;

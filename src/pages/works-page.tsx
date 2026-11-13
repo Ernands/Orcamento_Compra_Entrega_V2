@@ -31,7 +31,7 @@ import {
   updateWorkDocument,
 } from '../data/works/works-repository';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
-import { serviceTotals } from '../domain/works-calculations';
+import { activeWorkServiceKpis, serviceTotals } from '../domain/works-calculations';
 import { openSignedDocumentInNewTab } from '../lib/signed-document-window';
 import { workDocumentDisplayStatus } from '../domain/work-document-display-status';
 import type { Store } from '../domain/types';
@@ -1258,28 +1258,7 @@ export function WorksPage() {
       );
   }, [documentationFilter, query, referenceFilter, services, stateFilter, storeFilter]);
 
-  const totals = useMemo(
-    () =>
-      filtered.reduce(
-        (sum, service) => {
-          const current = serviceTotals(service);
-          sum.budgetCents += current.budgetCents;
-          sum.contractedCents += current.contractedCents;
-          sum.paidCents += current.paidCents;
-          sum.payableCents += current.payableCents;
-          sum.missingDocumentsCents += current.missingDocumentsCents;
-          return sum;
-        },
-        {
-          budgetCents: 0n,
-          contractedCents: 0n,
-          paidCents: 0n,
-          payableCents: 0n,
-          missingDocumentsCents: 0n,
-        },
-      ),
-    [filtered],
-  );
+  const totals = useMemo(() => activeWorkServiceKpis(filtered), [filtered]);
 
   const allFilteredExpanded =
     filtered.length > 0 && filtered.every((service) => expandedServiceIds.has(service.id));
@@ -1400,6 +1379,11 @@ export function WorksPage() {
           </div>
         </div>
       </section>
+
+      <p className="works-kpis__note">
+        Os indicadores consideram somente serviços não cancelados. Serviços cancelados,
+        seus pagamentos e documentos continuam disponíveis na listagem para auditoria.
+      </p>
 
       <section className="works-controls">
         <label className="search-field">
