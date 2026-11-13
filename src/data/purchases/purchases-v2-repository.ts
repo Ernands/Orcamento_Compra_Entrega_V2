@@ -230,7 +230,7 @@ async function loadAuditStorePurchaseRows(storeId: string) {
       .select('purchase_id')
       .eq('store_id', storeId)
       .order('purchase_id')
-      .range(from, to) as never,
+      .range(from, to),
   );
   const purchaseIds = [...new Set(memberships.map((row) => row.purchase_id))];
   const byIds = <T>(table: string, foreignKey: string, ids: string[]): Promise<T[]> =>
@@ -240,7 +240,7 @@ async function loadAuditStorePurchaseRows(storeId: string) {
         .select('*')
         .in(foreignKey, chunk)
         .order('id')
-        .range(from, to) as never,
+        .range(from, to),
     );
   const [purchases, stores, items, orders, payments, attachmentRows, adjustments] =
     await Promise.all([
