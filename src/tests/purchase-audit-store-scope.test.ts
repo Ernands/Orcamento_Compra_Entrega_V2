@@ -192,15 +192,13 @@ describe('Consulta de auditoria limitada à loja sem cortar a CMP compartilhada'
     const linkRequests = db.requests.filter((request) =>
       request.table === 'supply_purchase_attachment_stores');
     expect(linkRequests).toHaveLength(2);
-    expect(linkRequests.map((request) => request.filters.find((filter) =>
-      filter.column === 'attachment_id' && filter.operation === 'in')))
-      .toEqual([
-        expect.objectContaining({ values: expect.arrayContaining(['att-0', 'att-99']) }),
-        expect.objectContaining({ values: expect.arrayContaining(['att-100', 'att-104']) }),
-      ]);
-    expect(linkRequests.map((request) => (request.filters.find((filter) =>
-      filter.column === 'attachment_id' && filter.operation === 'in')?.values as string[]).length))
-      .toEqual([100, 5]);
+    const chunks = linkRequests.map((request) => {
+      const values = request.filters.find((filter) =>
+        filter.column === 'attachment_id' && filter.operation === 'in')?.values;
+      return Array.isArray(values) ? values.map((value: unknown) => String(value)) : [];
+    });
+    expect(chunks.map((chunk) => chunk.length)).toEqual([100, 5]);
+    expect(chunks.flat()).toEqual(Array.from({ length: 105 }, (_, index) => 'att-' + index));
   });
 
   it('filtra os IDs de CMP no banco e conserva todas as lojas, rateios e notas das CMPs escolhidas', async () => {
