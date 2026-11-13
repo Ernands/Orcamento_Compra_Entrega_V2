@@ -207,3 +207,9 @@ O CI **não** substitui essa homologação nem a validação de abertura de URL 
 - O DEV tem 54/26/954 linhas nas três tabelas `purchase_delivery_items`, `purchase_delivery_destinations`, `purchase_delivery_cells`, inexistentes no PROD; não confundir esse conjunto anterior com as 26 migrations novas.
 - Revisão estática dos 26 arquivos concluiu que Bloco A altera várias policies RLS, Bloco B contém `ALTER POLICY` sobre duas policies presentes em ambos e Blocos C/D são predominantemente RPCs de leitura/índices. Sem ensaio em cópia do esquema PROD e sem login real, os gates 1–4 permanecem BLOQUEADOS.
 - [Registro completo e reproduzível desta rodada](preview-85-final-preflight-evidence-2026-11-13.md). **Nenhuma migração ou dado de PROD foi modificado.**
+
+## Backup da organização Free — revisão confirmada em 13/11/2026
+
+A consulta `get_organization` identificou o plano Supabase **Free**, o qual não recebe a rotina de backup automático diário descrita para Pro/Team/Enterprise. Backup verificado: **não**. O inventário SELECT do PROD indicou **17** contas `auth.users`, **17** usuários em `public.usuarios`, cinco buckets, dos quais quatro têm no total **2.052** objetos de Storage (metadados somam **354.163.344 bytes**). Não confundir este inventário com backup físico ou funcional. O dump padrão da Supabase CLI omite schemas `auth` e `storage`; exigir cobertura específica, objetos físicos e prova de recuperação.
+
+[Runbook para backup manual do plano Free](preview-85-free-plan-backup-and-recovery-runbook-2026-11-13.md) preparado com comandos de exportação e cuidados de autenticação/Storage. **Nenhuma exportação foi realizada** por esta investigação. O Gate 2 segue BLOQUEADO, com prioridade máxima antes da liberação.
