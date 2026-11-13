@@ -381,7 +381,9 @@ export async function listSupplyPurchasesV2(options?: {
     fetchPagedResult<OrderLineStoreRow>((from, to) => supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineStoreRow>>),
     fetchPagedResult<PaymentRow>((from, to) => supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PaymentRow>>),
     options?.includeAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>),
-    options?.includeAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<AttachmentStoreRow>((from, to) => supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>),
+    // Loaded after active attachments are known: only their store links matter.
+    // This avoids a global RLS scan over all attachment/store associations.
+    Promise.resolve({ data: [], error: null }),
     options?.allRows || options?.includeAttachments === false || options?.includeQuoteAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<QuoteAttachmentRow>((from, to) => supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<QuoteAttachmentRow>>),
     fetchPagedResult<PartialAdjustmentRecord>((from, to) => supabase
       .from('supply_purchase_partial_adjustments' as never)
@@ -404,7 +406,23 @@ export async function listSupplyPurchasesV2(options?: {
   const originalLineStores = orderLineStoreResult.data as unknown as OrderLineStoreRow[];
   const payments = paymentResult.data as unknown as PaymentRow[];
   const attachments = attachmentResult.data as unknown as AttachmentRow[];
-  const attachmentStores = attachmentStoreResult.data as unknown as AttachmentStoreRow[];
+  // A missing document or an inactive attachment must never trigger a global
+  // attachment/store read. Preserve the full set of stores for each *visible*
+  // active attachment, including shared CMPs and their other stores.
+  // The store-scoped audit already provides its own bounded association rows.
+  const attachmentStores = scopedRows
+    ? attachmentStoreResult.data as unknown as AttachmentStoreRow[]
+    : options?.includeAttachments === false ? []
+    : await fetchAllPagesForIds<AttachmentStoreRow>(
+      attachments.map((attachment) => attachment.id),
+      (attachmentIds, from, to) => supabase
+        .from('supply_purchase_attachment_stores' as never)
+        .select('*')
+        .in('attachment_id', attachmentIds)
+        .order('store_code_snapshot')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>,
+    );
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
   const adjustments = adjustmentResult.data as unknown as PartialAdjustmentRecord[];
   // Retain main's safety gate: never project financial refunds if their
