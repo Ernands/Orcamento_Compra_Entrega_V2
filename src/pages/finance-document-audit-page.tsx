@@ -3,25 +3,24 @@ import { FileArchive, FileSearch, RefreshCcw, Search } from 'lucide-react';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
 import { listAuditStores } from '../data/finance/document-audit-repository';
+import { listAuditDocumentCandidates } from '../data/finance/document-audit-candidates-repository';
 import {
   createPurchaseAttachmentSignedUrlV2,
   listSupplyPurchasesV2,
 } from '../data/purchases/purchases-v2-repository';
 import { createWorkDocumentSignedUrl, listWorkServices } from '../data/works/works-repository';
 import { buildAuditRecords } from '../domain/document-audit-records';
+import { supplementAuditCrossStoreLinks } from '../domain/document-audit-cross-store';
 import { auditDocumentCoverage, auditRecordDocumentLabel } from '../domain/document-audit-coverage';
 import { configuredAuditRecipients } from '../domain/document-audit-recipients';
 import { formatBRL } from '../domain/supply-calculations';
-import type { PurchaseV2 } from '../domain/purchase-v2-types';
-import type { WorkService } from '../domain/works-types';
 import type { Store } from '../domain/types';
-import type { AuditFinding } from '../domain/document-audit-types';
+import type { AuditFinding, AuditRecord } from '../domain/document-audit-types';
 import './finance-document-audit-page.css';
 
 interface AuditStoreSnapshot {
   storeId: string;
-  purchases: PurchaseV2[];
-  works: WorkService[];
+  records: AuditRecord[];
 }
 
 export function FinanceDocumentAuditPage() {
@@ -105,9 +104,17 @@ export function FinanceDocumentAuditPage() {
       listSupplyPurchasesV2({ allRows: true, storeId }),
       listWorkServices({ allRows: true, includeComponents: true, storeId }),
     ])
-      .then(([nextPurchases, nextWorks]) => {
+      .then(async ([nextPurchases, nextWorks]) => {
         if (current !== sourceGeneration.current) return;
-        const next: AuditStoreSnapshot = { storeId, purchases: nextPurchases, works: nextWorks };
+        const baseRecords = buildAuditRecords(storeId, nextPurchases, nextWorks);
+        // Cross-store fiscal hints are read-only and RLS scoped. Failure must
+        // block generating a report rather than silently implying no duplicates.
+        const candidates = await listAuditDocumentCandidates(baseRecords);
+        if (current !== sourceGeneration.current) return;
+        const next: AuditStoreSnapshot = {
+          storeId,
+          records: supplementAuditCrossStoreLinks(baseRecords, candidates),
+        };
         cachedSources.current.set(cacheKey, next);
         // Bound both client memory and sensitive per-session cached snapshots.
         if (cachedSources.current.size > 3) {
@@ -129,9 +136,7 @@ export function FinanceDocumentAuditPage() {
   const store = stores.find((entry) => entry.id === storeId);
   const sourcesReady = Boolean(sourceSnapshot && sourceSnapshot.storeId === storeId);
   const records = useMemo(
-    () => (sourceSnapshot?.storeId === storeId && storeId
-      ? buildAuditRecords(storeId, sourceSnapshot.purchases, sourceSnapshot.works)
-      : []),
+    () => (sourceSnapshot?.storeId === storeId && storeId ? sourceSnapshot.records : []),
     [storeId, sourceSnapshot],
   );
   const filtered = useMemo(
