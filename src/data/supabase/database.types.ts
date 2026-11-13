@@ -3453,6 +3453,96 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finance_document_audit_fiscal_candidates_v1: {
+        Args: { p_numbers?: string[] | null; p_paths?: string[] | null }
+        Returns: {
+          source: string
+          id: string
+          purchase_id: string | null
+          service_id: string | null
+          purchase_order_id: string | null
+          document_type: string
+          document_number: string | null
+          storage_path: string | null
+        }[]
+      }
+      finance_purchase_payment_origins_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
+      finance_purchase_combined_groups_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
+      finance_purchase_store_costs_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
+      finance_purchase_store_origin_weights_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
+      finance_purchase_payment_store_origins_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
+      finance_purchase_unscheduled_page_v1: {
+        Args: { p_page?: number | null; p_page_size?: number | null }
+        Returns: Json
+      }
+      finance_purchase_events_page_v2: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+          p_status?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_query?: string | null
+        }
+        Returns: Json
+      }
+      finance_purchase_adjustment_reconciliation_v1: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+        }
+        Returns: Json
+      }
+      finance_purchase_events_page_v1: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+          p_status?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_query?: string | null
+        }
+        Returns: Json
+      }
+      finance_work_commitments_page_v1: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+          p_status?: string | null
+          p_store_ids?: string[] | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_query?: string | null
+        }
+        Returns: Json
+      }
+      finance_payment_sources_page_v1: {
+        Args: {
+          p_page?: number | null
+          p_page_size?: number | null
+          p_status?: string | null
+          p_source?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_query?: string | null
+        }
+        Returns: Json
+      }
       change_store_financial_closure: {
         Args: { p_store_id: string; p_action: string; p_confirm_text: string; p_reason?: string | null }
         Returns: Json

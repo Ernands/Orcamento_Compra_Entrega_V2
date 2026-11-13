@@ -7,6 +7,20 @@
   align-items: center;
 }
 
+.finance-parity-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.finance-parity-preview__actions small {
+  font-size: 0.73rem;
+  color: var(--muted);
+}
+
 .finance-payments-filter-indicator {
   width: fit-content;
   display: inline-flex;
@@ -240,6 +254,18 @@
   border-radius: 6px;
   font-size: 0.78rem;
   text-transform: none;
+}
+
+.finance-payments-occurrence-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 12px;
+  border-left: 3px solid #bd8b23;
+  border-radius: 4px;
+  background: #fff8e9;
+  color: #6f5221;
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .finance-payments-search {
@@ -935,6 +961,7 @@
 .finance-reimbursement-preview td small { margin-top: 2px; color: var(--muted); }
 .finance-reimbursement-money { white-space: nowrap; font-weight: 750; }
 .finance-reimbursement-buttons { display: flex; justify-content: flex-end; gap: 9px; }
+.finance-reimbursement-progress { color: #365a7b; font-size: 0.78rem; font-weight: 650; margin: 6px 0; }
 .finance-reimbursement-error { color: #9b342b; font-size: 0.75rem; }
 .finance-reimbursement-success { color: #177354; font-size: 0.75rem; }
 @media (max-width: 800px) {

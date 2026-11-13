@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildImplementationDashboard,
+  buildImplementationDashboardFromMetrics,
   buildSupplyDashboard,
+  buildSupplyDashboardFromMetrics,
 } from '../data/dashboard/dashboard-repository';
 import type { Store, SupplyItem, SupplyNeed, SupplyQuote, SupplyQuoteItem } from '../domain/types';
 
@@ -237,5 +239,80 @@ describe('dashboard metrics', () => {
       secondaryValue: 5,
     });
     expect(dashboard.quotesByItem[0]).toMatchObject({ count: 2 });
+    expect(
+      buildSupplyDashboardFromMetrics({
+        active_items: dashboard.activeItems,
+        open_needs: dashboard.openNeeds,
+        unlinked_needs: dashboard.unlinkedNeeds,
+        active_suppliers: dashboard.activeSuppliers,
+        total_quotes: dashboard.totalQuotes,
+        received_quotes: dashboard.receivedQuotes,
+        comparable_quotes: dashboard.comparableQuotes,
+        needs_by_status: dashboard.needsByStatus.map((row) => ({
+          ...row,
+          secondaryValue: row.secondaryValue ?? 0,
+        })),
+        needs_by_store: dashboard.needsByStore.map((row) => ({
+          ...row,
+          secondaryValue: row.secondaryValue ?? 0,
+        })),
+        recurring_items: dashboard.recurringItems.map((row) => ({
+          ...row,
+          secondaryValue: row.secondaryValue ?? 0,
+        })),
+        quotes_by_store: dashboard.quotesByStore.map((row) => ({
+          ...row,
+          secondaryValue: row.secondaryValue ?? 0,
+        })),
+        quotes_by_item: dashboard.quotesByItem.map((row) => ({
+          ...row,
+          secondaryValue: row.secondaryValue ?? 0,
+        })),
+      }),
+    ).toEqual(dashboard);
   });
+  it('preserva os indicadores ao receber linhas agregadas do banco', () => {
+    const legacy = buildImplementationDashboard(
+      stores,
+      [
+        { id: 'old-1', storeId: 'store-1', status: 'completed', createdAt: '2026-07-01' },
+        { id: 'impl-1', storeId: 'store-1', status: 'in_progress', createdAt: '2026-08-01' },
+        { id: 'impl-3', storeId: 'store-3', status: 'completed', createdAt: '2026-08-02' },
+      ],
+      [
+        {
+          implementationId: 'impl-1',
+          title: 'Concluida',
+          status: 'completed',
+          priority: 'normal',
+          dueDate: '2026-08-10',
+        },
+        {
+          implementationId: 'impl-1',
+          title: 'Atrasada',
+          status: 'pending',
+          priority: 'critical',
+          dueDate: '2026-08-15',
+        },
+        {
+          implementationId: 'impl-1',
+          title: 'Futura',
+          status: 'in_progress',
+          priority: 'high',
+          dueDate: '2026-08-25',
+        },
+        {
+          implementationId: 'impl-3',
+          title: 'Finalizada',
+          status: 'completed',
+          priority: 'normal',
+          dueDate: null,
+        },
+      ],
+      '2026-08-17',
+    );
+
+    expect(buildImplementationDashboardFromMetrics(legacy.stores, '2026-08-17')).toEqual(legacy);
+  });
+
 });

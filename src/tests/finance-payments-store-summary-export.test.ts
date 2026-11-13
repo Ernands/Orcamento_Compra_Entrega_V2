@@ -107,4 +107,39 @@ describe('Excel de pagamentos com resumo por loja', () => {
     expect(summary?.getCell('D17').value).toBe(10);
     expect(summary?.getCell('E17').value).toBe(40);
   });
+
+  it('exporta as 125 linhas filtradas e concilia centavos após paginação visual', async () => {
+    const rows = Array.from({ length: 125 }, (_, i): UnifiedFinancePaymentRow => ({
+      ...payment,
+      id: 'payment-' + i,
+      paymentIds: ['payment-' + i],
+      purchaseIds: ['purchase-' + i],
+      referenceCodes: ['CMP-' + String(i + 1).padStart(5, '0')],
+    }));
+    const bytes = await createFinanceUnifiedPaymentsWorkbookWithStoreSummary({
+      rows,
+      summaryRows: rows,
+      stores,
+      view: 'paid',
+      generatedAt: new Date('2026-11-12T12:00:00-03:00'),
+      filtersText: 'Situação: Pago | UF: CE | Valores: somente ocorrências financeiras dentro do período filtrado',
+    });
+
+    const workbook = new Workbook();
+    await workbook.xlsx.load(bytes);
+    const summary = workbook.getWorksheet('Resumo');
+    const payments = workbook.getWorksheet('Pagamentos');
+    const byStore = workbook.getWorksheet('Pagamentos por loja');
+
+    expect(summary?.getCell('B5').value).toContain('somente ocorrências financeiras');
+    expect(summary?.getCell('B6').value).toBe(125);
+    expect(summary?.getCell('B9').value).toBe(15_000);
+    expect(payments?.rowCount).toBe(126);
+    expect(payments?.getCell('K2').value).toBe(120);
+    expect(payments?.getCell('K126').value).toBe(120);
+    // 125 pagamentos, dois vínculos por evento: nenhum truncamento no limite visual de 50.
+    expect(byStore?.rowCount).toBe(251);
+    expect(summary?.getCell('E16').value).toBe(10_000);
+    expect(summary?.getCell('E17').value).toBe(5_000);
+  });
 });

@@ -1,6 +1,6 @@
 import type { Database, Json } from '../supabase/database.types';
 import { supabase } from '../supabase/client';
-import { fetchAllPages } from '../supabase/pagination';
+import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { moneyToCents } from '../../domain/supply-calculations';
 import type {
   FinanceStoreBudget,
@@ -153,30 +153,71 @@ function mapService(
   };
 }
 
-export async function listWorkServices(options?: { allRows?: boolean }): Promise<WorkService[]> {
-  const servicesQuery = () => supabase.from('works_services').select('*').order('updated_at', { ascending: false }).order('id');
-  const paymentsQuery = () => supabase.from('works_service_payments').select('*').order('due_date', { ascending: true, nullsFirst: false }).order('id');
-  const documentsQuery = () => supabase.from('works_service_documents').select('*').order('created_at', { ascending: false }).order('id');
-  const componentsQuery = () => supabase.from('works_service_components').select('*').order('sort_order', { ascending: true }).order('id');
-  const [servicesResult, paymentsResult, documentsResult, componentsResult] = options?.allRows
-    ? await Promise.all([
-      fetchAllPages((from, to) => servicesQuery().range(from, to)).then((data) => ({ data, error: null })),
-      fetchAllPages((from, to) => paymentsQuery().range(from, to)).then((data) => ({ data, error: null })),
-      fetchAllPages((from, to) => documentsQuery().range(from, to)).then((data) => ({ data, error: null })),
-      fetchAllPages((from, to) => componentsQuery().range(from, to)).then((data) => ({ data, error: null })),
-    ])
-    : await Promise.all([servicesQuery(), paymentsQuery(), documentsQuery(), componentsQuery()]);
+export async function listWorkServices(options?: {
+  allRows?: boolean;
+  storeId?: string;
+  includeDocuments?: boolean;
+  includeComponents?: boolean;
+}): Promise<WorkService[]> {
+  const servicesQuery = () => {
+    const query = supabase
+      .from('works_services')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .order('id');
+    return options?.storeId ? query.eq('store_id', options.storeId) : query;
+  };
+  const paymentsQuery = () => supabase
+    .from('works_service_payments')
+    .select('*')
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('id');
+  const documentsQuery = () => supabase
+    .from('works_service_documents')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .order('id');
+  const componentsQuery = () => supabase
+    .from('works_service_components')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('id');
 
-  const error =
-    servicesResult.error || paymentsResult.error || documentsResult.error || componentsResult.error;
-  if (error) throw error;
+  const servicesResult = options?.allRows === false
+    ? await servicesQuery()
+    : { data: await fetchAllPages<WorkServiceRow>((from, to) => servicesQuery().range(from, to)), error: null };
+  if (servicesResult.error) throw servicesResult.error;
 
-  const paymentRows = (paymentsResult.data || []) as unknown as WorkPaymentRow[];
+  const services = (servicesResult.data || []) as unknown as WorkServiceRow[];
+  const serviceIds = services.map((service) => service.id);
+  if (serviceIds.length === 0) return [];
+
+  // Child records are scoped to the visible services instead of scanning every
+  // payment, document and component in the database on each module open.
+  const [paymentRows, documentRows, componentRows] = await Promise.all([
+    fetchAllPagesForIds<WorkPaymentRow>(
+      serviceIds,
+      (ids, from, to) => paymentsQuery().in('service_id', ids).range(from, to) as never,
+    ),
+    options?.includeDocuments === false
+      ? Promise.resolve([] as WorkDocumentRow[])
+      : fetchAllPagesForIds<WorkDocumentRow>(
+        serviceIds,
+        (ids, from, to) => documentsQuery().in('service_id', ids).range(from, to),
+      ),
+    options?.includeComponents === false
+      ? Promise.resolve([] as WorkComponentRow[])
+      : fetchAllPagesForIds<WorkComponentRow>(
+        serviceIds,
+        (ids, from, to) => componentsQuery().in('service_id', ids).range(from, to),
+      ),
+  ]);
+
   const paymentsByService = groupRowsBy(paymentRows, (payment) => payment.service_id);
-  const documentsByService = groupRowsBy(documentsResult.data || [], (document) => document.service_id);
-  const componentsByService = groupRowsBy(componentsResult.data || [], (component) => component.service_id);
+  const documentsByService = groupRowsBy(documentRows, (document) => document.service_id);
+  const componentsByService = groupRowsBy(componentRows, (component) => component.service_id);
 
-  return (servicesResult.data || []).map((service) =>
+  return services.map((service) =>
     mapService(
       service,
       paymentsByService.get(service.id) || [],

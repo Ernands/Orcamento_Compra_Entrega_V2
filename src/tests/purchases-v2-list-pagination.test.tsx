@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { purchaseOrderFinancialSummary, purchaseOrderStoreCosts } from '../domain/purchase-v2-calculations';
-import { PurchasePartialAdjustmentPanel } from '../components/purchase-partial-adjustment-panel';
 import { buildUnifiedFinancePayments } from '../domain/finance-payments';
 import { buildStoreReimbursement } from '../domain/finance-reimbursement';
+import { PurchasePartialAdjustmentPanel } from '../components/purchase-partial-adjustment-panel';
 
 // Reproduces the Supabase/PostgREST 1000-row response limit in the regular
 // Compras V2 screen, not just in the finance-only allRows mode.
@@ -29,19 +29,26 @@ vi.mock('../data/supabase/client', () => ({
         is() { return query; },
         in(column: string, values: string[]) {
           testDatabase.recovered.push({ table, column, values });
-          return Promise.resolve({
-            data: (testDatabase.tables[table] || []).filter((row) =>
-              values.includes(String(row[column]))),
-            error: null,
+          const data = (testDatabase.tables[table] || []).filter((row) =>
+            values.includes(String(row[column])));
+          // Support both the one-shot recovery lookup and the bounded,
+          // paginated association read used by Compras V2.
+          const filteredQuery = Object.assign(Promise.resolve({ data, error: null }), {
+            order() { return this; },
+            range(from: number, to: number) {
+              testDatabase.reads.push({ table, from, to });
+              return Promise.resolve({ data: data.slice(from, to + 1), error: null });
+            },
           });
+          return filteredQuery;
         },
         range(from: number, to: number) {
           testDatabase.reads.push({ table, from, to });
-          const data = (testDatabase.tables[table] || []).slice(from, to + 1);
           return Promise.resolve({
             data: table === 'supply_purchase_order_items'
-              ? data.filter((row) => !testDatabase.omittedFromPages.includes(String(row.id)))
-              : data,
+              ? (testDatabase.tables[table] || []).slice(from, to + 1).filter(
+                  (row) => !testDatabase.omittedFromPages.includes(String(row.id)))
+              : (testDatabase.tables[table] || []).slice(from, to + 1),
             error: null,
           });
         },
@@ -142,8 +149,37 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
       }],
       supply_purchase_items: items,
       supply_items: [],
-      supply_purchase_destinations: [],
-      supply_purchase_destination_stores: [],
+      supply_purchase_destinations: [{
+        id: 'destination-97',
+        purchase_item_id: 'item-0',
+        source_quote_destination_id: null,
+        destination_type: 'store',
+        profile_id: null,
+        store_id: storeId,
+        label_snapshot: 'LOJ-008 BAEPENDI',
+        state_snapshot: 'MG',
+        destination_count: 1,
+        quantity: '1',
+        unit: 'un',
+        quoted_shipping_type: 'free',
+        quoted_shipping_amount: '0',
+        quoted_delivery_days: null,
+        notes_snapshot: null,
+        position: 0,
+        distribution_status: 'confirmed',
+        snapshot_source: 'manual',
+      }],
+      supply_purchase_destination_stores: [{
+        id: 'destination-store-97',
+        purchase_destination_id: 'destination-97',
+        store_id: storeId,
+        store_code_snapshot: 'LOJ-008',
+        store_name_snapshot: 'BAEPENDI - MG',
+        store_city_snapshot: 'BAEPENDI',
+        store_state_snapshot: 'MG',
+        allocated_quantity: '1',
+        allocation_source: 'manual',
+      }],
       supply_purchase_orders: [{
         id: orderId,
         purchase_id: purchaseId,
@@ -178,7 +214,17 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
       }],
       supply_purchase_attachments: [],
       supply_purchase_attachment_stores: [],
-      supply_quote_attachments: [],
+      supply_quote_attachments: [{
+        id: 'quote-attachment-97',
+        quote_id: 'quote-241',
+        original_name: 'proposta.pdf',
+        storage_path: 'cotacoes/quote-241/proposta.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 999,
+        document_type: 'other',
+        created_at: '2026-11-01T00:00:00Z',
+        deleted_at: null,
+      }],
       supply_purchase_partial_adjustments: [],
     };
 
@@ -191,6 +237,8 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
     if (!order) throw new Error('A CMP-00097 perdeu o pedido ativo');
 
     expect(order.lines).toHaveLength(8);
+    expect(purchase.items[0].destinations).toHaveLength(1);
+    expect(purchase.quoteAttachments).toHaveLength(1);
     expect(order.lines.reduce((sum, line) => sum + Math.round(Number(line.lineTotal) * 100), 0)).toBe(340858);
     expect(purchase.stores).toHaveLength(1);
     const stores = purchaseOrderStoreCosts(order);
@@ -208,14 +256,39 @@ describe('Compras V2 — leitura completa de pedidos após 1000 linhas', () => {
         { table: 'supply_purchase_order_items', from: 500, to: 999 },
         { table: 'supply_purchase_order_items', from: 1000, to: 1499 },
       ]);
+    // The purchase has no fiscal attachments, so avoid the expensive
+    // global link-table scan entirely.
+    expect(testDatabase.reads.some((request) =>
+      request.table === 'supply_purchase_attachment_stores')).toBe(false);
 
     render(<PurchasePartialAdjustmentPanel purchase={purchase} order={order}
       canEdit onSaved={async () => {}} onAttachRefundProof={() => {}} />);
     expect(screen.getByRole('button', { name: 'Ajustar compra / Cancelamento parcial' }))
       .toBeInTheDocument();
     expect(screen.queryByText(/Operações com múltiplos pagamentos exigem/)).not.toBeInTheDocument();
-  });
 
+    const readsBeforeFinance = testDatabase.reads.length;
+    const financePurchases = await listSupplyPurchasesV2({
+      includeAttachments: false,
+      includeDestinations: false,
+      includeQuoteAttachments: false,
+    });
+    const financeReads = testDatabase.reads.slice(readsBeforeFinance).map((entry) => entry.table);
+    expect(financeReads).not.toContain('supply_purchase_destinations');
+    expect(financeReads).not.toContain('supply_purchase_destination_stores');
+    expect(financeReads).not.toContain('supply_quote_attachments');
+    expect(financeReads).not.toContain('supply_purchase_attachments');
+    expect(financeReads).toContain('supply_purchase_order_items');
+    expect(financeReads).toContain('supply_purchase_payments');
+
+    const compact = financePurchases[0];
+    expect(compact.items[0].destinations).toEqual([]);
+    expect(compact.quoteAttachments).toEqual([]);
+    expect(compact.orders).toEqual(purchase.orders);
+    expect(compact.payments).toEqual(purchase.payments);
+    expect(purchaseOrderFinancialSummary(compact, compact.orders[0])).toEqual(financial);
+    expect(buildUnifiedFinancePayments(financePurchases, [])).toEqual(buildUnifiedFinancePayments(purchases, []));
+  });
   it('recupera linha omitida na leitura e mantém o residual retido da CMP-00097 no Reembolso', async () => {
     // Reutiliza a fixture acima na sua estrutura mínima e acrescenta o mesmo
     // lançamento financeiro real da CMP-00097, sem acessar nem alterar produção.

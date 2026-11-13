@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { fetchAllPages } from '../supabase/pagination';
 import { buildPurchaseOrderRpcPayloadV2 } from './purchases-v2-repository';
 import type { PurchaseBatchOperationResultV2 } from './purchases-v2-repository';
 import type { RegisterPurchaseOperationResultV2 } from '../../domain/purchase-v2-types';
@@ -43,14 +44,8 @@ export function buildPaymentWithOccurrencePayload(
 }
 
 export async function listSupplyPurchasePaymentOccurrencesV2(): Promise<PurchasePaymentOccurrenceV2[]> {
-  const { data, error } = await supabase
-    .from('supply_purchase_payment_occurrences' as never)
-    .select('*')
-    .order('payment_id')
-    .order('position')
-    .order('occurred_on');
-  if (error) throw error;
-  return (data as unknown as Array<{
+  const data = await fetchAllPages<{
+    
     id: string;
     payment_id: string;
     attachment_id: string | null;
@@ -61,7 +56,15 @@ export async function listSupplyPurchasePaymentOccurrencesV2(): Promise<Purchase
     source: PurchasePaymentOccurrenceV2['source'];
     notes: string | null;
     position: number;
-  }>).map((row) => ({
+  }>((from, to) => supabase
+    .from('supply_purchase_payment_occurrences' as never)
+    .select('*')
+    .order('payment_id')
+    .order('position')
+    .order('occurred_on')
+    .order('id')
+    .range(from, to));
+  return data.map((row) => ({
     id: row.id,
     paymentId: row.payment_id,
     attachmentId: row.attachment_id,

@@ -24,6 +24,8 @@ import {
   FinancePaymentOccurrencesModal,
 } from '../components/finance-payment-occurrences';
 import { FinanceUnifiedPaymentsExportActions } from '../components/finance-unified-payments-export-actions';
+import { FinanceTablePager } from '../components/finance-table-pager';
+import { financeTablePage } from '../domain/finance-table-pagination';
 import { FinanceReimbursementModal } from '../components/finance-reimbursement-modal';
 import { fiscalStateForPayment } from '../domain/finance-reimbursement';
 import { financePaymentStoreLabel, financePaymentStoreTitle } from '../domain/finance-payment-store-label';
@@ -56,6 +58,7 @@ import {
   filterInactiveStoresWithoutFinancialValues,
 } from '../domain/finance-store-visibility';
 import type { PurchasePaymentOccurrenceV2 } from '../domain/payment-occurrences';
+import type { FinancePreviewParityReport } from '../data/finance/finance-parity-comparison';
 import { formatBRL } from '../domain/supply-calculations';
 import type { PurchaseV2 } from '../domain/purchase-v2-types';
 import type { Store } from '../domain/types';
@@ -135,11 +138,22 @@ export function FinancePaymentsPage() {
   const canReconciliation = can('finance.account_reconciliation_view');
   const canManageFinance = can('finance.manage');
   const [searchParams] = useSearchParams();
+  const financeParityEnabled = typeof window !== 'undefined' &&
+    window.location.hostname.startsWith('deploy-preview-85--') &&
+    searchParams.get('financeParity') !== '0';
+  // Avoid launching several paginated diagnostic RPCs during the ordinary
+  // Pagamentos load. ?financeParity=1 explicitly opts in to automatic audit.
+  const financeParityAuto = searchParams.get('financeParity') === '1';
+  const [financeParityRunId, setFinanceParityRunId] = useState(0);
+  const [financeParity, setFinanceParity] = useState<FinancePreviewParityReport | null>(null);
+  const [financeParityError, setFinanceParityError] = useState<string | null>(null);
+  const [financeParityLoading, setFinanceParityLoading] = useState(false);
   const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
   const [works, setWorks] = useState<WorkService[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [occurrences, setOccurrences] = useState<PurchasePaymentOccurrenceV2[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tablePage, setTablePage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [originOpen, setOriginOpen] = useState(true);
   const [reimbursementOpen, setReimbursementOpen] = useState(false);
@@ -170,8 +184,10 @@ export function FinancePaymentsPage() {
     setError(null);
     try {
       const [nextPurchases, nextWorks, nextStores, nextOccurrences] = await Promise.all([
-        listSupplyPurchasesV2(),
-        listWorkServices(),
+        // Payment totals depend on order line allocations and fiscal documents,
+        // not quotation attachments, purchase destinations or work components.
+        listSupplyPurchasesV2({ includeDestinations: false, includeQuoteAttachments: false }),
+        listWorkServices({ includeComponents: false }),
         listStores(),
         listSupplyPurchasePaymentOccurrencesV2(),
       ]);
@@ -198,6 +214,29 @@ export function FinancePaymentsPage() {
     () => decorateFinancePaymentsWithOccurrences(buildUnifiedFinancePayments(purchases, works), occurrences),
     [occurrences, purchases, works],
   );
+  // Only Netlify Preview #85 runs the shadow read-only comparison.
+  // It does not replace the current finance calculation or modify data.
+  useEffect(() => {
+    if (!financeParityEnabled || loading || error ||
+        (!financeParityAuto && financeParityRunId === 0)) return;
+    let active = true;
+    setFinanceParityLoading(true);
+    setFinanceParityError(null);
+    setFinanceParity(null);
+    void import('../data/finance/finance-parity-comparison')
+      .then(({ runFinancePreviewParity }) => runFinancePreviewParity(purchases, works, rows))
+      .then((report) => {
+        if (active) setFinanceParity(report);
+      })
+      .catch((cause: unknown) => {
+        if (active) setFinanceParityError(cause instanceof Error ? cause.message : 'Falha na conferência.');
+      })
+      .finally(() => {
+        if (active) setFinanceParityLoading(false);
+      });
+    return () => { active = false; };
+  }, [financeParityEnabled, financeParityAuto, financeParityRunId, loading, error, purchases, works, rows]);
+
   const storesById = useMemo(
     () => new Map(stores.map((store) => [store.id, store])),
     [stores],
@@ -295,6 +334,9 @@ export function FinancePaymentsPage() {
     supplierFilter,
   ]);
 
+  const hasRefundsOutsideOccurrenceScope = occurrenceValueScopeActive &&
+    summaryRows.some((row) => (row.refundCents || 0n) > 0n);
+
   const totals = useMemo(() => financePaymentTotals(summaryRows), [summaryRows]);
   const originSummary = useMemo(() => financePaymentOriginSummary(summaryRows), [summaryRows]);
   const filteredRows = useMemo(
@@ -304,6 +346,14 @@ export function FinancePaymentsPage() {
         .sort((a, b) => dateSort(a, b, view)),
     [summaryRows, view],
   );
+  // Paginate only the rendered table; totals, filters, exports and reimbursements
+  // continue to use the complete filtered/unfiltered datasets.
+  const pagedPayments = financeTablePage(filteredRows, tablePage);
+  useEffect(() => {
+    setTablePage(1);
+  }, [view, originFilter, storeFilter, stateFilter, supplierFilter, methodFilter,
+    dateFrom, dateTo, occurrenceValuesOnly, query, focusItemId, focusServiceId]);
+
   const activeFilterCount = [
     originFilter,
     storeFilter,
@@ -488,6 +538,7 @@ export function FinancePaymentsPage() {
             methodFilter={methodFilter}
             dateFrom={dateFrom}
             dateTo={dateTo}
+            occurrenceValuesOnly={occurrenceValueScopeActive}
             query={query}
             hasDeepFilter={hasDeepFilter}
             onError={setError}
@@ -509,6 +560,60 @@ export function FinancePaymentsPage() {
       </header>
 
       {error && <ErrorState message={error} onRetry={() => void load()} />}
+      {financeParityEnabled && !loading && (
+        <section className="finance-parity-preview" aria-label="Auditoria financeira Preview 85"
+          style={{ padding: 16, borderRadius: 8, border: '1px solid #94a3b8' }}>
+          <strong>Auditoria financeira · Preview #85 (somente leitura)</strong>
+          <div className="finance-parity-preview__actions">
+            <button type="button" className="button button--secondary button--small"
+              disabled={financeParityLoading}
+              onClick={() => setFinanceParityRunId((id) => id + 1)}>
+              {financeParityLoading ? 'Conferindo…'
+                : financeParityRunId || financeParity ? 'Reexecutar auditoria' : 'Executar auditoria'}
+            </button>
+            <small>Diagnóstico sob demanda: não sobrecarrega o carregamento normal de Pagamentos.</small>
+          </div>
+          {financeParityLoading && <p role="status">Comparando os lançamentos e o SQL paginado…</p>}
+          {financeParityError && <p role="alert">Falha na auditoria: {financeParityError}</p>}
+          {financeParity && (
+            <div role="status">
+              <p>{financeParity.passed ? 'Conferência sem divergências nos cenários cobertos.'
+                : 'Conferência parcial ou com divergências; os valores oficiais não foram alterados.'}</p>
+              <ul>
+                {financeParity.domain.checks.map((check) => (
+                  <li key={check.stage}>
+                    Etapa {check.stage} · {check.title}: {check.passed ? 'sem divergência detectada' : 'divergência detectada'}
+                    {' '}({check.checked} verificações)
+                    {check.issues.length > 0 && ' — ' + check.issues.slice(0, 2).join(' | ')}
+                    {check.warnings.length > 0 && ' — ' + check.warnings.length + ' ressalva(s)'}
+                  </li>
+                ))}
+                <li>Reembolsos (SQL): {financeParity.adjustmentSqlStatus === 'matched'
+                  ? financeParity.adjustmentSqlDetail
+                  : 'Pendente — ' + financeParity.adjustmentSqlDetail}</li>
+                <li>Saldos sem programação (SQL): {financeParity.unscheduledSqlStatus === 'matched'
+                  ? financeParity.unscheduledSqlDetail
+                  : 'Pendente — ' + financeParity.unscheduledSqlDetail}</li>
+                <li>Custos por loja (SQL): {financeParity.storeCostSqlStatus === 'matched'
+                  ? financeParity.storeCostSqlDetail
+                  : 'Pendente — ' + financeParity.storeCostSqlDetail}</li>
+                <li>CMPs combinadas (SQL): {financeParity.combinedSqlStatus === 'matched'
+                  ? financeParity.combinedSqlDetail
+                  : 'Pendente — ' + financeParity.combinedSqlDetail}</li>
+                <li>Origem dos pagamentos (SQL): {financeParity.originSqlStatus === 'matched'
+                  ? financeParity.originSqlDetail
+                  : 'Pendente — ' + financeParity.originSqlDetail}</li>
+                <li>Pagamentos por loja/origem (SQL): {financeParity.storePaymentSqlStatus === 'matched'
+                  ? financeParity.storePaymentSqlDetail
+                  : 'Pendente — ' + financeParity.storePaymentSqlDetail}</li>
+                <li>SQL paginado: {financeParity.sqlStatus === 'matched'
+                  ? financeParity.sqlCheckedEvents + ' eventos conferidos'
+                  : financeParity.sqlDetail}</li>
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
       {loading ? (
         <InlineLoading label="Carregando pagamentos" />
       ) : (
@@ -669,6 +774,12 @@ export function FinancePaymentsPage() {
               />
               Considerar somente os valores das ocorrências dentro do período filtrado
             </label>
+            {hasRefundsOutsideOccurrenceScope && (
+              <p className="finance-payments-occurrence-warning" role="status">
+                Atenção: pagamentos com reembolso permanecem pelo valor líquido integral
+                para manter a conciliação financeira, mesmo neste filtro por ocorrências.
+              </p>
+            )}
             <label className="finance-payments-search">
               <Search size={17} />
               <input
@@ -721,6 +832,7 @@ export function FinancePaymentsPage() {
               <span>{filteredRows.length} registro(s)</span>
             </header>
             {filteredRows.length ? (
+              <>
               <div className="finance-payments-table-scroll">
                 <table className="finance-payments-table">
                   <thead>
@@ -735,7 +847,7 @@ export function FinancePaymentsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((row, index) => {
+                    {pagedPayments.items.map((row, index) => {
                       const origin = rowOriginLabel(row);
                       const store = financePaymentStoreLabel(row, storesById);
                       const storeTitle = financePaymentStoreTitle(row, storesById);
@@ -863,6 +975,15 @@ export function FinancePaymentsPage() {
                   </tbody>
                 </table>
               </div>
+              <FinanceTablePager
+                page={pagedPayments.page}
+                pageCount={pagedPayments.pageCount}
+                total={pagedPayments.total}
+                pageSize={50}
+                label="pagamentos"
+                onPageChange={setTablePage}
+              />
+              </>
             ) : (
               <EmptyState
                 title={`Nenhum pagamento em “${VIEW_LABELS[view]}”`}

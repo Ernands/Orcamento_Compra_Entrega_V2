@@ -1,4 +1,5 @@
 import { purchaseOrderStoreCosts } from './purchase-v2-calculations';
+import { normalizeFiscalDocumentNumber } from './fiscal-document-number';
 import { moneyToCents, quantityToThousandths } from './supply-calculations';
 import type { PurchaseV2 } from './purchase-v2-types';
 import type { WorkService } from './works-types';
@@ -96,22 +97,37 @@ function documentCatalog(
   // Matching registered number/supplier is a hint, never proof of the same fiscal document.
   const normalize = (value: string) => value.trim().toLocaleUpperCase('pt-BR');
   const documents = [...catalog.values()];
-  documents.forEach((doc) => {
-    if (!doc.number?.trim()) return;
+  // Index possible invoice/receipt matches by registered number and supplier.
+  // This is still only a manual review hint, not proof of fiscal identity.
+  const catalogOrder = new Map(documents.map((doc, index) => [doc.key, index]));
+  const numberSupplierIndex = new Map<string, AuditDocument[]>();
+  const candidateKey = (doc: AuditDocument, supplier: string) =>
+    JSON.stringify([doc.type, normalizeFiscalDocumentNumber(doc.number), supplier]);
+  for (const doc of documents) {
+    if (!doc.number?.trim()) continue;
+    for (const supplier of new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean))) {
+      const key = candidateKey(doc, supplier);
+      const candidates = numberSupplierIndex.get(key);
+      if (candidates) candidates.push(doc);
+      else numberSupplierIndex.set(key, [doc]);
+    }
+  }
+  for (const doc of documents) {
+    if (!doc.number?.trim()) continue;
     const own = new Set(doc.links.map((link) => link.recordId));
     const suppliers = new Set(doc.links.map((link) => normalize(link.supplier)).filter(Boolean));
-    doc.possibleLinks = documents
-      .filter(
-        (other) =>
-          other.key !== doc.key &&
-          other.type === doc.type &&
-          other.number &&
-          normalize(other.number) === normalize(doc.number!) &&
-          other.links.some((link) => suppliers.has(normalize(link.supplier))),
-      )
+    const matches = new Map<string, AuditDocument>();
+    for (const supplier of suppliers) {
+      for (const other of numberSupplierIndex.get(candidateKey(doc, supplier)) || []) {
+        if (other.key !== doc.key) matches.set(other.key, other);
+      }
+    }
+    // Keep the original catalog order across suppliers for deterministic audits.
+    doc.possibleLinks = [...matches.values()]
+      .sort((a, b) => (catalogOrder.get(a.key) ?? 0) - (catalogOrder.get(b.key) ?? 0))
       .flatMap((other) => other.links)
       .filter((link) => !own.has(link.recordId));
-  });
+  }
   return catalog;
 }
 
@@ -121,6 +137,16 @@ export function buildAuditRecords(
   works: WorkService[],
 ): AuditRecord[] {
   const documents = [...documentCatalog(purchases, works).values()];
+  // One indexing pass avoids scanning the entire fiscal catalog for each CMP
+  // and OBR. Shared files retain all record links but appear once per record.
+  const documentsByRecord = new Map<string, AuditDocument[]>();
+  for (const doc of documents) {
+    for (const recordId of new Set(doc.links.map((link) => link.recordId))) {
+      const linked = documentsByRecord.get(recordId);
+      if (linked) linked.push(doc);
+      else documentsByRecord.set(recordId, [doc]);
+    }
+  }
   const records: AuditRecord[] = [];
   purchases
     .filter((purchase) => purchase.stores.some((store) => store.storeId === storeId))
@@ -208,7 +234,7 @@ export function buildAuditRecords(
             : null,
         budgetCents: moneyToCents(purchase.approvedTotal),
         items,
-        documents: documents.filter((doc) => doc.links.some((link) => link.recordId === id)),
+        documents: documentsByRecord.get(id) || [],
       });
     });
   works
@@ -255,7 +281,7 @@ export function buildAuditRecords(
           included: active,
           stage: active ? 'Componente/valor contratado' : 'Obra cancelada',
         })),
-        documents: documents.filter((doc) => doc.links.some((link) => link.recordId === id)),
+        documents: documentsByRecord.get(id) || [],
       });
     });
   return records.sort((a, b) => a.reference.localeCompare(b.reference, 'pt-BR'));

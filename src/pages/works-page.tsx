@@ -32,6 +32,8 @@ import {
 } from '../data/works/works-repository';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import { serviceTotals } from '../domain/works-calculations';
+import { openSignedDocumentInNewTab } from '../lib/signed-document-window';
+import { workDocumentDisplayStatus } from '../domain/work-document-display-status';
 import type { Store } from '../domain/types';
 import type {
   WorkDocumentStatus,
@@ -1297,17 +1299,16 @@ export function WorksPage() {
   const openDocument = async (service: WorkService, documentId: string) => {
     if (!canDocuments) return;
     const document = service.documents.find((entry) => entry.id === documentId);
-    if (!document?.storagePath) return;
+    const storagePath = document?.storagePath?.trim();
+    if (!document || !storagePath) return;
     setOpeningDocumentId(document.id);
     setError(null);
     try {
-      window.open(
-        await createWorkDocumentSignedUrl(document.storagePath),
-        '_blank',
-        'noopener,noreferrer',
-      );
-    } catch {
-      setError('Não foi possível abrir o documento.');
+      await openSignedDocumentInNewTab(() => createWorkDocumentSignedUrl(storagePath));
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message.includes('pop-ups')
+        ? cause.message
+        : 'Não foi possível abrir o documento. Confira o anexo e tente novamente.');
     } finally {
       setOpeningDocumentId(null);
     }
@@ -1679,11 +1680,9 @@ export function WorksPage() {
                                 </span>
                                 <div className="works-document-tags">
                                   <span
-                                    className={`works-document-tag works-document-tag--${document.status}`}
+                                    className={`works-document-tag works-document-tag--${workDocumentDisplayStatus(document).tone}`}
                                   >
-                                    {document.status === 'verified'
-                                      ? 'Conferido'
-                                      : 'Pendente de conferência'}
+                                    {workDocumentDisplayStatus(document).label}
                                   </span>
                                   {document.paymentId && (
                                     <span className="works-document-tag works-document-tag--payment">
@@ -1693,7 +1692,7 @@ export function WorksPage() {
                                 </div>
                               </div>
                               <div className="works-document-actions">
-                                {document.storagePath ? (
+                                {workDocumentDisplayStatus(document).hasFile ? (
                                   <button
                                     className="button button--secondary button--small"
                                     disabled={openingDocumentId === document.id}

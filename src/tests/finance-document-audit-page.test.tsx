@@ -5,6 +5,7 @@ import { authorizedHomePath } from '../app/guards';
 import { FinanceDocumentAuditPage } from '../pages/finance-document-audit-page';
 import { useSession } from '../app/session-provider';
 import { listAuditStores } from '../data/finance/document-audit-repository';
+import { listAuditDocumentCandidates } from '../data/finance/document-audit-candidates-repository';
 import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
 import { listWorkServices } from '../data/works/works-repository';
 import type { WorkService } from '../domain/works-types';
@@ -12,6 +13,9 @@ import { auditStore } from './fixtures/document-audit';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
 vi.mock('../data/finance/document-audit-repository', () => ({ listAuditStores: vi.fn() }));
+vi.mock('../data/finance/document-audit-candidates-repository', () => ({
+  listAuditDocumentCandidates: vi.fn(),
+}));
 vi.mock('../data/purchases/purchases-v2-repository', () => ({
   listSupplyPurchasesV2: vi.fn(),
   createPurchaseAttachmentSignedUrlV2: vi.fn(),
@@ -21,6 +25,7 @@ vi.mock('../data/works/works-repository', () => ({
   createWorkDocumentSignedUrl: vi.fn(),
 }));
 beforeEach(() => {
+  vi.mocked(listAuditDocumentCandidates).mockResolvedValue([]);
   vi.mocked(useSession).mockReturnValue({
     can: (capability: string) =>
       ['finance.view', 'finance.document_audit_view'].includes(capability),
@@ -52,18 +57,95 @@ describe('seleção e acesso da conferência', () => {
     render(<FinanceDocumentAuditPage />);
     const select = screen.getByLabelText('Loja');
     await waitFor(() => expect(select).toBeEnabled());
-    expect(listSupplyPurchasesV2).toHaveBeenCalledWith({ allRows: true });
-    expect(listWorkServices).toHaveBeenCalledWith({ allRows: true });
+    // Never fetch all purchases and works just to render the store selector.
+    expect(listSupplyPurchasesV2).not.toHaveBeenCalled();
+    expect(listWorkServices).not.toHaveBeenCalled();
     await user.selectOptions(select, 'store-a');
-    expect(screen.getByText('Serviço sem pagamentos')).toBeInTheDocument();
+    await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({
+      allRows: true, storeId: 'store-a',
+    }));
+    expect(listWorkServices).toHaveBeenCalledWith({
+      allRows: true, includeComponents: true, storeId: 'store-a',
+    });
+    await waitFor(() => expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Serviço sem pagamentos')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: /Gerar conferência/ });
     expect(button).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Selecionar todos' }));
     expect(button).toBeEnabled();
     await user.selectOptions(select, 'store-b');
-    expect(button).toBeDisabled();
-    expect(screen.queryByText('Serviço sem pagamentos')).not.toBeInTheDocument();
+    // Loading swaps out the previous store's table/button; do not assert on a
+    // detached node belonging to the previous store's selection.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Gerar conferência/ })).toBeDisabled());
+    await waitFor(() => expect(listSupplyPurchasesV2).toHaveBeenCalledWith({
+      allRows: true, storeId: 'store-b',
+    }));
+    expect(listWorkServices).toHaveBeenCalledWith({
+      allRows: true, includeComponents: true, storeId: 'store-b',
+    });
+    await waitFor(() => expect(screen.queryByText('Serviço sem pagamentos')).not.toBeInTheDocument());
+    await user.selectOptions(select, 'store-a');
+    expect(await screen.findByText('Serviço sem pagamentos')).toBeInTheDocument();
+    // Per-user cache avoids a second RLS query when revisiting a loaded store.
+    expect(listSupplyPurchasesV2).toHaveBeenCalledTimes(2);
+    expect(listWorkServices).toHaveBeenCalledTimes(2);
+    expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(2);
   });
+  it('alerta sobre recibo cadastrado sem arquivo, antes de permitir a conferência', async () => {
+    vi.mocked(listWorkServices).mockResolvedValue([{
+      id: 'w1',
+      code: 'OBR-TESTE',
+      storeId: 'store-a',
+      status: 'contracted',
+      providerName: 'Prestador',
+      contractedAmount: '100.00',
+      budgetAmount: '120.00',
+      description: 'Serviço de instalação',
+      payments: [],
+      documents: [{
+        id: 'document-without-file',
+        documentType: 'receipt',
+        status: 'verified',
+        storagePath: null,
+        originalName: null,
+        documentAmount: '100.00',
+      }],
+      components: [],
+    } as unknown as WorkService]);
+
+    const user = userEvent.setup();
+    render(<FinanceDocumentAuditPage />);
+    const storeSelect = screen.getByLabelText('Loja');
+    await waitFor(() => expect(storeSelect).toBeEnabled());
+    await user.selectOptions(storeSelect, 'store-a');
+
+    expect(await screen.findByText('Sem arquivo fiscal vinculado')).toBeInTheDocument();
+    expect(screen.getByText('1 cadastro(s) sem arquivo — regularizar')).toBeInTheDocument();
+    expect(screen.queryByText(/Atenção: 1 documento\(s\)/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Selecionar OBR-TESTE' }));
+    expect(screen.getByText(/Atenção: 1 documento\(s\) cadastrado\(s\) sem arquivo/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gerar conferência/ })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Limpar seleção' }));
+    expect(screen.queryByText(/Atenção: 1 documento\(s\)/)).not.toBeInTheDocument();
+  });
+
+  it('falha fechado quando não é possível verificar duplicidade externa e não libera ZIP parcial', async () => {
+    vi.mocked(listAuditDocumentCandidates).mockRejectedValue(new Error('403 RLS'));
+    const user = userEvent.setup();
+    render(<FinanceDocumentAuditPage />);
+    const storeSelect = screen.getByLabelText('Loja');
+    await waitFor(() => expect(storeSelect).toBeEnabled());
+    await user.selectOptions(storeSelect, 'store-a');
+
+    expect(await screen.findByText(
+      'Não foi possível verificar possíveis notas e recibos duplicados em outras lojas. A conferência foi bloqueada para evitar relatório incompleto. Atualize e tente novamente.',
+    )).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Gerar conferência/ })).not.toBeInTheDocument();
+    expect(listAuditDocumentCandidates).toHaveBeenCalledTimes(1);
+  });
+
   it('direciona o usuário com acesso exclusivo à conferência para a nova tela', () => {
     expect(authorizedHomePath(['finance.view', 'finance.document_audit_view'])).toBe(
       '/financeiro/conferencia-compras-obras',

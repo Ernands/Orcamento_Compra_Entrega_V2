@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/client';
-import { fetchAllPages } from '../supabase/pagination';
+import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { moneyToSqlNumeric } from '../../domain/supply-calculations';
 import { applyPurchasePartialAdjustments, type PartialAdjustmentRecord } from '../../domain/purchase-partial-adjustments';
 import type {
@@ -274,9 +274,84 @@ async function recoverAdjustmentOrderLines(
   return { lines: restoredLines, stores: restoredStores };
 }
 
-export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Promise<PurchaseV2[]> {
+/**
+ * Preview audit: choose purchases by store membership inside the database, then
+ * load ALL their rows (including allocations for other stores). Filtering
+ * individual lines by the selected store would corrupt shared CMP totals.
+ * Each ID list is paginated in bounded chunks and all queries retain RLS.
+ */
+async function loadAuditStorePurchaseRows(storeId: string) {
+  const memberships = await fetchAllPages<{ purchase_id: string }>((from, to) =>
+    supabase.from('supply_purchase_stores' as never)
+      .select('purchase_id')
+      .eq('store_id', storeId)
+      .order('purchase_id')
+      .range(from, to),
+  );
+  const purchaseIds = [...new Set(memberships.map((row) => row.purchase_id))];
+  const byIds = <T>(table: string, foreignKey: string, ids: string[]): Promise<T[]> =>
+    fetchAllPagesForIds<T>(
+      ids,
+      (chunk, from, to) => supabase.from(table as never)
+        .select('*')
+        .in(foreignKey, chunk)
+        .order('id')
+        .range(from, to),
+    );
+  const [purchases, stores, items, orders, payments, attachmentRows, adjustments] =
+    await Promise.all([
+      byIds<PurchaseRow>('supply_purchases', 'id', purchaseIds),
+      byIds<PurchaseStoreRow>('supply_purchase_stores', 'purchase_id', purchaseIds),
+      byIds<PurchaseItemRow>('supply_purchase_items', 'purchase_id', purchaseIds),
+      byIds<OrderRow>('supply_purchase_orders', 'purchase_id', purchaseIds),
+      byIds<PaymentRow>('supply_purchase_payments', 'purchase_id', purchaseIds),
+      byIds<AttachmentRow>('supply_purchase_attachments', 'purchase_id', purchaseIds),
+      byIds<PartialAdjustmentRecord>('supply_purchase_partial_adjustments', 'purchase_id', purchaseIds),
+    ]);
+  const attachments = attachmentRows.filter((row) => !row.deleted_at);
+  const [destinations, lines, attachmentStores] = await Promise.all([
+    byIds<DestinationRow>('supply_purchase_destinations', 'purchase_item_id', items.map((row) => row.id)),
+    byIds<OrderLineRow>('supply_purchase_order_items', 'order_id', orders.map((row) => row.id)),
+    byIds<AttachmentStoreRow>('supply_purchase_attachment_stores', 'attachment_id', attachments.map((row) => row.id)),
+  ]);
+  const [destinationStores, lineStores] = await Promise.all([
+    byIds<DestinationStoreRow>(
+      'supply_purchase_destination_stores', 'purchase_destination_id', destinations.map((row) => row.id),
+    ),
+    byIds<OrderLineStoreRow>(
+      'supply_purchase_order_line_stores', 'order_line_id', lines.map((row) => row.id),
+    ),
+  ]);
+  purchases.sort((a, b) =>
+    b.approved_at.localeCompare(a.approved_at) || a.id.localeCompare(b.id));
+  const ok = <T>(data: T[]) => ({ data, error: null });
+  return [
+    ok(purchases), ok(stores), ok(items), ok([] as SupplyItemCatalogRow[]),
+    ok(destinations), ok(destinationStores), ok(orders), ok(lines),
+    ok(lineStores), ok(payments), ok(attachments), ok(attachmentStores),
+    ok([] as QuoteAttachmentRow[]), ok(adjustments),
+  ] as const;
+}
+
+/** The lightweight financial projection retains purchases, order lines, payments,
+ * adjustments and (unless disabled) fiscal attachments. The operational
+ * Compras screens keep all destinations and original quote attachments.
+ */
+export async function listSupplyPurchasesV2(options?: {
+  allRows?: boolean;
+  /** Read-only fiscal audit. Retain the complete purchases shared by this store. */
+  storeId?: string;
+  includeAttachments?: boolean;
+  includeDestinations?: boolean;
+  includeQuoteAttachments?: boolean;
+}): Promise<PurchaseV2[]> {
+  if (options?.storeId && !options.allRows)
+    throw new Error('Filtro de loja da conferência exige consulta completa das referências.');
+  const scopedRows = options?.storeId
+    ? await loadAuditStorePurchaseRows(options.storeId)
+    : null;
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
-    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult] = await Promise.all([
+    orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult] = scopedRows ?? await Promise.all([
     fetchPagedResult<PurchaseRow>((from, to) => supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseRow>>),
     fetchPagedResult<PurchaseStoreRow>((from, to) => (
       supabase.from('supply_purchase_stores' as never)
@@ -287,14 +362,14 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
     )),
     fetchPagedResult<PurchaseItemRow>((from, to) => supabase.from('supply_purchase_items' as never).select('*').order('created_at').order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseItemRow>>),
     options?.allRows ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<SupplyItemCatalogRow>((from, to) => supabase.from('supply_items' as never).select('id, subcategory, group_name, financial_group').order('id').range(from, to) as unknown as PromiseLike<PagedResult<SupplyItemCatalogRow>>),
-    fetchPagedResult<DestinationRow>((from, to) => (
+    options?.includeDestinations === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<DestinationRow>((from, to) => (
       supabase.from('supply_purchase_destinations' as never)
         .select('*')
         .order('position')
         .order('id')
         .range(from, to) as unknown as PromiseLike<PagedResult<DestinationRow>>
     )),
-    fetchPagedResult<DestinationStoreRow>((from, to) => (
+    options?.includeDestinations === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<DestinationStoreRow>((from, to) => (
       supabase.from('supply_purchase_destination_stores' as never)
         .select('*')
         .order('store_code_snapshot')
@@ -305,9 +380,11 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
     fetchPagedResult<OrderLineRow>((from, to) => supabase.from('supply_purchase_order_items' as never).select('*').order('created_at').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineRow>>),
     fetchPagedResult<OrderLineStoreRow>((from, to) => supabase.from('supply_purchase_order_line_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<OrderLineStoreRow>>),
     fetchPagedResult<PaymentRow>((from, to) => supabase.from('supply_purchase_payments' as never).select('*').order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PaymentRow>>),
-    fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>),
-    fetchPagedResult<AttachmentStoreRow>((from, to) => supabase.from('supply_purchase_attachment_stores' as never).select('*').order('store_code_snapshot').order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentStoreRow>>),
-    options?.allRows ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<QuoteAttachmentRow>((from, to) => supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<QuoteAttachmentRow>>),
+    options?.includeAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<AttachmentRow>((from, to) => supabase.from('supply_purchase_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<AttachmentRow>>),
+    // Loaded after active attachments are known: only their store links matter.
+    // This avoids a global RLS scan over all attachment/store associations.
+    Promise.resolve({ data: [], error: null }),
+    options?.allRows || options?.includeAttachments === false || options?.includeQuoteAttachments === false ? Promise.resolve({ data: [], error: null }) : fetchPagedResult<QuoteAttachmentRow>((from, to) => supabase.from('supply_quote_attachments' as never).select('*').is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<QuoteAttachmentRow>>),
     fetchPagedResult<PartialAdjustmentRecord>((from, to) => supabase
       .from('supply_purchase_partial_adjustments' as never)
       .select('*').order('created_at').order('id')
@@ -329,9 +406,27 @@ export async function listSupplyPurchasesV2(options?: { allRows?: boolean }): Pr
   const originalLineStores = orderLineStoreResult.data as unknown as OrderLineStoreRow[];
   const payments = paymentResult.data as unknown as PaymentRow[];
   const attachments = attachmentResult.data as unknown as AttachmentRow[];
-  const attachmentStores = attachmentStoreResult.data as unknown as AttachmentStoreRow[];
+  // A missing document or an inactive attachment must never trigger a global
+  // attachment/store read. Preserve the full set of stores for each *visible*
+  // active attachment, including shared CMPs and their other stores.
+  // The store-scoped audit already provides its own bounded association rows.
+  const attachmentStores = scopedRows
+    ? attachmentStoreResult.data as unknown as AttachmentStoreRow[]
+    : options?.includeAttachments === false ? []
+    : await fetchAllPagesForIds<AttachmentStoreRow>(
+      attachments.map((attachment) => attachment.id),
+      (attachmentIds, from, to) => supabase
+        .from('supply_purchase_attachment_stores' as never)
+        .select('*')
+        .in('attachment_id', attachmentIds)
+        .order('store_code_snapshot')
+        .order('id')
+        .range(from, to),
+    );
   const quoteAttachments = quoteAttachmentResult.data as unknown as QuoteAttachmentRow[];
   const adjustments = adjustmentResult.data as unknown as PartialAdjustmentRecord[];
+  // Retain main's safety gate: never project financial refunds if their
+  // immutable adjusted order lines disappeared from the paginated read.
   const { lines, stores: lineStores } = await recoverAdjustmentOrderLines(
     originalLines, originalLineStores, adjustments,
   );

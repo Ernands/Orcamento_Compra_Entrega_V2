@@ -3,30 +3,38 @@ import { FileArchive, FileSearch, RefreshCcw, Search } from 'lucide-react';
 import { useSession } from '../app/session-provider';
 import { EmptyState, ErrorState, InlineLoading, StatusBadge } from '../components/ui';
 import { listAuditStores } from '../data/finance/document-audit-repository';
+import { listAuditDocumentCandidates } from '../data/finance/document-audit-candidates-repository';
 import {
   createPurchaseAttachmentSignedUrlV2,
   listSupplyPurchasesV2,
 } from '../data/purchases/purchases-v2-repository';
 import { createWorkDocumentSignedUrl, listWorkServices } from '../data/works/works-repository';
 import { buildAuditRecords } from '../domain/document-audit-records';
+import { supplementAuditCrossStoreLinks } from '../domain/document-audit-cross-store';
+import { auditDocumentCoverage, auditRecordDocumentLabel } from '../domain/document-audit-coverage';
 import { configuredAuditRecipients } from '../domain/document-audit-recipients';
 import { formatBRL } from '../domain/supply-calculations';
-import type { PurchaseV2 } from '../domain/purchase-v2-types';
-import type { WorkService } from '../domain/works-types';
 import type { Store } from '../domain/types';
-import type { AuditFinding } from '../domain/document-audit-types';
+import type { AuditFinding, AuditRecord } from '../domain/document-audit-types';
 import './finance-document-audit-page.css';
 
+interface AuditStoreSnapshot {
+  storeId: string;
+  records: AuditRecord[];
+}
+
 export function FinanceDocumentAuditPage() {
-  const { can } = useSession();
+  const { can, session } = useSession();
+  const userId = session?.user?.id || '';
   const allowed = can('finance.view') && can('finance.document_audit_view');
   const [stores, setStores] = useState<Store[]>([]);
-  const [purchases, setPurchases] = useState<PurchaseV2[]>([]);
-  const [works, setWorks] = useState<WorkService[]>([]);
+  const [sourceSnapshot, setSourceSnapshot] = useState<AuditStoreSnapshot | null>(null);
+  const cachedSources = useRef<Map<string, AuditStoreSnapshot>>(new Map());
   const [storeId, setStoreId] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingSources, setLoadingSources] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ocr, setOcr] = useState(true);
@@ -38,26 +46,28 @@ export function FinanceDocumentAuditPage() {
   } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const sourceGeneration = useRef(0);
   const load = useCallback(async () => {
     if (!allowed) {
       setLoading(false);
       return;
     }
     const current = ++generation.current;
+    // Ignore any previously running financial load after an explicit refresh.
+    sourceGeneration.current += 1;
+    cachedSources.current.clear();
     setLoading(true);
+    setLoadingSources(false);
+    setSourceSnapshot(null);
     setError(null);
     setSelected(new Set());
     setResult(null);
     try {
-      const [nextStores, nextPurchases, nextWorks] = await Promise.all([
-        listAuditStores(),
-        listSupplyPurchasesV2({ allRows: true }),
-        listWorkServices({ allRows: true }),
-      ]);
+      // The initial view only needs store labels. Loading all fiscal records here
+      // causes many paginated database requests even when no store is selected.
+      const nextStores = await listAuditStores();
       if (current !== generation.current) return;
       setStores(nextStores);
-      setPurchases(nextPurchases);
-      setWorks(nextWorks);
       setStoreId((previous) => (nextStores.some((store) => store.id === previous) ? previous : ''));
     } catch {
       if (current === generation.current)
@@ -67,19 +77,71 @@ export function FinanceDocumentAuditPage() {
     } finally {
       if (current === generation.current) setLoading(false);
     }
-  }, [allowed]);
+  }, [allowed, userId]);
   useEffect(() => {
     const counter = generation;
     void load();
     return () => {
       counter.current++;
+      sourceGeneration.current++;
       controller.current?.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!allowed || loading || !storeId || error) return;
+    const current = ++sourceGeneration.current;
+    const cacheKey = `${userId}:${storeId}`;
+    const cached = cachedSources.current.get(cacheKey);
+    if (cached) {
+      setSourceSnapshot(cached);
+      setLoadingSources(false);
+      return;
+    }
+    setSourceSnapshot(null);
+    setLoadingSources(true);
+    void Promise.all([
+      listSupplyPurchasesV2({ allRows: true, storeId }),
+      listWorkServices({ allRows: true, includeComponents: true, storeId }),
+    ])
+      .then(async ([nextPurchases, nextWorks]) => {
+        if (current !== sourceGeneration.current) return;
+        const baseRecords = buildAuditRecords(storeId, nextPurchases, nextWorks);
+        // Cross-store fiscal hints are read-only and RLS scoped. Failure must
+        // block generating a report rather than silently implying no duplicates.
+        const candidates = await listAuditDocumentCandidates(baseRecords).catch(() => {
+          throw new Error('Falha ao verificar documentos semelhantes em outras lojas.');
+        });
+        if (current !== sourceGeneration.current) return;
+        const next: AuditStoreSnapshot = {
+          storeId,
+          records: supplementAuditCrossStoreLinks(baseRecords, candidates),
+        };
+        cachedSources.current.set(cacheKey, next);
+        // Bound both client memory and sensitive per-session cached snapshots.
+        if (cachedSources.current.size > 3) {
+          const oldest = cachedSources.current.keys().next().value;
+          if (oldest) cachedSources.current.delete(oldest);
+        }
+        setSourceSnapshot(next);
+      })
+      .catch((cause: unknown) => {
+        if (current !== sourceGeneration.current) return;
+        setError(cause instanceof Error && cause.message.startsWith('Falha ao verificar documentos')
+          ? 'Não foi possível verificar possíveis notas e recibos duplicados em outras lojas. A conferência foi bloqueada para evitar relatório incompleto. Atualize e tente novamente.'
+          : 'Não foi possível carregar todas as compras e obras da loja. Atualize e tente novamente.');
+      })
+      .finally(() => {
+        if (current === sourceGeneration.current) setLoadingSources(false);
+      });
+    return () => { sourceGeneration.current++; };
+  }, [allowed, loading, storeId, userId]);
+
   const store = stores.find((entry) => entry.id === storeId);
+  const sourcesReady = Boolean(sourceSnapshot && sourceSnapshot.storeId === storeId);
   const records = useMemo(
-    () => (storeId ? buildAuditRecords(storeId, purchases, works) : []),
-    [storeId, purchases, works],
+    () => (sourceSnapshot?.storeId === storeId && storeId ? sourceSnapshot.records : []),
+    [storeId, sourceSnapshot],
   );
   const filtered = useMemo(
     () =>
@@ -98,6 +160,7 @@ export function FinanceDocumentAuditPage() {
     [records, query],
   );
   const chosen = records.filter((record) => selected.has(record.id));
+  const chosenCoverage = auditDocumentCoverage(chosen);
   const selectedKnown = chosen
     .filter((record) => record.active)
     .reduce((sum, record) => sum + (record.storeCents ?? 0n), 0n);
@@ -181,7 +244,7 @@ export function FinanceDocumentAuditPage() {
         </div>
         <button
           className="button button--secondary"
-          disabled={busy || loading}
+          disabled={busy || loading || loadingSources}
           onClick={() => void load()}
         >
           <RefreshCcw size={16} /> Atualizar
@@ -217,9 +280,11 @@ export function FinanceDocumentAuditPage() {
         </div>
       </section>
       {error && <ErrorState message={error} onRetry={!busy ? () => void load() : undefined} />}
-      {loading ? (
-        <InlineLoading label="Carregando compras, obras e vínculos documentais…" />
-      ) : !store ? (
+      {loading || loadingSources || (Boolean(storeId) && !sourcesReady && !error) ? (
+        <InlineLoading label={loadingSources
+          ? 'Carregando compras, obras e vínculos documentais da seleção…'
+          : 'Carregando lojas e vínculos documentais…'} />
+      ) : error && !sourcesReady ? null : !store ? (
         <EmptyState
           title="Selecione uma loja para começar"
           detail="Todas as compras e obras vinculadas serão listadas, independentemente do pagamento."
@@ -331,20 +396,8 @@ export function FinanceDocumentAuditPage() {
                           </strong>
                         </td>
                         <td>
-                          <span>
-                            {!record.documents.length
-                              ? 'Sem nota ou recibo'
-                              : record.documents.every((doc) => doc.type === 'receipt')
-                                ? 'Documentado por recibo'
-                                : `${record.documents.filter((doc) => doc.type === 'invoice').length} nota(s)`}
-                          </span>
-                          {!!record.documents.length && (
-                            <small>
-                              {record.documents.some((doc) => !doc.storagePath)
-                                ? 'Há cadastro sem arquivo'
-                                : 'Conteúdo será conferido ao gerar'}
-                            </small>
-                          )}
+                          <span>{auditRecordDocumentLabel(record).label}</span>
+                          <small>{auditRecordDocumentLabel(record).detail}</small>
                         </td>
                       </tr>
                     ))}
@@ -370,10 +423,17 @@ export function FinanceDocumentAuditPage() {
                 demorar. Anexos indisponíveis e correspondências incertas ficam sinalizados para
                 revisão, sem presumir valores ou alterar lançamentos.
               </p>
+              {chosenCoverage.withoutPath > 0 && (
+                <p className="document-audit-missing-warning" role="status">
+                  Atenção: {chosenCoverage.withoutPath} documento(s) cadastrado(s) sem arquivo vinculado
+                  na seleção. O ZIP sinalizará essas pendências, mas não poderá incluir os arquivos
+                  ausentes. Regularize os anexos nas telas de Compras ou Obras e Serviços.
+                </p>
+              )}
             </div>
             <button
               className="button button--primary"
-              disabled={busy || !chosen.length || loading}
+              disabled={busy || !chosen.length || loading || loadingSources}
               onClick={() => void generate()}
             >
               <FileArchive size={18} /> Gerar conferência — ZIP + Excel
