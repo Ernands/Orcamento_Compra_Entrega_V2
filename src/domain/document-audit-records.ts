@@ -121,6 +121,16 @@ export function buildAuditRecords(
   works: WorkService[],
 ): AuditRecord[] {
   const documents = [...documentCatalog(purchases, works).values()];
+  // One indexing pass avoids scanning the entire fiscal catalog for each CMP
+  // and OBR. Shared files retain all record links but appear once per record.
+  const documentsByRecord = new Map<string, AuditDocument[]>();
+  for (const doc of documents) {
+    for (const recordId of new Set(doc.links.map((link) => link.recordId))) {
+      const linked = documentsByRecord.get(recordId);
+      if (linked) linked.push(doc);
+      else documentsByRecord.set(recordId, [doc]);
+    }
+  }
   const records: AuditRecord[] = [];
   purchases
     .filter((purchase) => purchase.stores.some((store) => store.storeId === storeId))
@@ -208,7 +218,7 @@ export function buildAuditRecords(
             : null,
         budgetCents: moneyToCents(purchase.approvedTotal),
         items,
-        documents: documents.filter((doc) => doc.links.some((link) => link.recordId === id)),
+        documents: documentsByRecord.get(id) || [],
       });
     });
   works
@@ -255,7 +265,7 @@ export function buildAuditRecords(
           included: active,
           stage: active ? 'Componente/valor contratado' : 'Obra cancelada',
         })),
-        documents: documents.filter((doc) => doc.links.some((link) => link.recordId === id)),
+        documents: documentsByRecord.get(id) || [],
       });
     });
   return records.sort((a, b) => a.reference.localeCompare(b.reference, 'pt-BR'));
