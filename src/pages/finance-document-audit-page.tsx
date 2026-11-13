@@ -28,6 +28,8 @@ export function FinanceDocumentAuditPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [sourcesReady, setSourcesReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ocr, setOcr] = useState(true);
@@ -39,26 +41,29 @@ export function FinanceDocumentAuditPage() {
   } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const sourceGeneration = useRef(0);
   const load = useCallback(async () => {
     if (!allowed) {
       setLoading(false);
       return;
     }
     const current = ++generation.current;
+    // Ignore any previously running financial load after an explicit refresh.
+    sourceGeneration.current += 1;
     setLoading(true);
+    setLoadingSources(false);
+    setSourcesReady(false);
+    setPurchases([]);
+    setWorks([]);
     setError(null);
     setSelected(new Set());
     setResult(null);
     try {
-      const [nextStores, nextPurchases, nextWorks] = await Promise.all([
-        listAuditStores(),
-        listSupplyPurchasesV2({ allRows: true }),
-        listWorkServices({ allRows: true }),
-      ]);
+      // The initial view only needs store labels. Loading all fiscal records here
+      // causes many paginated database requests even when no store is selected.
+      const nextStores = await listAuditStores();
       if (current !== generation.current) return;
       setStores(nextStores);
-      setPurchases(nextPurchases);
-      setWorks(nextWorks);
       setStoreId((previous) => (nextStores.some((store) => store.id === previous) ? previous : ''));
     } catch {
       if (current === generation.current)
@@ -74,13 +79,38 @@ export function FinanceDocumentAuditPage() {
     void load();
     return () => {
       counter.current++;
+      sourceGeneration.current++;
       controller.current?.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!allowed || loading || loadingSources || !storeId || sourcesReady || error) return;
+    const current = ++sourceGeneration.current;
+    setLoadingSources(true);
+    void Promise.all([
+      listSupplyPurchasesV2({ allRows: true }),
+      listWorkServices({ allRows: true, includeComponents: true }),
+    ])
+      .then(([nextPurchases, nextWorks]) => {
+        if (current !== sourceGeneration.current) return;
+        setPurchases(nextPurchases);
+        setWorks(nextWorks);
+        setSourcesReady(true);
+      })
+      .catch(() => {
+        if (current === sourceGeneration.current)
+          setError('Não foi possível carregar todas as compras e obras. Atualize e tente novamente.');
+      })
+      .finally(() => {
+        if (current === sourceGeneration.current) setLoadingSources(false);
+      });
+  }, [allowed, loading, loadingSources, storeId, sourcesReady, error]);
+
   const store = stores.find((entry) => entry.id === storeId);
   const records = useMemo(
-    () => (storeId ? buildAuditRecords(storeId, purchases, works) : []),
-    [storeId, purchases, works],
+    () => (sourcesReady && storeId ? buildAuditRecords(storeId, purchases, works) : []),
+    [sourcesReady, storeId, purchases, works],
   );
   const filtered = useMemo(
     () =>
@@ -183,8 +213,8 @@ export function FinanceDocumentAuditPage() {
         </div>
         <button
           className="button button--secondary"
-          disabled={busy || loading}
-          onClick={() => void load()}
+          disabled={busy || loading || loadingSources}
+          onClick={() => void load()
         >
           <RefreshCcw size={16} /> Atualizar
         </button>
@@ -195,7 +225,7 @@ export function FinanceDocumentAuditPage() {
           <select
             aria-label="Loja"
             value={storeId}
-            disabled={loading || busy}
+            disabled={loading || loadingSources || busy}
             onChange={(event) => {
               setStoreId(event.target.value);
               setSelected(new Set());
@@ -219,8 +249,10 @@ export function FinanceDocumentAuditPage() {
         </div>
       </section>
       {error && <ErrorState message={error} onRetry={!busy ? () => void load() : undefined} />}
-      {loading ? (
-        <InlineLoading label="Carregando compras, obras e vínculos documentais…" />
+      {loading || loadingSources || (Boolean(storeId) && !sourcesReady && !error) ? (
+        <InlineLoading label={loadingSources
+          ? 'Carregando compras, obras e vínculos documentais da seleção…'
+          : 'Carregando lojas e vínculos documentais…'} />
       ) : !store ? (
         <EmptyState
           title="Selecione uma loja para começar"
@@ -370,8 +402,8 @@ export function FinanceDocumentAuditPage() {
             </div>
             <button
               className="button button--primary"
-              disabled={busy || !chosen.length || loading}
-              onClick={() => void generate()}
+              disabled={busy || !chosen.length || loading || loadingSources}
+              onClick={() => void generate()
             >
               <FileArchive size={18} /> Gerar conferência — ZIP + Excel
             </button>
