@@ -145,6 +145,30 @@ function setup(): void {
 afterEach(() => { db.tables = {}; db.requests = []; });
 
 describe('Consulta de auditoria limitada à loja sem cortar a CMP compartilhada', () => {
+  it('busca vínculos de anexos apenas para documentos ativos e conserva lojas de CMP compartilhada', async () => {
+    setup();
+    db.tables.supply_purchase_attachment_stores.push({
+      id: 'att-store-deleted', attachment_id: 'att-deleted',
+      store_id: 'store-a', store_code_snapshot: 'store-a',
+      store_name_snapshot: 'store-a', store_city_snapshot: 'Cidade',
+      store_state_snapshot: 'RN',
+    });
+    const purchases = await listSupplyPurchasesV2();
+    const shared = purchases.find((row) => row.id === 'p-shared');
+    expect(shared).toBeDefined();
+    expect(shared!.attachments.map((attachment) => attachment.id)).toEqual(['att-shared']);
+    expect(shared!.attachments[0].stores.map((store) => store.storeId).sort())
+      .toEqual(['store-a', 'store-b']);
+
+    const linkRequests = db.requests.filter((request) =>
+      request.table === 'supply_purchase_attachment_stores');
+    expect(linkRequests.length).toBeGreaterThan(0);
+    expect(linkRequests.every((request) => request.filters.some((filter) =>
+      filter.operation === 'in' && filter.column === 'attachment_id' &&
+      (filter.values as string[]).length === 1 &&
+      (filter.values as string[])[0] === 'att-shared'))).toBe(true);
+  });
+
   it('filtra os IDs de CMP no banco e conserva todas as lojas, rateios e notas das CMPs escolhidas', async () => {
     setup();
     const selected = await listSupplyPurchasesV2({ allRows: true, storeId: 'store-a' });
