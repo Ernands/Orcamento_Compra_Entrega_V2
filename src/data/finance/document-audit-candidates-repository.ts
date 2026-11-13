@@ -75,7 +75,7 @@ export async function listAuditDocumentCandidates(
     fetchAllPagesForIds<CandidateRow>(
       values,
       (chunk, from, to) => supabase
-        .rpc('finance_document_audit_fiscal_candidates_v1' as never, {
+        .rpc('finance_document_audit_fiscal_candidates_v1', {
           p_numbers: field === 'numbers' ? chunk : [],
           p_paths: field === 'paths' ? chunk : [],
         } as never)
