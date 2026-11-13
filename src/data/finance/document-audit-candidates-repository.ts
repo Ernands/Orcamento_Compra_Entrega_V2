@@ -1,6 +1,7 @@
 import { supabase } from '../supabase/client';
 import { fetchAllPagesForIds } from '../supabase/pagination';
 import type { AuditDocumentLink, AuditRecord } from '../../domain/document-audit-types';
+import { normalizeFiscalDocumentNumber } from '../../domain/fiscal-document-number';
 
 export interface AuditDocumentCandidate {
   key: string;
@@ -54,49 +55,65 @@ export async function listAuditDocumentCandidates(
   const catalog = new Map(records.flatMap((record) =>
     record.documents.map((doc) => [doc.key, doc] as const)));
   const docs = [...catalog.values()];
-  const numbers = unique(docs.map((doc) => doc.number));
+  const numbers = unique(docs.map((doc) => normalizeFiscalDocumentNumber(doc.number)));
   const paths = unique(docs.map((doc) => doc.storagePath));
   if (!numbers.length && !paths.length) return [];
 
-  const fetchMatches = async <T>(
-    table: 'supply_purchase_attachments' | 'works_service_documents',
-    select: string,
-  ): Promise<T[]> => {
-    const [numberRows, pathRows] = await Promise.all([
-      numbers.length
-        ? fetchAllPagesForIds<T>(numbers, (chunk, from, to) => {
-          let query = supabase.from(table).select(select).in('document_number', chunk).in('document_type', ['invoice', 'receipt']);
-          if (table === 'supply_purchase_attachments') query = query.is('deleted_at', null);
-          return query.order('id').range(from, to) as never;
-        })
-        : Promise.resolve([] as T[]),
-      paths.length
-        ? fetchAllPagesForIds<T>(paths, (chunk, from, to) => {
-          let query = supabase.from(table).select(select).in('storage_path', chunk).in('document_type', ['invoice', 'receipt']);
-          if (table === 'supply_purchase_attachments') query = query.is('deleted_at', null);
-          return query.order('id').range(from, to) as never;
-        })
-        : Promise.resolve([] as T[]),
-    ]);
-    const matches = new Map<string, T>();
-    for (const row of [...numberRows, ...pathRows]) {
-      const candidate = row as { id: string; document_type: string };
-      if (candidate.document_type === 'invoice' || candidate.document_type === 'receipt')
-        matches.set(candidate.id, row);
-    }
-    return [...matches.values()];
+  type CandidateRow = {
+    source: 'purchase' | 'work';
+    id: string;
+    purchase_id: string | null;
+    service_id: string | null;
+    purchase_order_id: string | null;
+    document_type: string;
+    document_number: string | null;
+    storage_path: string | null;
   };
-
-  const [purchaseDocuments, workDocuments] = await Promise.all([
-    fetchMatches<FiscalAttachment>(
-      'supply_purchase_attachments',
-      'id,purchase_id,purchase_order_id,document_type,document_number,storage_path',
-    ),
-    fetchMatches<FiscalWorkDocument>(
-      'works_service_documents',
-      'id,service_id,document_type,document_number,storage_path',
-    ),
+  // The security-invoker RPC filters by the same normalized expression as
+  // its DEV index. Returned rows remain subject to the caller's original RLS.
+  const fetchCandidates = (field: 'numbers' | 'paths', values: string[]) =>
+    fetchAllPagesForIds<CandidateRow>(
+      values,
+      (chunk, from, to) => supabase
+        .rpc('finance_document_audit_fiscal_candidates_v1' as never, {
+          p_numbers: field === 'numbers' ? chunk : [],
+          p_paths: field === 'paths' ? chunk : [],
+        } as never)
+        .order('source')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{ data: CandidateRow[] | null; error: unknown }>,
+    );
+  const [numberRows, pathRows] = await Promise.all([
+    fetchCandidates('numbers', numbers),
+    fetchCandidates('paths', paths),
   ]);
+  const matches = new Map<string, CandidateRow>();
+  for (const row of [...numberRows, ...pathRows]) {
+    if ((row.source === 'purchase' || row.source === 'work') &&
+        (row.document_type === 'invoice' || row.document_type === 'receipt')) {
+      matches.set(`${row.source}:${row.id}`, row);
+    }
+  }
+  const allMatches = [...matches.values()];
+  const purchaseDocuments: FiscalAttachment[] = allMatches
+    .filter((row) => row.source === 'purchase' && Boolean(row.purchase_id))
+    .map((row) => ({
+      id: row.id,
+      purchase_id: row.purchase_id!,
+      purchase_order_id: row.purchase_order_id,
+      document_type: row.document_type,
+      document_number: row.document_number,
+      storage_path: row.storage_path,
+    }));
+  const workDocuments: FiscalWorkDocument[] = allMatches
+    .filter((row) => row.source === 'work' && Boolean(row.service_id))
+    .map((row) => ({
+      id: row.id,
+      service_id: row.service_id!,
+      document_type: row.document_type,
+      document_number: row.document_number,
+      storage_path: row.storage_path,
+    }));
 
   const purchaseIds = unique(purchaseDocuments.map((doc) => doc.purchase_id));
   const attachmentIds = unique(purchaseDocuments.map((doc) => doc.id));
