@@ -567,6 +567,47 @@ export async function registerPartialPurchaseAdjustment(
   return data;
 }
 
+/**
+ * Scoped revision of CMP-00099. DB validates permissions, existing snapshot,
+ * source payment/lines and credit documents, then swaps the adjustment atomically.
+ * The immutable original purchase and the prior audit snapshot remain preserved.
+ */
+export async function reviseCmp00099PartialAdjustment(input: {
+  existingAdjustmentId: string;
+  expectedCreatedAt: string;
+  expectedOriginalCents: bigint;
+  expectedRefundCents: bigint;
+  attachmentId: string;
+  reference: string;
+  reason: string;
+  refundEntries: Array<{ lineId: string; amountCents: bigint; refundedOn: string }>;
+  cancelled: Array<{ lineId: string; amountCents: bigint }>;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    'revise_cmp00099_partial_adjustment_v1' as never,
+    {
+      p_adjustment_id: input.existingAdjustmentId,
+      p_expected_created_at: input.expectedCreatedAt,
+      p_expected_original_cents: Number(input.expectedOriginalCents),
+      p_expected_refund_cents: Number(input.expectedRefundCents),
+      p_refund_attachment_id: input.attachmentId,
+      p_reference: input.reference,
+      p_reason: input.reason,
+      p_adjustments: input.cancelled.map((line) => ({
+        line_id: line.lineId, kind: 'cancelled',
+        reduction_cents: Number(line.amountCents),
+      })),
+      p_refund_entries: input.refundEntries.map((entry) => ({
+        line_id: entry.lineId,
+        amount_cents: Number(entry.amountCents),
+        refunded_on: entry.refundedOn,
+      })),
+    } as never,
+  );
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export function buildPurchaseOrderRpcPayloadV2(values: RegisterPurchaseOrderInputV2) {
   return {
     p_purchase_id: values.purchaseId,
