@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileText, Plus, Scale, ShieldCheck, Trash2 } from 'lucide-react';
-import { registerPartialPurchaseAdjustment } from '../data/purchases/purchases-v2-repository';
+import { registerPartialPurchaseAdjustment, reviseCmp00099PartialAdjustment } from '../data/purchases/purchases-v2-repository';
 import type { PurchaseOrderV2, PurchaseV2 } from '../domain/purchase-v2-types';
 import { moneyToCents } from '../domain/supply-calculations';
 import { moneyBRL, parseRefundBRL, prorateFreightReduction } from '../domain/purchase-freight-proration';
@@ -16,6 +16,9 @@ type Props = {
   onAttachRefundProof: () => void;
 };
 const format = (value: bigint) => moneyBRL(Number(value));
+const inputAmount = (cents: bigint) => (Number(cents) / 100).toFixed(2).replace('.', ',');
+const toSqlAmount = (cents: bigint) =>
+  (cents / 100n).toString() + '.' + (cents % 100n).toString().padStart(2, '0');
 const originalTotal = (order: PurchaseOrderV2) =>
   order.lines.reduce((total, line) => total + moneyToCents(line.lineTotal || '0'), 0n);
 
@@ -23,15 +26,22 @@ export function PurchasePartialAdjustmentPanel({
   purchase, order, canEdit, onSaved, onAttachRefundProof,
 }: Props) {
   const existing = purchase.adjustments?.find((entry) => entry.orderId === order.id);
+  const scopedRevision = Boolean(existing && purchase.code === 'CMP-00099');
+  const [editingExisting, setEditingExisting] = useState(false);
   const [open, setOpen] = useState(false);
-  const [cancelledIds, setCancelledIds] = useState<string[]>([]);
-  const [refundInputs, setRefundInputs] = useState<RefundInput[]>([]);
-  const [nextRefundId, setNextRefundId] = useState(1);
-  const [reference, setReference] = useState('');
-  const [reason, setReason] = useState('');
+  const [cancelledIds, setCancelledIds] = useState<string[]>(() =>
+    existing?.cancelledLines.map((line) => line.id) ?? []);
+  const [refundInputs, setRefundInputs] = useState<RefundInput[]>(() =>
+    (existing?.refundEntries ?? []).map((entry, index) => ({
+      id: index + 1, lineId: entry.lineId,
+      amount: inputAmount(entry.amountCents), date: entry.refundedOn,
+    })));
+  const [nextRefundId, setNextRefundId] = useState((existing?.refundEntries.length ?? 0) + 1);
+  const [reference, setReference] = useState(existing?.reference ?? '');
+  const [reason, setReason] = useState(existing?.reason ?? '');
   // null: ainda não selecionado manualmente. Com um único comprovante
   // válido do pedido, a seleção é automática após o upload e atualização.
-  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(existing?.refundAttachmentId ?? null);
   const [confirmFreight, setConfirmFreight] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +54,26 @@ export function PurchasePartialAdjustmentPanel({
   const selectedDocumentId = documentId === null
     ? (refundProofs.length === 1 ? refundProofs[0].id : '')
     : refundProofs.some((doc) => doc.id === documentId) ? documentId : '';
-  const original = originalTotal(order);
+  // The read model removes cancelled lines and adds virtual financial rows.
+  // Restore original values to present the source items, never editable virtual rows.
+  const originalLines = existing ? [
+    ...order.lines
+      .filter((line) => !/^(freight-retained|residual-retained|residual-credit):/.test(line.id))
+      .map((line) => {
+        const reduced = existing.freightLines.find((item) => item.id === line.id);
+        if (!reduced) return line;
+        return {
+          ...line,
+          shippingAmount: toSqlAmount(reduced.originalShippingCents),
+          lineTotal: toSqlAmount(moneyToCents(line.lineTotal || '0') + reduced.reductionCents),
+        };
+      }),
+    ...(order.cancelledLines ?? []),
+  ] : order.lines;
+  const original = existing?.grossCents ?? originalTotal(order);
   const cancelledSet = new Set(cancelledIds);
-  const cancelledLines = order.lines.filter((line) => cancelledSet.has(line.id));
-  const retainedLines = order.lines.filter((line) => !cancelledSet.has(line.id));
+  const cancelledLines = originalLines.filter((line) => cancelledSet.has(line.id));
+  const retainedLines = originalLines.filter((line) => !cancelledSet.has(line.id));
   const cancelledTotal = cancelledLines.reduce((sum, line) => sum + moneyToCents(line.lineTotal || '0'), 0n);
   const cancelledFreight = cancelledLines.reduce((sum, line) => sum + moneyToCents(line.shippingAmount || '0'), 0n);
   const parsedEntries = refundInputs.map((entry) => ({
@@ -70,7 +96,7 @@ export function PurchasePartialAdjustmentPanel({
   const managerialResidual = absoluteDifference - coveredFreight;
   const validMoney = difference !== null && refund !== null && refund > 0 && BigInt(refund) < original;
   const pendingRequirements: string[] = [];
-  if (cancelledIds.length === 0 || cancelledIds.length >= order.lines.length) {
+  if (cancelledIds.length === 0 || cancelledIds.length >= originalLines.length) {
     pendingRequirements.push('Selecione os itens cancelados e mantenha pelo menos um item na compra.');
   }
   if (!entriesValid) {
@@ -106,7 +132,7 @@ export function PurchasePartialAdjustmentPanel({
   })();
   const net = refund === null ? null : original - BigInt(refund);
 
-  if (existing) {
+  if (existing && !editingExisting) {
     const doc = purchase.attachments.find((entry) => entry.id === existing.refundAttachmentId);
     return <div className="purchase-refund-history">
       <div className="purchase-refund-history__title"><ShieldCheck size={17}/><strong>Cancelamento parcial conciliado</strong></div>
@@ -140,11 +166,17 @@ export function PurchasePartialAdjustmentPanel({
       </table></div>}
       <p>Comprovante do crédito: <strong>{doc?.originalName || existing.refundAttachmentId}</strong>.
         Pagamento e linhas originais preservados no banco e no histórico de auditoria.</p>
+      {scopedRevision && canEdit && order.status === 'active' && (
+        <button type="button" className="button button--secondary button--small"
+          onClick={() => { setEditingExisting(true); setOpen(true); }}>
+          <Scale size={15}/> Reabrir edição do ajuste
+        </button>
+      )}
     </div>;
   }
   if (!canEdit || order.status !== 'active') return null;
-  if (purchase.stores.length !== 1 || !payment || order.lines.length < 2 ||
-      moneyToCents(payment.amount) !== original ||
+  if (purchase.stores.length !== 1 || !payment || originalLines.length < 2 ||
+      (!existing && moneyToCents(payment.amount) !== original) ||
       order.lines.some((line) => line.lineTotal === null || line.shippingAmount === null ||
         line.storeDistributionStatus !== 'confirmed')) {
     return <p className="purchase-refund-limitation">
@@ -176,29 +208,39 @@ export function PurchasePartialAdjustmentPanel({
   const submit = async () => {
     if (!validInputs || refund === null || !payment) return;
     if (!window.confirm(
-      `Registrar ajuste IRREVERSÍVEL no pedido de ${purchase.code}?\n\n` +
+      `${editingExisting ? 'REVISAR a conciliação existente' : 'Registrar ajuste IRREVERSÍVEL'} no pedido de ${purchase.code}?\n\n` +
       `Pagamento original: ${format(original)}\nItens cancelados: ${format(cancelledTotal)}\n` +
       `Crédito recebido: ${moneyBRL(refund)}\nFrete compensado: ${format(coveredFreight)}\n` +
       `Diferença gerencial separada (não comprovada como frete): ${format(managerialResidual)}\n` +
       `Total líquido: ${format(net || 0n)}\n\n` +
-      'O banco manterá o pagamento original e os documentos. O ajuste não poderá ser repetido.',
+      editingExisting ? 'A versão anterior será preservada na auditoria. Os indicadores financeiros serão recalculados ao salvar.' : 'O banco manterá o pagamento original e os documentos. O ajuste não poderá ser repetido.',
     )) return;
     setSaving(true);
     setError(null);
     try {
-      await registerPartialPurchaseAdjustment({
-        orderId: order.id, paymentId: payment.id, attachmentId: selectedDocumentId,
-        reference: reference.trim(), reason: reason.trim(),
-        expectedOriginalCents: original,
-        refundEntries: parsedEntries.map((entry) => ({
-          lineId: entry.lineId, amountCents: BigInt(entry.cents!), refundedOn: entry.date,
-        })),
-        cancelled: cancelledLines.map((line) => ({
-          lineId: line.id, amountCents: moneyToCents(line.lineTotal || '0'),
-        })),
-      });
+      const refundEntries = parsedEntries.map((entry) => ({
+        lineId: entry.lineId, amountCents: BigInt(entry.cents!), refundedOn: entry.date,
+      }));
+      const cancelled = cancelledLines.map((line) => ({
+        lineId: line.id, amountCents: moneyToCents(line.lineTotal || '0'),
+      }));
+      if (existing && editingExisting) {
+        await reviseCmp00099PartialAdjustment({
+          existingAdjustmentId: existing.id, expectedCreatedAt: existing.createdAt,
+          expectedOriginalCents: existing.grossCents, expectedRefundCents: existing.refundedCents,
+          attachmentId: selectedDocumentId, reference: reference.trim(), reason: reason.trim(),
+          refundEntries, cancelled,
+        });
+      } else {
+        await registerPartialPurchaseAdjustment({
+          orderId: order.id, paymentId: payment.id, attachmentId: selectedDocumentId,
+          reference: reference.trim(), reason: reason.trim(),
+          expectedOriginalCents: original, refundEntries, cancelled,
+        });
+      }
       await onSaved();
       setOpen(false);
+      setEditingExisting(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao salvar ajuste.');
     } finally {
@@ -207,14 +249,20 @@ export function PurchasePartialAdjustmentPanel({
   };
 
   return <section className="purchase-refund-panel">
+    {editingExisting && <p className="purchase-refund-revision-note">
+      Revisão da CMP-00099: os itens, créditos e frete serão recalculados. A conciliação atual
+      permanece intacta se houver falha; a versão anterior fica disponível na auditoria.
+    </p>}
     <button type="button" className="button button--secondary button--small"
-      onClick={() => setOpen((current) => !current)} aria-expanded={open}>
-      <Scale size={16}/> {open ? 'Recolher ajuste' : 'Ajustar compra / Cancelamento parcial'}
+      onClick={() => editingExisting
+        ? (setEditingExisting(false), setOpen(false))
+        : setOpen((current) => !current)} aria-expanded={open}>
+      <Scale size={16}/> {editingExisting ? 'Cancelar edição' : open ? 'Recolher ajuste' : 'Ajustar compra / Cancelamento parcial'}
     </button>
     {open && <div className="purchase-refund-body">
       <h4>Cancelamento parcial com créditos por item e rateio proporcional do frete</h4>
       <p>Selecione os itens integralmente cancelados. Clique em + para registrar o valor recebido e a data de cada reembolso. O total é calculado automaticamente.</p>
-      <div className="purchase-refund-lines">{order.lines.map((line) =>
+      <div className="purchase-refund-lines">{originalLines.map((line) =>
         <label key={line.id} className={cancelledSet.has(line.id) ? 'is-cancelled' : ''}>
           <input type="checkbox" checked={cancelledSet.has(line.id)} onChange={() => updateSelection(line.id)}/>
           <span><strong>{line.itemName}</strong><small>{line.itemCode} · {line.quantity} {line.unit}</small></span>
@@ -344,8 +392,8 @@ export function PurchasePartialAdjustmentPanel({
       )}
       <div className="purchase-refund-actions"><button type="button" className="button button--primary"
         disabled={!validInputs || saving} onClick={() => void submit()}>
-          {saving ? 'Registrando e validando...' : 'Confirmar cancelamento parcial e reembolso'}
-        </button><small>Operação única, auditável e bloqueada para repetição.</small></div>
+          {saving ? 'Validando e salvando...' : editingExisting ? 'Salvar revisão do ajuste' : 'Confirmar cancelamento parcial e reembolso'}
+        </button><small>{editingExisting ? 'Revisão transacional, com snapshot anterior preservado na auditoria.' : 'Operação única, auditável e bloqueada para repetição.'}</small></div>
     </div>}
   </section>;
 }
