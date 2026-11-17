@@ -46,3 +46,15 @@
 
 /* Diferenças sem lastro de frete: visíveis sem impedir conciliação matemática. */
 .purchase-refund-residual-warning{padding:12px 14px;border:1px solid #e9ca86;border-left:3px solid #bf8426;border-radius:8px;background:#fffaf0;color:#73511e;font-size:12px;line-height:1.6}
+
+.purchase-refund-revision-note {
+  margin: 0 0 8px;
+  padding: 11px 13px;
+  border: 1px solid #e0d6b0;
+  border-left: 3px solid #a88529;
+  border-radius: 8px;
+  background: #fffaf0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6c552a;
+}
