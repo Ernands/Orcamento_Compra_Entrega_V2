@@ -47,7 +47,7 @@ export async function listImplementationWaves(): Promise<ImplementationWave[]> {
   const { data, error } = await supabase.from('implementation_waves' as never)
     .select('id,name,status').order('id');
   if (error) throw error;
-  return (data ?? []) as ImplementationWave[];
+  return data ?? [];
 }
 
 export async function createImplementationWave(name: string): Promise<ImplementationWave> {
@@ -57,7 +57,7 @@ export async function createImplementationWave(name: string): Promise<Implementa
     .insert({ name: label, status: 'planning' } as never)
     .select('id,name,status').single();
   if (error) throw error;
-  return data as ImplementationWave;
+  return data;
 }
 
 /** Returns null for explicitly "all", [] for a wave with no accessible stores.
