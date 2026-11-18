@@ -6,16 +6,25 @@ import type {
   StoreImplementation,
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
+import { fetchAllPagesForIds } from '../supabase/pagination';
 
 type ItemRow = Awaited<ReturnType<typeof implementationItemRows>>[number];
 
-async function implementationRows() {
-  const { data, error } = await supabase.from('store_implementations').select('*');
+async function implementationRows(storeIds: string[] | null = null) {
+  if (storeIds !== null && !storeIds.length) return [];
+  const query = supabase.from('store_implementations').select('*');
+  const { data, error } = await (storeIds === null ? query : query.in('store_id', storeIds));
   if (error) throw error;
   return data;
 }
 
-async function implementationItemRows() {
+async function implementationItemRows(ids: string[] | null = null) {
+  if (ids !== null) return fetchAllPagesForIds(
+    ids,
+    (chunk, from, to) => supabase.from('store_implementation_items')
+      .select('*').in('implementation_id',chunk).order('id').range(from,to),
+  );
   const { data, error } = await supabase.from('store_implementation_items').select('*');
   if (error) throw error;
   return data;
@@ -161,10 +170,13 @@ export function calculateProgress(items: ImplementationItem[]): ImplementationPr
 }
 
 export async function listPendingImplementationItems(): Promise<PendingImplementationItem[]> {
-  const [implementations, allItems, storesResult] = await Promise.all([
-    implementationRows(),
-    implementationItemRows(),
-    supabase.from('lojas').select('id, codigo_negocio, nome'),
+  const selectedStoreIds = await getWaveScopedStoreIds();
+  if (selectedStoreIds !== null && !selectedStoreIds.length) return [];
+  const implementations = await implementationRows(selectedStoreIds);
+  const storeQuery = supabase.from('lojas').select('id, codigo_negocio, nome');
+  const [allItems, storesResult] = await Promise.all([
+    implementationItemRows(implementations.map((item) => item.id)),
+    selectedStoreIds === null ? storeQuery : storeQuery.in('id', selectedStoreIds),
   ]);
   if (storesResult.error) throw storesResult.error;
 
