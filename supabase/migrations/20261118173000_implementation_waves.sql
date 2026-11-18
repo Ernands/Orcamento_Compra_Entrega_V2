@@ -12,7 +12,8 @@ create table if not exists public.implementation_waves (
 );
 
 insert into public.implementation_waves (id, name, status)
-values (1, '1ª onda', 'in_progress')
+values (1, '1ª onda', 'in_progress'),
+       (2, '2ª onda', 'planning')
 on conflict (id) do nothing;
 
 select setval(
