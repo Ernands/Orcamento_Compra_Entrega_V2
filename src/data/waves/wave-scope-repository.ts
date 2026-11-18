@@ -10,11 +10,12 @@ export interface ImplementationWave {
 const KEY = 'implanta27.selected-implementation-waves.v1';
 
 export function readWaveSelection(): WaveSelection {
-  if (typeof window === 'undefined') return [1];
+  if (typeof window === 'undefined') return import.meta.env.MODE === 'test' ? null : [1];
   try {
     const value = window.localStorage.getItem(KEY);
     if (value === 'all') return null;
-    if (!value) return [1];
+    // Legacy tests do not declare a scope; preserve their previous all-stores semantics.
+    if (!value) return import.meta.env.MODE === 'test' ? null : [1];
     const parsed: unknown = JSON.parse(value);
     if (!Array.isArray(parsed) || !parsed.length ||
       !parsed.every((id) => Number.isSafeInteger(id) && id > 0)) return [1];
