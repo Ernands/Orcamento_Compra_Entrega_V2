@@ -126,7 +126,8 @@ describe('StoresPage', () => {
     await user.type(screen.getByLabelText('Cidade'), 'Curitiba');
     await user.selectOptions(screen.getByLabelText('UF'), 'PR');
     // Wave is mandatory: newly registered stores are not silently placed in wave 1.
-    await user.selectOptions(await screen.findByLabelText('Onda de implantação'), '2');
+    await screen.findByRole('option', { name: '2ª onda' });
+    await user.selectOptions(screen.getByLabelText('Onda de implantação'), '2');
     await user.click(screen.getByRole('button', { name: 'Salvar loja' }));
 
     expect(createStore).toHaveBeenCalledWith(
