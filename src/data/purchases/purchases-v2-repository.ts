@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { moneyToSqlNumeric } from '../../domain/supply-calculations';
 import { applyPurchasePartialAdjustments, type PartialAdjustmentRecord } from '../../domain/purchase-partial-adjustments';
@@ -280,11 +281,13 @@ async function recoverAdjustmentOrderLines(
  * individual lines by the selected store would corrupt shared CMP totals.
  * Each ID list is paginated in bounded chunks and all queries retain RLS.
  */
-async function loadAuditStorePurchaseRows(storeId: string) {
-  const memberships = await fetchAllPages<{ purchase_id: string }>((from, to) =>
+async function loadAuditStorePurchaseRows(storeIds: string[]) {
+  const memberships = await fetchAllPagesForIds<{ purchase_id: string }>(
+    storeIds,
+    (ids, from, to) =>
     supabase.from('supply_purchase_stores' as never)
       .select('purchase_id')
-      .eq('store_id', storeId)
+      .in('store_id', ids)
       .order('purchase_id')
       .range(from, to),
   );
@@ -347,9 +350,11 @@ export async function listSupplyPurchasesV2(options?: {
 }): Promise<PurchaseV2[]> {
   if (options?.storeId && !options.allRows)
     throw new Error('Filtro de loja da conferência exige consulta completa das referências.');
-  const scopedRows = options?.storeId
-    ? await loadAuditStorePurchaseRows(options.storeId)
-    : null;
+  const selectedStoreIds = options?.storeId ? [options.storeId] : await getWaveScopedStoreIds();
+  // Scope purchase IDs via store memberships *before* loading orders, payments,
+  // documents or other children. Never request global financial data for a wave.
+  const scopedRows = selectedStoreIds === null ? null
+    : await loadAuditStorePurchaseRows(selectedStoreIds);
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult] = scopedRows ?? await Promise.all([
     fetchPagedResult<PurchaseRow>((from, to) => supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseRow>>),
