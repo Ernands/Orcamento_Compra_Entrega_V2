@@ -7,6 +7,12 @@ import { createStore, listResponsibleUsers, listStores } from '../data/stores/st
 import { StoresPage } from '../pages/stores-page';
 
 vi.mock('../app/session-provider', () => ({ useSession: vi.fn() }));
+vi.mock('../data/waves/wave-scope-repository', () => ({
+  listImplementationWaves: vi.fn().mockResolvedValue([
+    { id: 1, name: '1ª onda', status: 'in_progress' },
+    { id: 2, name: '2ª onda', status: 'planning' },
+  ]),
+}));
 vi.mock('../data/stores/stores-repository', () => ({
   listStores: vi.fn(),
   listResponsibleUsers: vi.fn(),
@@ -119,10 +125,12 @@ describe('StoresPage', () => {
     await user.type(screen.getByLabelText('Nome'), 'Loja Nova');
     await user.type(screen.getByLabelText('Cidade'), 'Curitiba');
     await user.selectOptions(screen.getByLabelText('UF'), 'PR');
+    // Wave is mandatory: newly registered stores are not silently placed in wave 1.
+    await user.selectOptions(await screen.findByLabelText('Onda de implantação'), '2');
     await user.click(screen.getByRole('button', { name: 'Salvar loja' }));
 
     expect(createStore).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Loja Nova', city: 'Curitiba', state: 'PR' }),
+      expect.objectContaining({ name: 'Loja Nova', city: 'Curitiba', state: 'PR', waveId: '2' }),
     );
   });
 });
