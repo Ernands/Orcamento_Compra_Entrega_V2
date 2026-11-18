@@ -47,18 +47,17 @@ export async function listImplementationWaves(): Promise<ImplementationWave[]> {
   const { data, error } = await supabase.from('implementation_waves' as never)
     .select('id,name,status').order('id');
   if (error) throw error;
-  return (data ?? []) as unknown as ImplementationWave[];
+  return (data ?? []) as ImplementationWave[];
 }
 
 export async function createImplementationWave(name: string): Promise<ImplementationWave> {
-  const rows = await listImplementationWaves();
   const label = name.trim();
   if (label.length < 3 || label.length > 100) throw new Error('Nome da onda deve ter entre 3 e 100 caracteres.');
   const { data, error } = await supabase.from('implementation_waves' as never)
     .insert({ name: label, status: 'planning' } as never)
     .select('id,name,status').single();
   if (error) throw error;
-  return data as unknown as ImplementationWave;
+  return data as ImplementationWave;
 }
 
 /** Returns null for explicitly "all", [] for a wave with no accessible stores.
