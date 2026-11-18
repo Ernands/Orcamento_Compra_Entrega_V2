@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, type FormEvent, useCallback, useContext, useEffect, useState } from 'react';
 import { Layers3, Plus } from 'lucide-react';
 import {
   createImplementationWave, listImplementationWaves, readWaveSelection,
@@ -50,7 +50,7 @@ export function WaveSelector({ canManage }: { canManage: boolean }) {
     const next = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
     setSelection(next.length > 0 ? next : null);
   };
-  const create = async (event: React.FormEvent) => {
+  const create = async (event: FormEvent) => {
     event.preventDefault();
     if (!newName.trim()) return;
     setBusy(true);
