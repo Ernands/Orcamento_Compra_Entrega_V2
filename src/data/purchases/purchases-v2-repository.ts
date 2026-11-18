@@ -282,15 +282,20 @@ async function recoverAdjustmentOrderLines(
  * Each ID list is paginated in bounded chunks and all queries retain RLS.
  */
 async function loadAuditStorePurchaseRows(storeIds: string[]) {
-  const memberships = await fetchAllPagesForIds<{ purchase_id: string }>(
-    storeIds,
-    (ids, from, to) =>
-    supabase.from('supply_purchase_stores' as never)
+  // Preserve single-store audit's stable equal-filter contract.
+  // Multi-store waves use grouped IN queries before loading purchase data.
+  const memberships = storeIds.length === 1
+    ? await fetchAllPages<{ purchase_id: string }>((from, to) => supabase
+      .from('supply_purchase_stores' as never)
       .select('purchase_id')
-      .in('store_id', ids)
+      .eq('store_id', storeIds[0])
       .order('purchase_id')
-      .range(from, to),
-  );
+      .range(from, to))
+    : await fetchAllPagesForIds<{ purchase_id: string }>(
+      storeIds,
+      (ids, from, to) => supabase.from('supply_purchase_stores' as never)
+        .select('purchase_id').in('store_id', ids).order('purchase_id').range(from, to),
+    );
   const purchaseIds = [...new Set(memberships.map((row) => row.purchase_id))];
   const byIds = <T>(table: string, foreignKey: string, ids: string[]): Promise<T[]> =>
     fetchAllPagesForIds<T>(
