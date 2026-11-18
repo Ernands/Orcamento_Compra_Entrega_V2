@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ResponsibleUser, Store, StoreFormValues } from '../domain/types';
 import { Modal } from './ui';
+import { listImplementationWaves, type ImplementationWave } from '../data/waves/wave-scope-repository';
 
 const STATES = [
   'AC',
@@ -33,6 +34,7 @@ const STATES = [
 ];
 
 const EMPTY_VALUES: StoreFormValues = {
+  waveId: '',
   name: '',
   city: '',
   state: '',
@@ -46,6 +48,7 @@ const EMPTY_VALUES: StoreFormValues = {
 function valuesFromStore(store: Store | null): StoreFormValues {
   if (!store) return EMPTY_VALUES;
   return {
+    waveId: store.waveId ? String(store.waveId) : '1',
     name: store.name,
     city: store.city,
     state: store.state,
@@ -75,11 +78,15 @@ export function StoreFormModal({
   const [values, setValues] = useState<StoreFormValues>(valuesFromStore(store));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [waves, setWaves] = useState<ImplementationWave[]>([]);
 
   useEffect(() => {
     if (open) {
       setValues(valuesFromStore(store));
       setError(null);
+      void listImplementationWaves().then(setWaves).catch(() => {
+        setError('Não foi possível carregar as ondas. Verifique sua conexão antes de salvar.');
+      });
     }
   }, [open, store]);
 
@@ -89,6 +96,10 @@ export function StoreFormModal({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!values.waveId || !waves.some((wave) => String(wave.id) === values.waveId)) {
+      setError('Selecione a onda de implantação da loja.');
+      return;
+    }
     if (!values.name.trim() || !values.city.trim() || !values.state) {
       setError('Preencha nome, cidade e UF.');
       return;
@@ -118,6 +129,13 @@ export function StoreFormModal({
           <input value={store?.code || 'Gerado ao salvar'} readOnly disabled />
         </label>
         <div className="form-grid">
+          <label className="field form-grid__wide">
+            Onda de implantação
+            <select value={values.waveId || ''} onChange={(event) => set('waveId', event.target.value)} required>
+              <option value="">Selecione a onda</option>
+              {waves.map((wave) => <option key={wave.id} value={wave.id}>{wave.name}</option>)}
+            </select>
+          </label>
           <label className="field form-grid__wide">
             Nome
             <input
