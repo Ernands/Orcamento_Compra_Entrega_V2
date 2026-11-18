@@ -3720,3 +3720,29 @@ svg {
     margin: 0;
   }
 }
+
+
+/* Implementation wave selector, isolated from the existing sidebar layout. */
+.wave-selector { display:flex; align-items:center; justify-content:flex-end; gap:9px; padding:7px 24px;
+  border-bottom:1px solid var(--border, #dde5ed); background:var(--surface, #fff); min-height:47px; }
+.wave-selector__caption { font-size:12px; font-weight:700; color:var(--muted, #52647c); }
+.wave-selector__menu { position:relative; z-index:20; }
+.wave-selector__menu summary { min-width:135px; max-width:270px; padding:7px 28px 7px 11px;
+  border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#20344b;
+  cursor:pointer; font-weight:650; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wave-selector__menu summary:focus-visible { outline:2px solid #237db5; outline-offset:2px; }
+.wave-selector__options { position:absolute; right:0; top:calc(100% + 6px); width:270px;
+  max-height:min(420px,75vh); overflow:auto; display:grid; gap:9px; padding:13px;
+  border:1px solid #cbd5e1; border-radius:10px; background:white; box-shadow:0 8px 28px #0d273229; }
+.wave-selector__options > label { display:flex; gap:9px; align-items:center; font-size:12px; cursor:pointer; }
+.wave-selector__options input[type=checkbox] { accent-color:#1f6e9c; }
+.wave-selector__options form { display:grid; gap:6px; border-top:1px solid #e2e8f0; padding-top:10px; }
+.wave-selector__options form label { font-size:11px; font-weight:650; }
+.wave-selector__new { display:flex; gap:6px; }
+.wave-selector__new input { min-width:0; flex:1; border:1px solid #cbd5e1; border-radius:6px; padding:7px; }
+.wave-selector__new button { display:grid; place-items:center; border:0; border-radius:6px;
+  color:white; background:#256e9b; cursor:pointer; width:34px; }
+.wave-selector__options small { color:#ac3737; font-size:11px; }
+@media(max-width:640px) { .wave-selector{padding:8px 12px; padding-right:60px; }
+  .wave-selector__caption{display:none;} .wave-selector__options{right:-10px;max-width:calc(100vw - 24px);}
+}
