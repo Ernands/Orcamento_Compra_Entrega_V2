@@ -28,6 +28,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { IconButton } from '../components/ui';
 import { useSession } from './session-provider';
+import { WaveScopeProvider, WaveSelector, useWaveScope } from './wave-scope';
 
 const SECTION_STORAGE = {
   implantation: 'implanta27.sidebar.implantation',
@@ -63,7 +64,7 @@ function readSidebarCollapsedState(): boolean {
   }
 }
 
-export function AppShell() {
+function AppShellContent() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedState);
   const [signingOut, setSigningOut] = useState(false);
@@ -75,6 +76,7 @@ export function AppShell() {
     readSectionState(SECTION_STORAGE.administration),
   );
   const { viewer, can, signOut } = useSession();
+  const { key: waveKey } = useWaveScope();
   const location = useLocation();
   const canViewSupply =
     can('items.view') ||
@@ -427,6 +429,7 @@ export function AppShell() {
         </div>
       )}
       <div className="app-main">
+        <WaveSelector canManage={can('stores.create')} />
         <button
           type="button"
           className="app-mobile-menu"
@@ -438,10 +441,15 @@ export function AppShell() {
         </button>
         <main className="page-content">
           <Suspense fallback={<div className="page-stack" role="status" aria-live="polite">Carregando módulo...</div>}>
-            <Outlet />
+            <Outlet key={waveKey} />
           </Suspense>
         </main>
       </div>
     </div>
   );
+}
+
+/** Scope stays mounted across route changes; changing it remounts only the active page. */
+export function AppShell() {
+  return <WaveScopeProvider><AppShellContent /></WaveScopeProvider>;
 }
