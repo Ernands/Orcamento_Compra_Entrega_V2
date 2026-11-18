@@ -448,9 +448,10 @@ export async function createWorkDocumentSignedUrl(storagePath: string): Promise<
 }
 
 export async function listFinanceStoreBudgets(): Promise<FinanceStoreBudget[]> {
-  const { data, error } = await supabase
-    .from('finance_store_budgets')
-    .select('*')
+  const storeIds = await getWaveScopedStoreIds();
+  if (storeIds !== null && storeIds.length === 0) return [];
+  const query = supabase.from('finance_store_budgets').select('*');
+  const { data, error } = await (storeIds === null ? query : query.in('store_id', storeIds))
     .order('updated_at', { ascending: false });
   if (error) throw error;
 
