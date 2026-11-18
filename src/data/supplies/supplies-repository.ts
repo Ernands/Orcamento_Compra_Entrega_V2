@@ -253,9 +253,13 @@ export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDet
 }
 
 export async function listSupplyNeeds(): Promise<SupplyNeed[]> {
-  const needRows = await fetchAllPages<StoreNeedRow>((from, to) =>
-    supabase.from('store_needs').select('*').order('created_at', { ascending: false }).order('id').range(from, to),
-  );
+  const waveStoreIds = await getWaveScopedStoreIds();
+  if (waveStoreIds !== null && waveStoreIds.length === 0) return [];
+  const needRows = await fetchAllPages<StoreNeedRow>((from, to) => {
+    const query = supabase.from('store_needs').select('*');
+    return (waveStoreIds === null ? query : query.in('store_id', waveStoreIds))
+      .order('created_at', { ascending: false }).order('id').range(from, to);
+  });
   const storeIds = [...new Set(needRows.map((need) => need.store_id))];
   const storeRows = await fetchAllPagesForIds<StoreLookupRow>(
     storeIds,
