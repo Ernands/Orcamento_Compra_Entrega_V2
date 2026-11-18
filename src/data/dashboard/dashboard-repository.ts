@@ -14,6 +14,7 @@ import type {
   SupplyQuote,
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { readWaveSelection } from '../waves/wave-scope-repository';
 
 export interface DashboardImplementationInput {
   id: string;
@@ -267,9 +268,12 @@ type DashboardImplementationMetricRow = {
 
 export async function loadImplementationDashboard(): Promise<ImplementationDashboard> {
   const today = localDate();
+  const waves = readWaveSelection();
   const { data, error } = await supabase.rpc(
-    'dashboard_implementation_store_metrics_v1' as never,
-    { p_today: today } as never,
+    (waves === null ? 'dashboard_implementation_store_metrics_v1'
+      : 'dashboard_implementation_store_metrics_wave_v1') as never,
+    (waves === null ? { p_today: today }
+      : { p_today: today, p_wave_ids: waves }) as never,
   );
   if (error) throw error;
 
@@ -341,9 +345,12 @@ export function buildSupplyDashboardFromMetrics(row: SupplyDashboardMetricRow): 
 
 export async function loadSupplyDashboard(): Promise<SupplyDashboard> {
   const today = localDate();
+  const waves = readWaveSelection();
   const { data, error } = await supabase.rpc(
-    'dashboard_supply_metrics_v1' as never,
-    { p_today: today } as never,
+    (waves === null ? 'dashboard_supply_metrics_v1'
+      : 'dashboard_supply_metrics_wave_v1') as never,
+    (waves === null ? { p_today: today }
+      : { p_today: today, p_wave_ids: waves }) as never,
   );
   if (error) throw error;
 
