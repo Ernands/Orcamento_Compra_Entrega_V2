@@ -17,6 +17,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../app/session-provider';
+import { readWaveSelection } from '../data/waves/wave-scope-repository';
 import '../styles/store-financial-close.css';
 import {
   FinancePaymentDatesAction,
@@ -272,7 +273,10 @@ export function FinancePaymentsPage() {
     if (stateFilter) {
       return visibleStores.filter((store) => store.state === stateFilter).map((store) => store.id);
     }
-    return null;
+    // The global wave selector scopes payments by store allocations even when
+    // the page's own store/UF filters are unset. A shared CMP contributes
+    // only the amounts allocated to stores in the selected waves.
+    return readWaveSelection() === null ? null : visibleStores.map((store) => store.id);
   }, [stateFilter, storeFilter, visibleStores]);
   const occurrenceValueScopeActive = occurrenceValuesOnly && Boolean(dateFrom || dateTo);
 
