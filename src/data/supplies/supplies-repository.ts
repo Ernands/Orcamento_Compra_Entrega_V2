@@ -500,11 +500,11 @@ function mapQuoteItem(
 }
 
 export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
-  const storeIds = await getWaveScopedStoreIds();
-  if (storeIds !== null && storeIds.length === 0) return [];
-  const scopedMemberships = storeIds === null ? null
+  const waveStoreIds = await getWaveScopedStoreIds();
+  if (waveStoreIds !== null && waveStoreIds.length === 0) return [];
+  const scopedMemberships = waveStoreIds === null ? null
     : await fetchAllPagesForIds<Pick<QuoteStoreRow, 'quote_id'>>(
-      storeIds,
+      waveStoreIds,
       (ids, from, to) => supabase.from('supply_quote_stores')
         .select('quote_id').in('store_id', ids)
         .order('quote_id').range(from, to),
