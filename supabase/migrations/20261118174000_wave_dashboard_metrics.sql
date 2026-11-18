@@ -99,7 +99,7 @@ AS $function$
     (coalesce(metrics.overdue_count, 0) > 0) desc,
     coalesce(metrics.pending_count, 0) desc,
     store.nome asc;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.dashboard_supply_metrics_wave_v1(p_today date, p_wave_ids integer[])
@@ -258,7 +258,7 @@ AS $function$
       ))
       from quote_item_groups as groups
     ), '[]'::jsonb);
-$function$
+$function$;
 
 
 revoke all on function public.dashboard_implementation_store_metrics_wave_v1(date,integer[]) from public,anon;
