@@ -1,5 +1,6 @@
 import type { ResponsibleUser, Store, StoreFormValues } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { invalidateWaveScopeCache, readWaveSelection } from '../waves/wave-scope-repository';
 import { listStoreFinancialClosures } from './store-financial-closure-repository';
 
 interface StoreRow {
@@ -13,6 +14,7 @@ interface StoreRow {
   data_inauguracao_planejada: string | null;
   observacoes: string | null;
   responsavel_usuario_id: string | null;
+  wave_id?: number;
 }
 
 function mapStore(row: StoreRow, responsibleName: string | null): Store {
@@ -28,6 +30,7 @@ function mapStore(row: StoreRow, responsibleName: string | null): Store {
     plannedOpeningDate: row.data_inauguracao_planejada,
     notes: row.observacoes,
     responsibleName,
+    waveId: Number(row.wave_id ?? 1),
   };
 }
 
@@ -46,11 +49,14 @@ async function responsibleNames(ids: string[]): Promise<Map<string, string>> {
 }
 
 export async function listStores(): Promise<Store[]> {
-  const { data, error } = await supabase
+  const waveIds = readWaveSelection();
+  // The filter is sent to PostgreSQL before transferring stores and closures.
+  const baseQuery = supabase
     .from('lojas')
     .select(
-      'id, codigo_negocio, nome, cidade, uf, endereco, status, data_inauguracao_planejada, observacoes, responsavel_usuario_id',
-    )
+      'id, codigo_negocio, nome, cidade, uf, endereco, status, data_inauguracao_planejada, observacoes, responsavel_usuario_id, wave_id',
+    );
+  const { data, error } = await (waveIds === null ? baseQuery : baseQuery.in('wave_id', waveIds))
     .order('nome');
 
   if (error) {
@@ -71,7 +77,7 @@ export async function getStore(id: string): Promise<Store> {
   const { data, error } = await supabase
     .from('lojas')
     .select(
-      'id, codigo_negocio, nome, cidade, uf, endereco, status, data_inauguracao_planejada, observacoes, responsavel_usuario_id',
+      'id, codigo_negocio, nome, cidade, uf, endereco, status, data_inauguracao_planejada, observacoes, responsavel_usuario_id, wave_id',
     )
     .eq('id', id)
     .single();
@@ -103,6 +109,7 @@ export async function listResponsibleUsers(): Promise<ResponsibleUser[]> {
 
 function storePayload(values: StoreFormValues) {
   return {
+    ...(values.waveId ? { wave_id: Number(values.waveId) } : {}),
     nome: values.name.trim(),
     cidade: values.city.trim(),
     uf: values.state,
@@ -122,11 +129,13 @@ export async function createStore(values: StoreFormValues): Promise<Store> {
     .single();
 
   if (error) throw error;
+  invalidateWaveScopeCache();
   return getStore(data.id);
 }
 
 export async function updateStore(id: string, values: StoreFormValues): Promise<Store> {
   const { error } = await supabase.from('lojas').update(storePayload(values)).eq('id', id);
   if (error) throw error;
+  invalidateWaveScopeCache();
   return getStore(id);
 }
