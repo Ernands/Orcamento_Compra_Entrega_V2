@@ -19,12 +19,13 @@ vi.mock('../data/waves/wave-scope-repository', () => ({
 vi.mock('../data/supabase/client', () => ({
   supabase: {
     from(table: string) {
-      let filter: { column: string; ids: unknown[] } | null = null;
+      const scope: { filter: { column: string; ids: unknown[] } | null } = { filter: null };
       const query = {
         select() { return query; },
-        in(column: string, ids: unknown[]) { filter = { column, ids }; return query; },
+        in(column: string, ids: unknown[]) { scope.filter = { column, ids }; return query; },
         order() { return query; },
         range(from: number, to: number) {
+          const filter = scope.filter;
           db.requests.push({ table, column: filter?.column ?? null, ids: filter?.ids ?? null, from, to });
           const rows = (db.tables[table] || []).filter((row) =>
             filter === null || filter.ids.includes(row[filter.column]));
