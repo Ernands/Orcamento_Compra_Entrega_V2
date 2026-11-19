@@ -21,13 +21,18 @@ select setval(
   greatest((select max(id) from public.implementation_waves), 1)
 );
 
+-- A temporary constant default backfills preexisting tuples via PostgreSQL's
+-- metadata-only ADD COLUMN (PostgreSQL 11+), preserving their updated_at
+-- and avoiding historical "business change" audit events for a data migration.
 alter table public.lojas
-  add column if not exists wave_id integer
+  add column if not exists wave_id integer default 1
     references public.implementation_waves(id) on delete restrict;
 
--- Historical stores, including inactive ones, are wave 1.
+-- Also repair any nulls if the column was manually created before deployment.
 update public.lojas set wave_id = 1 where wave_id is null;
 alter table public.lojas alter column wave_id set not null;
+-- No default for future inserts: every NEW store must explicitly choose a wave.
+alter table public.lojas alter column wave_id drop default;
 
 create index if not exists lojas_wave_id_idx on public.lojas (wave_id, id);
 create index if not exists supply_quote_stores_store_wave_scope_idx
