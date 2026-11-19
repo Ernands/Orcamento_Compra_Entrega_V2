@@ -1,5 +1,6 @@
 import type { ResponsibleUser, Store, StoreFormValues } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { invalidateWaveScopeCache, readWaveSelection } from '../waves/wave-scope-repository';
 import { listStoreFinancialClosures } from './store-financial-closure-repository';
 
@@ -39,29 +40,25 @@ async function responsibleNames(ids: string[]): Promise<Map<string, string>> {
     return new Map();
   }
 
-  const { data, error } = await supabase.from('usuarios').select('id, nome').in('id', ids);
-
-  if (error) {
-    throw error;
-  }
-
-  return new Map(data.map((user) => [user.id, user.nome]));
+  const rows = await fetchAllPagesForIds<{ id: string; nome: string }>(
+    ids,
+    (chunk, from, to) => supabase.from('usuarios')
+      .select('id, nome').in('id', chunk).order('id').range(from, to),
+  );
+  return new Map(rows.map((user) => [user.id, user.nome]));
 }
 
 export async function listStores(): Promise<Store[]> {
   const waveIds = readWaveSelection();
-  // The filter is sent to PostgreSQL before transferring stores and closures.
-  const baseQuery = supabase
-    .from('lojas')
-    .select(
+  // Keep the wave predicate in every database page. Without pagination the
+  // Data API's row cap silently hides stores in large implementation waves.
+  const data = await fetchAllPages<StoreRow>((from, to) => {
+    const query = supabase.from('lojas').select(
       'id, codigo_negocio, nome, cidade, uf, endereco, status, data_inauguracao_planejada, observacoes, responsavel_usuario_id, wave_id',
     );
-  const { data, error } = await (waveIds === null ? baseQuery : baseQuery.in('wave_id', waveIds))
-    .order('nome');
-
-  if (error) {
-    throw error;
-  }
+    return (waveIds === null ? query : query.in('wave_id', waveIds))
+      .order('nome').order('id').range(from, to);
+  });
 
   const ids = [...new Set(data.flatMap((store) => store.responsavel_usuario_id || []))];
   const names = await responsibleNames(ids);
