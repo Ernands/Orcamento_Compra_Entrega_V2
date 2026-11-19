@@ -28,10 +28,11 @@ vi.mock('../data/supabase/client', () => ({
           db.calls.push([...values]);
           return this;
         },
-        order() {
+        order() { return this; },
+        range(from: number, to: number) {
           if (selected === null) throw new Error('Unbounded wave query');
-          const data = db.rows.filter((row) => selected!.includes(row.wave_id))
-            .map((row) => ({ id: row.id }));
+          const data = db.rows.filter((row) => selected.includes(row.wave_id))
+            .map((row) => ({ id: row.id })).slice(from, to + 1);
           return Promise.resolve({ data, error: null });
         },
       };
@@ -43,6 +44,11 @@ beforeEach(() => {
   window.localStorage.clear();
   invalidateWaveScopeCache();
   db.calls = [];
+  db.rows = [
+    { id: 'store-a', wave_id: 1 },
+    { id: 'store-b', wave_id: 1 },
+    { id: 'store-c', wave_id: 2 },
+  ];
 });
 afterEach(() => {
   window.localStorage.clear();
@@ -59,6 +65,15 @@ describe('Supabase: consultas limitadas pelas ondas', () => {
     saveWaveSelection([1]);
     expect(await getWaveScopedStoreIds()).toEqual(['store-a', 'store-b']);
     expect(db.calls).toEqual([[2], [1]]);
+  });
+
+  it('carrega todas as lojas de uma onda grande, com paginação antes de transferir os dados', async () => {
+    db.rows = Array.from({ length: 1050 }, (_, index) => ({ id: `store-${index}`, wave_id: 1 }));
+    saveWaveSelection([1]);
+    const stores = await getWaveScopedStoreIds();
+    expect(stores).toHaveLength(1050);
+    expect(new Set(stores).size).toBe(1050);
+    expect(db.calls).toEqual([[1], [1], [1]]);
   });
 
   it('retorna vazio para uma onda sem lojas e nunca transforma isso em todas as lojas', async () => {
