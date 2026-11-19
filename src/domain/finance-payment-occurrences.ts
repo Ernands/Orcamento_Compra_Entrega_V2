@@ -215,6 +215,8 @@ export function scopeFinancePaymentsWithOccurrencesByStores(
       paymentDates: uniqueDates(paymentOccurrences.map((occurrence) => occurrence.date)),
       occurrenceSumCents,
       occurrenceDifferenceCents: occurrenceSumCents - scoped.amountCents,
+      occurrenceDetailsSource: row.occurrenceDetailsSource,
+      occurrenceDateScoped: row.occurrenceDateScoped,
       ...(refundCents === undefined ? {} : { refundCents }),
     }];
   });
