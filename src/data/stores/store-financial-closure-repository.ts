@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { fetchAllPagesForIds } from '../supabase/pagination';
 
 export type StoreFinancialClosureState = 'open' | 'closed' | 'unavailable';
 export interface StoreFinancialClosure {
@@ -25,18 +26,27 @@ export async function listStoreFinancialClosures(ids: string[]): Promise<Map<str
   const unique = [...new Set(ids)];
   const closures = new Map<string, StoreFinancialClosure>();
   if (!unique.length) return closures;
-  const { data, error } = await supabase.from('store_financial_closures')
-    .select('store_id,state,closed_at,closed_by_name,reopened_at,reopen_reason')
-    .in('store_id', unique);
-  if (error) {
-    if (error.code === '42P01' || error.code === 'PGRST205' || error.code === 'PGRST116') {
+  let data: Array<{
+    store_id: string; state: string; closed_at: string | null;
+    closed_by_name: string | null; reopened_at: string | null; reopen_reason: string | null;
+  }>;
+  try {
+    data = await fetchAllPagesForIds(
+      unique,
+      (chunk, from, to) => supabase.from('store_financial_closures')
+        .select('store_id,state,closed_at,closed_by_name,reopened_at,reopen_reason')
+        .in('store_id', chunk).order('store_id').range(from, to),
+    );
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+    if (code === '42P01' || code === 'PGRST205' || code === 'PGRST116') {
       unique.forEach((id) => closures.set(id, base(id, 'unavailable')));
       return closures;
     }
     throw error;
   }
   unique.forEach((id) => closures.set(id, base(id, 'open')));
-  (data || []).forEach((row) => closures.set(row.store_id, {
+  data.forEach((row) => closures.set(row.store_id, {
     storeId: row.store_id,
     state: row.state === 'closed' ? 'closed' : 'open',
     closedAt: row.closed_at,
