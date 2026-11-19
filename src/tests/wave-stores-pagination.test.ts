@@ -3,7 +3,7 @@ import { listStores } from '../data/stores/stores-repository';
 
 type Row = Record<string, unknown>;
 const db = vi.hoisted(() => ({
-  waveIds: [1] as number[] | null,
+  waveIds: [1],
   tables: {} as Record<string, Row[]>,
   requests: [] as Array<{ table: string; column: string | null; ids: unknown[] | null; from: number; to: number }>,
 }));
