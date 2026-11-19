@@ -2,6 +2,7 @@ import { lazy, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/login-page';
 import { AppShell } from './app-shell';
+import { BankReconciliationWaveGate } from './bank-reconciliation-wave-gate';
 import {
   AuthorizedHomeRedirect,
   RequireCapability,
@@ -339,7 +340,7 @@ export function App() {
                 <RequireCapability capability="finance.view">
                   <RequireCapability capability="finance.payments_view">
                     <RequireCapability capability="finance.account_reconciliation_view">
-                      <FinanceAccountReconciliationPage />
+                      <BankReconciliationWaveGate><FinanceAccountReconciliationPage /></BankReconciliationWaveGate>
                     </RequireCapability>
                   </RequireCapability>
                 </RequireCapability>
