@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listStores } from '../data/stores/stores-repository';
 
 type Row = Record<string, unknown>;
-const db = vi.hoisted(() => ({
+const db = vi.hoisted<{
+  waveIds: number[];
+  tables: Record<string, Row[]>;
+  requests: Array<{ table: string; column: string | null; ids: unknown[] | null; from: number; to: number }>;
+}>(() => ({
   waveIds: [1],
-  tables: {} as Record<string, Row[]>,
-  requests: [] as Array<{ table: string; column: string | null; ids: unknown[] | null; from: number; to: number }>,
+  tables: {},
+  requests: [],
 }));
 
 vi.mock('../data/waves/wave-scope-repository', () => ({
