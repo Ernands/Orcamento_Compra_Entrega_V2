@@ -104,10 +104,13 @@ export interface Store {
   status: StoreStatus;
   plannedOpeningDate: string | null;
   notes: string | null;
+  waveId?: number;
   financialClosure?: import('../data/stores/store-financial-closure-repository').StoreFinancialClosure;
 }
 
 export interface StoreFormValues {
+  /** Required for new stores; optional for legacy editable fixtures. */
+  waveId?: string;
   name: string;
   city: string;
   state: string;

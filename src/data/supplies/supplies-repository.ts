@@ -15,6 +15,7 @@ import type {
   SupplyQuoteValues,
 } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import type { Database, Json } from '../supabase/database.types';
 import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 
@@ -252,9 +253,13 @@ export async function getSupplyItemDetail(itemId: string): Promise<SupplyItemDet
 }
 
 export async function listSupplyNeeds(): Promise<SupplyNeed[]> {
-  const needRows = await fetchAllPages<StoreNeedRow>((from, to) =>
-    supabase.from('store_needs').select('*').order('created_at', { ascending: false }).order('id').range(from, to),
-  );
+  const waveStoreIds = await getWaveScopedStoreIds();
+  if (waveStoreIds !== null && waveStoreIds.length === 0) return [];
+  const needRows = await fetchAllPages<StoreNeedRow>((from, to) => {
+    const query = supabase.from('store_needs').select('*');
+    return (waveStoreIds === null ? query : query.in('store_id', waveStoreIds))
+      .order('created_at', { ascending: false }).order('id').range(from, to);
+  });
   const storeIds = [...new Set(needRows.map((need) => need.store_id))];
   const storeRows = await fetchAllPagesForIds<StoreLookupRow>(
     storeIds,
@@ -495,14 +500,29 @@ function mapQuoteItem(
 }
 
 export async function listSupplyQuotes(): Promise<SupplyQuote[]> {
-  const quotes = await fetchAllPages<QuoteRow>((from, to) =>
-    supabase
-      .from('supply_quotes')
-      .select('*')
-      .order('quote_date', { ascending: false })
-      .order('id')
-      .range(from, to),
-  );
+  const waveStoreIds = await getWaveScopedStoreIds();
+  if (waveStoreIds !== null && waveStoreIds.length === 0) return [];
+  const scopedMemberships = waveStoreIds === null ? null
+    : await fetchAllPagesForIds<Pick<QuoteStoreRow, 'quote_id'>>(
+      waveStoreIds,
+      (ids, from, to) => supabase.from('supply_quote_stores')
+        .select('quote_id').in('store_id', ids)
+        .order('quote_id').range(from, to),
+    );
+  const scopedQuoteIds = scopedMemberships === null ? null
+    : [...new Set(scopedMemberships.map((membership) => membership.quote_id))];
+  if (scopedQuoteIds !== null && scopedQuoteIds.length === 0) return [];
+  // Only quote IDs linked to the selected waves reach the expensive child queries.
+  const quotes = scopedQuoteIds === null
+    ? await fetchAllPages<QuoteRow>((from, to) => supabase
+      .from('supply_quotes').select('*').order('quote_date', { ascending: false })
+      .order('id').range(from, to))
+    : await fetchAllPagesForIds<QuoteRow>(
+      scopedQuoteIds,
+      (ids, from, to) => supabase.from('supply_quotes').select('*')
+        .in('id', ids).order('quote_date', { ascending: false })
+        .order('id').range(from, to),
+    );
   const quoteIds = quotes.map((quote) => quote.id);
 
   const [quoteStoreRows, quoteItemRows] = await Promise.all([

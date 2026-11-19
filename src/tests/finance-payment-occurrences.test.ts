@@ -7,6 +7,7 @@ import {
   financePaymentOccurrences,
   financePaymentOfficialAmount,
   scopeFinancePaymentToOccurrenceDateRange,
+  scopeFinancePaymentsWithOccurrencesByStores,
 } from '../domain/finance-payment-occurrences';
 import type { UnifiedFinancePaymentRow } from '../domain/finance-payments';
 import type { PurchasePaymentOccurrenceV2 } from '../domain/payment-occurrences';
@@ -116,6 +117,73 @@ describe('finance payment occurrences', () => {
     expect(financePaymentOfficialAmount(scoped)).toBe(64_290n);
     expect(financePaymentOccurrenceDifference(scoped)).toBe(0n);
     expect(financePaymentHasOccurrenceDivergence(scoped)).toBe(false);
+  });
+
+  it('rateia centavos das ocorrências entre ondas sem duplicar pagamento compartilhado', () => {
+    const original: UnifiedFinancePaymentRow = {
+      ...baseRow,
+      id: 'purchase:shared',
+      amountCents: 10_000n,
+      originAllocations: { equipment: 10_000n, furniture: 0n, works: 0n },
+      storeIds: ['store-a', 'store-b'],
+      storeCodes: ['LOJ-A', 'LOJ-B'],
+      storeAllocations: [
+        { storeId: 'store-a', storeCode: 'LOJ-A', state: 'RN',
+          amountCents: 5_000n, originAllocations: { equipment: 5_000n, furniture: 0n, works: 0n } },
+        { storeId: 'store-b', storeCode: 'LOJ-B', state: 'RN',
+          amountCents: 5_000n, originAllocations: { equipment: 5_000n, furniture: 0n, works: 0n } },
+      ],
+    };
+    const parts = ['33.33', '33.33', '33.34'].map((amount, position) => ({
+      ...cmp43Occurrences[0],
+      id: 'part-' + position,
+      amount,
+      position,
+    }));
+    const [full] = decorateFinancePaymentsWithOccurrences([original], parts);
+    const [a] = scopeFinancePaymentsWithOccurrencesByStores([full], ['store-a']);
+    const [b] = scopeFinancePaymentsWithOccurrencesByStores([full], ['store-b']);
+    expect(a.amountCents).toBe(5_000n);
+    expect(b.amountCents).toBe(5_000n);
+    expect(a.occurrenceSumCents).toBe(5_000n);
+    expect(b.occurrenceSumCents).toBe(5_000n);
+    expect(a.officialAmountCents).toBe(5_000n);
+    expect(b.officialAmountCents).toBe(5_000n);
+    expect(a.occurrenceDifferenceCents).toBe(0n);
+    expect(b.occurrenceDifferenceCents).toBe(0n);
+    expect(a.paymentOccurrences).toHaveLength(3);
+    expect(a.paymentOccurrences.map((entry, i) => entry.amountCents + b.paymentOccurrences[i].amountCents))
+      .toEqual(full.paymentOccurrences.map((entry) => entry.amountCents));
+    expect(full.amountCents).toBe(10_000n);
+  });
+
+  it('distribui eventos negativos de reembolso sem alterar o saldo líquido', () => {
+    const original: UnifiedFinancePaymentRow = {
+      ...baseRow, id: 'purchase:refund',
+      amountCents: 8_000n,
+      originAllocations: { equipment: 8_000n, furniture: 0n, works: 0n },
+      refundCents: 2_000n,
+      refundDate: '2026-10-06',
+      storeIds: ['store-a', 'store-b'],
+      storeCodes: ['LOJ-A', 'LOJ-B'],
+      storeAllocations: [
+        { storeId: 'store-a', storeCode: 'LOJ-A', state: 'RN',
+          amountCents: 4_000n, originAllocations: { equipment: 4_000n, furniture: 0n, works: 0n } },
+        { storeId: 'store-b', storeCode: 'LOJ-B', state: 'RN',
+          amountCents: 4_000n, originAllocations: { equipment: 4_000n, furniture: 0n, works: 0n } },
+      ],
+    };
+    const [full] = decorateFinancePaymentsWithOccurrences([original], []);
+    const [a] = scopeFinancePaymentsWithOccurrencesByStores([full], ['store-a']);
+    const [b] = scopeFinancePaymentsWithOccurrencesByStores([full], ['store-b']);
+    expect(full.paymentOccurrences.map((p) => p.amountCents)).toEqual([10_000n, -2_000n]);
+    expect(a.paymentOccurrences.map((p) => p.amountCents)).toEqual([5_000n, -1_000n]);
+    expect(b.paymentOccurrences.map((p) => p.amountCents)).toEqual([5_000n, -1_000n]);
+    expect(a.refundCents).toBe(1_000n);
+    expect(b.refundCents).toBe(1_000n);
+    expect(a.occurrenceSumCents).toBe(4_000n);
+    expect(b.occurrenceSumCents).toBe(4_000n);
+    expect(a.amountCents + b.amountCents).toBe(full.amountCents);
   });
 
   it('usa o pagamento cadastrado como fallback quando não há detalhamento estruturado', () => {

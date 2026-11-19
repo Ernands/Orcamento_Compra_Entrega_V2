@@ -1,4 +1,6 @@
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
+import { fetchAllPagesForIds } from '../supabase/pagination';
 import type {
   FinanceReimbursement,
   FinanceReimbursementItem,
@@ -65,22 +67,20 @@ function mapItem(row: ReimbursementItemRow): FinanceReimbursementItem {
 }
 
 export async function listFinanceReimbursements(): Promise<FinanceReimbursement[]> {
-  const [reimbursementResult, itemResult] = await Promise.all([
-    supabase
-      .from('finance_reimbursements' as never)
-      .select('*')
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('finance_reimbursement_items' as never)
-      .select('*')
-      .order('created_at'),
-  ]);
-
-  if (reimbursementResult.error) throw reimbursementResult.error;
-  if (itemResult.error) throw itemResult.error;
-
-  const reimbursements = reimbursementResult.data as unknown as ReimbursementRow[];
-  const items = itemResult.data as unknown as ReimbursementItemRow[];
+  const storeIds = await getWaveScopedStoreIds();
+  if (storeIds !== null && storeIds.length === 0) return [];
+  const parentQuery = supabase.from('finance_reimbursements' as never).select('*');
+  const { data: parentData, error: parentError } =
+    await (storeIds === null ? parentQuery : parentQuery.in('store_id', storeIds))
+      .order('created_at', { ascending: false });
+  if (parentError) throw parentError;
+  const reimbursements = (parentData ?? []) as unknown as ReimbursementRow[];
+  if (!reimbursements.length) return [];
+  const items = await fetchAllPagesForIds<ReimbursementItemRow>(
+    reimbursements.map((row) => row.id),
+    (ids, from, to) => supabase.from('finance_reimbursement_items' as never)
+      .select('*').in('reimbursement_id', ids).order('created_at').range(from, to),
+  );
   return reimbursements.map((row): FinanceReimbursement => ({
     id: row.id,
     code: row.codigo_negocio,

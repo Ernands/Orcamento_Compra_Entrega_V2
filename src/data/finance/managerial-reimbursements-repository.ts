@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import type { ManagerialReimbursementEntry, ManagerialReimbursementType } from '../../domain/managerial-reimbursements';
 type Row = {
   id:string; store_id:string; entry_type:ManagerialReimbursementType;
@@ -11,8 +12,11 @@ const map=(r:Row):ManagerialReimbursementEntry=>({
   createdBy:r.created_by,createdAt:r.created_at,
 });
 export async function listManagerialReimbursements():Promise<ManagerialReimbursementEntry[]> {
-  const {data,error}=await supabase.from('finance_managerial_reimbursement_entries' as never)
-    .select('*').order('created_at',{ascending:false}).limit(5000);
+  const storeIds = await getWaveScopedStoreIds();
+  if (storeIds !== null && storeIds.length === 0) return [];
+  const query = supabase.from('finance_managerial_reimbursement_entries' as never).select('*');
+  const {data,error}=await (storeIds === null ? query : query.in('store_id',storeIds))
+    .order('created_at',{ascending:false}).limit(5000);
   if(error) throw new Error(error.message);
   return ((data||[]) as Row[]).map(map);
 }

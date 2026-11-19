@@ -495,6 +495,7 @@ export type Database = {
           responsavel_usuario_id: string | null
           status: Database["public"]["Enums"]["store_status"]
           uf: string
+          wave_id: number
           updated_at: string
           updated_by: string | null
         }
@@ -513,6 +514,7 @@ export type Database = {
           responsavel_usuario_id?: string | null
           status?: Database["public"]["Enums"]["store_status"]
           uf: string
+          wave_id?: number
           updated_at?: string
           updated_by?: string | null
         }
@@ -531,6 +533,7 @@ export type Database = {
           responsavel_usuario_id?: string | null
           status?: Database["public"]["Enums"]["store_status"]
           uf?: string
+          wave_id?: number
           updated_at?: string
           updated_by?: string | null
         }

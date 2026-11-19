@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { listSupplyPurchasesV2 } from '../data/purchases/purchases-v2-repository';
+import { getWaveScopedStoreIds } from '../data/waves/wave-scope-repository';
 import { buildAuditRecords } from '../domain/document-audit-records';
 
 type Row = Record<string, unknown>;
@@ -12,6 +13,10 @@ const db = vi.hoisted<{
     filters: Array<{ column: string; operation: string; values: unknown }>;
   }>;
 }>(() => ({ tables: {}, requests: [] }));
+
+vi.mock('../data/waves/wave-scope-repository', () => ({
+  getWaveScopedStoreIds: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock('../data/supabase/client', () => ({
   supabase: {
@@ -142,7 +147,10 @@ function setup(): void {
   };
   db.requests = [];
 }
-afterEach(() => { db.tables = {}; db.requests = []; });
+afterEach(() => {
+  db.tables = {}; db.requests = [];
+  vi.mocked(getWaveScopedStoreIds).mockResolvedValue(null);
+});
 
 describe('Consulta de auditoria limitada à loja sem cortar a CMP compartilhada', () => {
   it('busca vínculos de anexos apenas para documentos ativos e conserva lojas de CMP compartilhada', async () => {
@@ -232,6 +240,48 @@ describe('Consulta de auditoria limitada à loja sem cortar a CMP compartilhada'
         !(filter.values as string[]).includes('p-only-b')),
     )).toBe(true);
     expect(db.requests.some((call) => call.table === 'supply_quote_attachments')).toBe(false);
+  });
+
+  it('consulta só as CMPs da onda no banco sem carregar anexos nem destinos desnecessários', async () => {
+    setup();
+    vi.mocked(getWaveScopedStoreIds).mockResolvedValue(['store-a']);
+    const selected = await listSupplyPurchasesV2({
+      includeDestinations: false,
+      includeAttachments: false,
+      includeQuoteAttachments: false,
+    });
+    expect(selected.map((item) => item.code).sort()).toEqual([
+      'CMP-COMPARTILHADA', 'CMP-SOMENTE-A',
+    ]);
+    const shared = selected.find((item) => item.id === 'p-shared')!;
+    // Shared references preserve their complete allocations for correct rateio.
+    expect(shared.stores.map((store) => store.storeId).sort()).toEqual(['store-a', 'store-b']);
+    expect(shared.orders[0].lines[0].stores.map((store) => store.storeId).sort())
+      .toEqual(['store-a', 'store-b']);
+    expect(shared.payments[0].amount).toBe('200.00');
+    expect(shared.attachments).toEqual([]);
+    expect(shared.quoteAttachments).toEqual([]);
+    expect(shared.items).toEqual([]);
+    const requestedTables = db.requests.map((request) => request.table);
+    expect(requestedTables).not.toContain('supply_purchase_attachments');
+    expect(requestedTables).not.toContain('supply_purchase_attachment_stores');
+    expect(requestedTables).not.toContain('supply_quote_attachments');
+    expect(requestedTables).not.toContain('supply_purchase_destinations');
+    expect(requestedTables).not.toContain('supply_purchase_destination_stores');
+    expect(db.requests.some((request) =>
+      request.table === 'supply_purchase_payments' &&
+      request.filters.some((filter) => filter.operation === 'in' &&
+        filter.column === 'purchase_id' &&
+        !(filter.values as string[]).includes('p-only-b')),
+    )).toBe(true);
+  });
+
+  it('não permite que auditoria por loja consulte uma loja de outra onda', async () => {
+    setup();
+    vi.mocked(getWaveScopedStoreIds).mockResolvedValue(['store-b']);
+    const result = await listSupplyPurchasesV2({ allRows: true, storeId: 'store-a' });
+    expect(result).toEqual([]);
+    expect(db.requests).toEqual([]);
   });
 
   it('não dispara consultas globais quando a loja não tem CMPs', async () => {

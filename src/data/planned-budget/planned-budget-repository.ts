@@ -8,6 +8,7 @@ import type {
 import { moneyToCents, quantityToThousandths } from '../../domain/supply-calculations';
 import type { Store, SupplyItem } from '../../domain/types';
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import type { Database, Json } from '../supabase/database.types';
 import { listSupplyItems } from '../supplies/supplies-repository';
 
@@ -48,29 +49,29 @@ export async function collectPaginatedRows<T>(
   }
 }
 
-async function listAllSegmentStores(): Promise<SegmentStoreRow[]> {
+async function listAllSegmentStores(storeIds: string[] | null): Promise<SegmentStoreRow[]> {
+  if (storeIds !== null && storeIds.length === 0) return [];
   return collectPaginatedRows(async (from, to) => {
-    const { data, error } = await supabase
-      .from('supply_budget_segment_stores')
-      .select('*')
-      .order('created_at')
-      .order('id')
-      .range(from, to);
+    const query = supabase.from('supply_budget_segment_stores').select('*');
+    const { data, error } = await (storeIds === null ? query : query.in('store_id', storeIds))
+      .order('created_at').order('id').range(from, to);
     if (error) throw error;
     return data;
   });
 }
 
 export async function listPlannedBudget(): Promise<PlannedBudgetData> {
+  const scopedStoreIds = await getWaveScopedStoreIds();
+  const storesQuery = supabase.from('lojas').select('id,codigo_negocio,nome,cidade,uf');
   const [items, storesResult, segmentsResult, segmentStores, budgetItemsResult] =
     await Promise.all([
       listSupplyItems(),
-      supabase
-        .from('lojas')
-        .select('id,codigo_negocio,nome,cidade,uf')
-        .order('codigo_negocio'),
+      scopedStoreIds !== null && !scopedStoreIds.length
+        ? Promise.resolve({ data: [] as StoreLite[], error: null })
+        : (scopedStoreIds === null ? storesQuery : storesQuery.in('id', scopedStoreIds))
+          .order('codigo_negocio'),
       supabase.from('supply_budget_segments').select('*').order('name'),
-      listAllSegmentStores(),
+      listAllSegmentStores(scopedStoreIds),
       supabase.from('supply_budget_items').select('*').order('created_at'),
     ]);
 
@@ -239,9 +240,10 @@ export async function setPlannedBudgetSegmentActive(
 export async function listPlannedBudgetStores(): Promise<
   Pick<Store, 'id' | 'code' | 'name' | 'city' | 'state'>[]
 > {
-  const { data, error } = await supabase
-    .from('lojas')
-    .select('id,codigo_negocio,nome,cidade,uf')
+  const scopedStoreIds = await getWaveScopedStoreIds();
+  if (scopedStoreIds !== null && !scopedStoreIds.length) return [];
+  const query = supabase.from('lojas').select('id,codigo_negocio,nome,cidade,uf');
+  const { data, error } = await (scopedStoreIds === null ? query : query.in('id', scopedStoreIds))
     .order('codigo_negocio');
   if (error) throw error;
   return data.map((store) => ({

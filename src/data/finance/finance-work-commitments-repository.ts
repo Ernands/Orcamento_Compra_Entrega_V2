@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import type { FinancePaymentsView } from '../../domain/finance-payments';
 
 /**
@@ -73,11 +74,16 @@ export async function listFinanceWorkCommitmentsPage(filters: {
   dateTo?: string | null;
   query?: string | null;
 } = {}): Promise<FinanceWorkCommitmentsPage> {
+  const scopedStoreIds = await getWaveScopedStoreIds();
+  const requested = filters.storeIds ?? null;
+  const allowedStoreIds = scopedStoreIds === null ? requested
+    : requested === null ? scopedStoreIds
+      : requested.filter((id) => scopedStoreIds.includes(id));
   const { data, error } = await supabase.rpc('finance_work_commitments_page_v1', {
     p_page: filters.page ?? 1,
     p_page_size: filters.pageSize ?? 50,
     p_status: filters.status ?? null,
-    p_store_ids: filters.storeIds ?? null,
+    p_store_ids: allowedStoreIds,
     p_date_from: filters.dateFrom ?? null,
     p_date_to: filters.dateTo ?? null,
     p_query: filters.query || null,

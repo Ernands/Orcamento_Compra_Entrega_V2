@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { moneyToSqlNumeric } from '../../domain/supply-calculations';
 import { applyPurchasePartialAdjustments, type PartialAdjustmentRecord } from '../../domain/purchase-partial-adjustments';
@@ -280,14 +281,29 @@ async function recoverAdjustmentOrderLines(
  * individual lines by the selected store would corrupt shared CMP totals.
  * Each ID list is paginated in bounded chunks and all queries retain RLS.
  */
-async function loadAuditStorePurchaseRows(storeId: string) {
-  const memberships = await fetchAllPages<{ purchase_id: string }>((from, to) =>
-    supabase.from('supply_purchase_stores' as never)
+async function loadAuditStorePurchaseRows(
+  storeIds: string[],
+  options?: {
+    allRows?: boolean;
+    includeAttachments?: boolean;
+    includeDestinations?: boolean;
+    includeQuoteAttachments?: boolean;
+  },
+) {
+  // Preserve single-store audit's stable equal-filter contract.
+  // Multi-store waves use grouped IN queries before loading purchase data.
+  const memberships = storeIds.length === 1
+    ? await fetchAllPages<{ purchase_id: string }>((from, to) => supabase
+      .from('supply_purchase_stores' as never)
       .select('purchase_id')
-      .eq('store_id', storeId)
+      .eq('store_id', storeIds[0])
       .order('purchase_id')
-      .range(from, to),
-  );
+      .range(from, to))
+    : await fetchAllPagesForIds<{ purchase_id: string }>(
+      storeIds,
+      (ids, from, to) => supabase.from('supply_purchase_stores' as never)
+        .select('purchase_id').in('store_id', ids).order('purchase_id').range(from, to),
+    );
   const purchaseIds = [...new Set(memberships.map((row) => row.purchase_id))];
   const byIds = <T>(table: string, foreignKey: string, ids: string[]): Promise<T[]> =>
     fetchAllPagesForIds<T>(
@@ -305,31 +321,62 @@ async function loadAuditStorePurchaseRows(storeId: string) {
       byIds<PurchaseItemRow>('supply_purchase_items', 'purchase_id', purchaseIds),
       byIds<OrderRow>('supply_purchase_orders', 'purchase_id', purchaseIds),
       byIds<PaymentRow>('supply_purchase_payments', 'purchase_id', purchaseIds),
-      byIds<AttachmentRow>('supply_purchase_attachments', 'purchase_id', purchaseIds),
+      options?.includeAttachments === false
+        ? Promise.resolve([] as AttachmentRow[])
+        : byIds<AttachmentRow>('supply_purchase_attachments', 'purchase_id', purchaseIds),
       byIds<PartialAdjustmentRecord>('supply_purchase_partial_adjustments', 'purchase_id', purchaseIds),
     ]);
   const attachments = attachmentRows.filter((row) => !row.deleted_at);
   const [destinations, lines, attachmentStores] = await Promise.all([
-    byIds<DestinationRow>('supply_purchase_destinations', 'purchase_item_id', items.map((row) => row.id)),
+    options?.includeDestinations === false
+      ? Promise.resolve([] as DestinationRow[])
+      : byIds<DestinationRow>('supply_purchase_destinations', 'purchase_item_id', items.map((row) => row.id)),
     byIds<OrderLineRow>('supply_purchase_order_items', 'order_id', orders.map((row) => row.id)),
-    byIds<AttachmentStoreRow>('supply_purchase_attachment_stores', 'attachment_id', attachments.map((row) => row.id)),
+    options?.includeAttachments === false
+      ? Promise.resolve([] as AttachmentStoreRow[])
+      : byIds<AttachmentStoreRow>('supply_purchase_attachment_stores', 'attachment_id', attachments.map((row) => row.id)),
   ]);
   const [destinationStores, lineStores] = await Promise.all([
-    byIds<DestinationStoreRow>(
-      'supply_purchase_destination_stores', 'purchase_destination_id', destinations.map((row) => row.id),
-    ),
+    options?.includeDestinations === false
+      ? Promise.resolve([] as DestinationStoreRow[])
+      : byIds<DestinationStoreRow>(
+        'supply_purchase_destination_stores', 'purchase_destination_id', destinations.map((row) => row.id),
+      ),
     byIds<OrderLineStoreRow>(
       'supply_purchase_order_line_stores', 'order_line_id', lines.map((row) => row.id),
     ),
+  ]);
+  // Catalog descriptions and quote evidence are still required by operational
+  // Compras, but must be read ONLY for selected purchase IDs. The specialized
+  // audit deliberately does not need them.
+  const itemCatalogIds = [...new Set(items.map((row) => row.supply_item_id))];
+  const linkedQuoteIds = [...new Set(purchases.map((row) => row.quote_id))];
+  const [catalog, quoteAttachments] = await Promise.all([
+    options?.allRows
+      ? Promise.resolve([] as SupplyItemCatalogRow[])
+      : fetchAllPagesForIds<SupplyItemCatalogRow>(
+        itemCatalogIds,
+        (ids, from, to) => supabase.from('supply_items' as never)
+          .select('id,subcategory,group_name,financial_group')
+          .in('id', ids).order('id').range(from, to),
+      ),
+    options?.allRows || options?.includeAttachments === false || options?.includeQuoteAttachments === false
+      ? Promise.resolve([] as QuoteAttachmentRow[])
+      : fetchAllPagesForIds<QuoteAttachmentRow>(
+        linkedQuoteIds,
+        (ids, from, to) => supabase.from('supply_quote_attachments' as never)
+          .select('*').in('quote_id', ids).is('deleted_at', null)
+          .order('id').range(from, to),
+      ),
   ]);
   purchases.sort((a, b) =>
     b.approved_at.localeCompare(a.approved_at) || a.id.localeCompare(b.id));
   const ok = <T>(data: T[]) => ({ data, error: null });
   return [
-    ok(purchases), ok(stores), ok(items), ok([] as SupplyItemCatalogRow[]),
+    ok(purchases), ok(stores), ok(items), ok(catalog),
     ok(destinations), ok(destinationStores), ok(orders), ok(lines),
     ok(lineStores), ok(payments), ok(attachments), ok(attachmentStores),
-    ok([] as QuoteAttachmentRow[]), ok(adjustments),
+    ok(quoteAttachments), ok(adjustments),
   ] as const;
 }
 
@@ -347,9 +394,16 @@ export async function listSupplyPurchasesV2(options?: {
 }): Promise<PurchaseV2[]> {
   if (options?.storeId && !options.allRows)
     throw new Error('Filtro de loja da conferência exige consulta completa das referências.');
-  const scopedRows = options?.storeId
-    ? await loadAuditStorePurchaseRows(options.storeId)
-    : null;
+  const waveStoreIds = await getWaveScopedStoreIds();
+  // An audit's explicit store filter must not override the global wave scope.
+  const selectedStoreIds = options?.storeId
+    ? (waveStoreIds === null || waveStoreIds.includes(options.storeId) ? [options.storeId] : [])
+    : waveStoreIds;
+  if (selectedStoreIds !== null && selectedStoreIds.length === 0) return [];
+  // Scope purchase IDs via store memberships *before* loading orders, payments,
+  // documents or other children. Never request global financial data for a wave.
+  const scopedRows = selectedStoreIds === null ? null
+    : await loadAuditStorePurchaseRows(selectedStoreIds, options);
   const [purchaseResult, storeResult, itemResult, catalogItemResult, destinationResult, destinationStoreResult, orderResult,
     orderLineResult, orderLineStoreResult, paymentResult, attachmentResult, attachmentStoreResult, quoteAttachmentResult, adjustmentResult] = scopedRows ?? await Promise.all([
     fetchPagedResult<PurchaseRow>((from, to) => supabase.from('supply_purchases' as never).select('*').order('approved_at', { ascending: false }).order('id').range(from, to) as unknown as PromiseLike<PagedResult<PurchaseRow>>),

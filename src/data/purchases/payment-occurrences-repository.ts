@@ -1,5 +1,6 @@
 import { supabase } from '../supabase/client';
-import { fetchAllPages } from '../supabase/pagination';
+import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import { buildPurchaseOrderRpcPayloadV2 } from './purchases-v2-repository';
 import type { PurchaseBatchOperationResultV2 } from './purchases-v2-repository';
 import type { RegisterPurchaseOperationResultV2 } from '../../domain/purchase-v2-types';
@@ -44,8 +45,7 @@ export function buildPaymentWithOccurrencePayload(
 }
 
 export async function listSupplyPurchasePaymentOccurrencesV2(): Promise<PurchasePaymentOccurrenceV2[]> {
-  const data = await fetchAllPages<{
-    
+  type OccurrenceRow = {
     id: string;
     payment_id: string;
     attachment_id: string | null;
@@ -56,14 +56,39 @@ export async function listSupplyPurchasePaymentOccurrencesV2(): Promise<Purchase
     source: PurchasePaymentOccurrenceV2['source'];
     notes: string | null;
     position: number;
-  }>((from, to) => supabase
-    .from('supply_purchase_payment_occurrences' as never)
-    .select('*')
-    .order('payment_id')
-    .order('position')
-    .order('occurred_on')
-    .order('id')
-    .range(from, to));
+  };
+  const waveStoreIds = await getWaveScopedStoreIds();
+  let paymentIds: string[] | null = null;
+  if (waveStoreIds !== null) {
+    if (waveStoreIds.length === 0) return [];
+    // Query only memberships -> purchase IDs -> payment IDs of selected waves.
+    const memberships = await fetchAllPagesForIds<{ purchase_id: string }>(
+      waveStoreIds,
+      (ids, from, to) => supabase.from('supply_purchase_stores' as never)
+        .select('purchase_id').in('store_id', ids).order('purchase_id').range(from, to),
+    );
+    const purchaseIds = [...new Set(memberships.map((row) => row.purchase_id))];
+    if (!purchaseIds.length) return [];
+    const payments = await fetchAllPagesForIds<{ id: string }>(
+      purchaseIds,
+      (ids, from, to) => supabase.from('supply_purchase_payments' as never)
+        .select('id').in('purchase_id', ids).order('id').range(from, to),
+    );
+    paymentIds = payments.map((payment) => payment.id);
+    if (!paymentIds.length) return [];
+  }
+  const query = () => supabase.from('supply_purchase_payment_occurrences' as never)
+    .select('*');
+  const data = paymentIds === null
+    ? await fetchAllPages<OccurrenceRow>((from, to) => query()
+      .order('payment_id').order('position').order('occurred_on').order('id')
+      .range(from, to))
+    : await fetchAllPagesForIds<OccurrenceRow>(
+      paymentIds,
+      (ids, from, to) => query().in('payment_id', ids)
+        .order('payment_id').order('position').order('occurred_on').order('id')
+        .range(from, to),
+    );
   return data.map((row) => ({
     id: row.id,
     paymentId: row.payment_id,

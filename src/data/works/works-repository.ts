@@ -1,5 +1,6 @@
 import type { Database, Json } from '../supabase/database.types';
 import { supabase } from '../supabase/client';
+import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
 import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import { moneyToCents } from '../../domain/supply-calculations';
 import type {
@@ -159,13 +160,16 @@ export async function listWorkServices(options?: {
   includeDocuments?: boolean;
   includeComponents?: boolean;
 }): Promise<WorkService[]> {
+  const scopedIds = options?.storeId ? null : await getWaveScopedStoreIds();
+  if (scopedIds !== null && scopedIds.length === 0) return [];
   const servicesQuery = () => {
     const query = supabase
       .from('works_services')
       .select('*')
       .order('updated_at', { ascending: false })
       .order('id');
-    return options?.storeId ? query.eq('store_id', options.storeId) : query;
+    return options?.storeId ? query.eq('store_id', options.storeId)
+      : scopedIds === null ? query : query.in('store_id', scopedIds);
   };
   const paymentsQuery = () => supabase
     .from('works_service_payments')
@@ -444,9 +448,10 @@ export async function createWorkDocumentSignedUrl(storagePath: string): Promise<
 }
 
 export async function listFinanceStoreBudgets(): Promise<FinanceStoreBudget[]> {
-  const { data, error } = await supabase
-    .from('finance_store_budgets')
-    .select('*')
+  const storeIds = await getWaveScopedStoreIds();
+  if (storeIds !== null && storeIds.length === 0) return [];
+  const query = supabase.from('finance_store_budgets').select('*');
+  const { data, error } = await (storeIds === null ? query : query.in('store_id', storeIds))
     .order('updated_at', { ascending: false });
   if (error) throw error;
 
