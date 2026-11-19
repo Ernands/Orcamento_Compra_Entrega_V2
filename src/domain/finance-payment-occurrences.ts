@@ -160,11 +160,64 @@ export function decorateFinancePaymentsWithOccurrences(
   });
 }
 
+/**
+ * Scope the payment AND its evidence consistently. Keeping the original
+ * occurrence values while reducing only row.amountCents would display a
+ * misleading divergence for a shared CMP.
+ *
+ * Cumulative proration conserves every cent across waves, including repeated
+ * small occurrences and negative partial-refund events.
+ */
 export function scopeFinancePaymentsWithOccurrencesByStores(
   rows: UnifiedFinancePaymentRowWithOccurrences[],
   storeIds: string[],
 ): UnifiedFinancePaymentRowWithOccurrences[] {
-  return scopeFinancePaymentsByStores(rows, storeIds) as UnifiedFinancePaymentRowWithOccurrences[];
+  const selected = new Set(storeIds);
+  const scopedById = new Map(scopeFinancePaymentsByStores(rows, storeIds).map((row) => [row.id, row]));
+  const selectedShare = (amount: bigint, original: UnifiedFinancePaymentRowWithOccurrences): bigint => {
+    const weights = original.storeAllocations.map((allocation) => ({
+      key: allocation.storeId,
+      weight: allocation.amountCents,
+    }));
+    if (original.unallocatedCents > 0n) {
+      weights.push({ key: '__unallocated__', weight: original.unallocatedCents });
+    }
+    const negative = amount < 0n;
+    const allocation = allocateWeightedCents(negative ? -amount : amount, weights);
+    const total = [...allocation].reduce(
+      (sum, [id, cents]) => sum + (selected.has(id) ? cents : 0n), 0n,
+    );
+    return negative ? -total : total;
+  };
+
+  return rows.flatMap((row) => {
+    const scoped = scopedById.get(row.id);
+    if (!scoped) return [];
+    let cumulative = 0n;
+    let priorShare = 0n;
+    const paymentOccurrences = row.paymentOccurrences.flatMap((occurrence) => {
+      cumulative += occurrence.amountCents;
+      const nextShare = selectedShare(cumulative, row);
+      const amountCents = nextShare - priorShare;
+      priorShare = nextShare;
+      return amountCents === 0n ? [] : [{ ...occurrence, amountCents }];
+    });
+    const occurrenceSumCents = paymentOccurrences.reduce(
+      (sum, occurrence) => sum + occurrence.amountCents, 0n,
+    );
+    const refundCents = row.refundCents === undefined
+      ? undefined
+      : selectedShare(row.refundCents, row);
+    return [{
+      ...scoped,
+      officialAmountCents: scoped.amountCents,
+      paymentOccurrences,
+      paymentDates: uniqueDates(paymentOccurrences.map((occurrence) => occurrence.date)),
+      occurrenceSumCents,
+      occurrenceDifferenceCents: occurrenceSumCents - scoped.amountCents,
+      ...(refundCents === undefined ? {} : { refundCents }),
+    }];
+  });
 }
 
 export function financePaymentMatchesDateRange(
