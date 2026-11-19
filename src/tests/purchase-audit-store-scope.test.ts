@@ -276,6 +276,14 @@ describe('Consulta de auditoria limitada à loja sem cortar a CMP compartilhada'
     )).toBe(true);
   });
 
+  it('não permite que auditoria por loja consulte uma loja de outra onda', async () => {
+    setup();
+    vi.mocked(getWaveScopedStoreIds).mockResolvedValue(['store-b']);
+    const result = await listSupplyPurchasesV2({ allRows: true, storeId: 'store-a' });
+    expect(result).toEqual([]);
+    expect(db.requests).toEqual([]);
+  });
+
   it('não dispara consultas globais quando a loja não tem CMPs', async () => {
     setup();
     const result = await listSupplyPurchasesV2({ allRows: true, storeId: 'store-c' });
