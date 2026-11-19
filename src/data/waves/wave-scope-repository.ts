@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { fetchAllPages } from '../supabase/pagination';
 
 /** Scope is a view filter, not a permission grant. RLS is always authoritative. */
 export type WaveSelection = number[] | null; // null = all waves
@@ -70,10 +71,12 @@ export async function getWaveScopedStoreIds(): Promise<string[] | null> {
   if (!cachedStoreIds || cachedKey !== key) {
     cachedKey = key;
     cachedStoreIds = (async () => {
-      const { data, error } = await supabase.from('lojas' as never)
-        .select('id').in('wave_id', selected).order('id');
-      if (error) throw error;
-      return ((data ?? []) as unknown as Array<{ id: string }>).map((store) => store.id);
+      // Paginate inside the wave predicate: Supabase projects may cap a single
+      // response at 1,000 rows. Never silently discard stores in larger waves.
+      const rows = await fetchAllPages<{ id: string }>((from, to) => supabase
+        .from('lojas' as never).select('id').in('wave_id', selected)
+        .order('id').range(from, to));
+      return rows.map((store) => store.id);
     })().catch((error) => {
       invalidateWaveScopeCache();
       throw error;
