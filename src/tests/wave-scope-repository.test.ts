@@ -31,7 +31,7 @@ vi.mock('../data/supabase/client', () => ({
         order() { return this; },
         range(from: number, to: number) {
           if (selected === null) throw new Error('Unbounded wave query');
-          const data = db.rows.filter((row) => selected.includes(row.wave_id))
+          const data = db.rows.filter((row) => selected!.includes(row.wave_id))
             .map((row) => ({ id: row.id })).slice(from, to + 1);
           return Promise.resolve({ data, error: null });
         },
