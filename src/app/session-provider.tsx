@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { loadViewer, loginWithCpf, logout } from '../data/auth/auth-repository';
 import { supabase } from '../data/supabase/client';
+import { invalidateWaveScopeCache } from '../data/waves/wave-scope-repository';
 import type { Capability, Viewer } from '../domain/types';
 
 interface SessionContextValue {
@@ -70,6 +71,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const hydrate = useCallback(async (nextSession: Session | null, force = false): Promise<void> => {
     const previousUserId = sessionRef.current?.user?.id;
     const nextUserId = nextSession?.user?.id;
+    // A cached set of authorized store IDs must never outlive the identity.
+    if (previousUserId !== nextUserId) invalidateWaveScopeCache();
     sessionRef.current = nextSession;
     setSession(nextSession);
 
