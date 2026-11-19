@@ -394,7 +394,12 @@ export async function listSupplyPurchasesV2(options?: {
 }): Promise<PurchaseV2[]> {
   if (options?.storeId && !options.allRows)
     throw new Error('Filtro de loja da conferência exige consulta completa das referências.');
-  const selectedStoreIds = options?.storeId ? [options.storeId] : await getWaveScopedStoreIds();
+  const waveStoreIds = await getWaveScopedStoreIds();
+  // An audit's explicit store filter must not override the global wave scope.
+  const selectedStoreIds = options?.storeId
+    ? (waveStoreIds === null || waveStoreIds.includes(options.storeId) ? [options.storeId] : [])
+    : waveStoreIds;
+  if (selectedStoreIds !== null && selectedStoreIds.length === 0) return [];
   // Scope purchase IDs via store memberships *before* loading orders, payments,
   // documents or other children. Never request global financial data for a wave.
   const scopedRows = selectedStoreIds === null ? null
