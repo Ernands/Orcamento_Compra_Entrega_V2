@@ -19,6 +19,7 @@ import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import { buildUnifiedFinancePayments } from '../domain/finance-payments';
 import { formatBRL } from '../domain/supply-calculations';
 import { buildBudgetForecast, type ForecastFilters, type ForecastIndicator } from '../domain/budget-forecast';
+import { buildBbReimbursementSummary } from '../domain/bb-reimbursement-summary';
 import { aggregateForecastDetailsByStore } from '../domain/forecast-store-aggregation';
 import type { FinanceOverviewStoreRow } from '../domain/finance-overview';
 import type { FinanceStoreRow } from '../domain/finance-types';
@@ -96,6 +97,7 @@ export function BudgetForecastDashboardPage() {
   const [filters, setFilters] = useState<ForecastFilters>(DEFAULT_FILTERS);
   const [considerReimbursements,setConsiderReimbursements] = useState(false);
   const [openIndicator, setOpenIndicator] = useState<ForecastIndicator | null>(null);
+  const [openBbComposition, setOpenBbComposition] = useState<'total' | 'received' | 'remaining' | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,9 +135,26 @@ export function BudgetForecastDashboardPage() {
     [dataset, filters.state]);
   const closureUnavailable = Boolean(dataset?.stores.some((store) =>
     store.financialClosure?.state === 'unavailable'));
-  const settlementByStore=useMemo(()=>dataset && considerReimbursements
-    ? managerialSettlementsByStore(dataset.managerialEntries,dataset.overview):undefined,
-    [dataset,considerReimbursements]);
+  const bbSettlements = useMemo(() => dataset
+    ? managerialSettlementsByStore(dataset.managerialEntries, dataset.overview) : null,
+    [dataset]);
+  // Existing financial forecast calculations still honor the independent toggle.
+  const settlementByStore = considerReimbursements ? bbSettlements ?? undefined : undefined;
+  // The BB receipt summary is always visible, including with the toggle = Não.
+  // Its source stores, Financeiro rows and receipts are already scoped by wave.
+  const bbSummary = useMemo(() => dataset && bbSettlements
+    ? buildBbReimbursementSummary(dataset.stores, dataset.overview, filters, bbSettlements)
+    : null, [dataset, filters, bbSettlements]);
+  const bbCompositionRows = useMemo(() => !bbSummary ? []
+    : openBbComposition === 'received'
+      ? bbSummary.rows.filter((row) => row.receivedCents !== 0n)
+      : bbSummary.rows,
+    [bbSummary, openBbComposition]);
+  const bbCompositionSums = useMemo(() => bbCompositionRows.reduce((total, row) => ({
+    totalCents: total.totalCents + row.totalCents,
+    receivedCents: total.receivedCents + row.receivedCents,
+    remainingCents: total.remainingCents + row.remainingCents,
+  }), { totalCents: 0n, receivedCents: 0n, remainingCents: 0n }), [bbCompositionRows]);
   const forecast = useMemo(() =>
     dataset ? buildBudgetForecast(dataset.stores, dataset.overview, dataset.payments, filters, {
       storePurchases: dataset.storePurchases, works: dataset.works,
@@ -284,10 +303,47 @@ export function BudgetForecastDashboardPage() {
       {loading ? <InlineLoading label="Atualizando previsão orçamentária..." /> : error
         ? <ErrorState message={error} onRetry={() => void load()} /> : forecast && indicators && <>
           <ForecastSection color="bb" title="Verba BB Reembolsável" icon={<Landmark size={18}/>}>
-            <div className={considerReimbursements?'forecast-card-grid forecast-card-grid--three':'forecast-card-grid'}>
-              {(considerReimbursements?(['bb','activeStores','reimbursed'] as const)
-                :(['bb','activeStores'] as const)).map((key)=>
-                <ForecastCard key={key} metric={indicators[key]} onClick={setOpenIndicator}/>)}
+            <div className="forecast-card-grid forecast-card-grid--bb-breakdown">
+              <div className="forecast-bb-primary">
+                <button type="button" className="forecast-card forecast-bb-total"
+                  onClick={() => setOpenBbComposition('total')}
+                  title="Clique para ver a composição da verba BB total por loja."
+                  aria-label={`Detalhar Verba BB Total: ${formatBRL(bbSummary?.totalCents ?? 0n)}`}>
+                  <span className="forecast-card__icon" aria-hidden="true"><Coins size={18}/></span>
+                  <span className="forecast-card__content">
+                    <span className="forecast-card__label">
+                      Verba BB Total <Info className="forecast-card__info" size={13} aria-hidden="true"/>
+                    </span>
+                    <strong className="forecast-card__value">{formatBRL(bbSummary?.totalCents ?? 0n)}</strong>
+                    <small className="forecast-card__note">Verba BB original das lojas ativas com verba.</small>
+                  </span>
+                </button>
+                <div className="forecast-bb-mini-stack">
+                  <button type="button" className="forecast-bb-mini forecast-bb-mini--received"
+                    onClick={() => setOpenBbComposition('received')}
+                    title="Ver lojas e valores efetivamente reembolsados pelo BB."
+                    aria-label={`Detalhar Valor Reembolsado: ${formatBRL(bbSummary?.receivedCents ?? 0n)}`}>
+                    <span className="forecast-bb-mini__icon" aria-hidden="true"><Banknote size={19}/></span>
+                    <span className="forecast-bb-mini__content">
+                      <span className="forecast-bb-mini__label">Valor Reembolsado</span>
+                      <strong className="forecast-bb-mini__value">{formatBRL(bbSummary?.receivedCents ?? 0n)}</strong>
+                    </span>
+                    <ChevronRight className="forecast-bb-mini__more" size={14} aria-hidden="true"/>
+                  </button>
+                  <button type="button" className="forecast-bb-mini forecast-bb-mini--remaining"
+                    onClick={() => setOpenBbComposition('remaining')}
+                    title="Ver por loja a verba original menos os recebimentos."
+                    aria-label={`Detalhar Verba BB a Reembolsar: ${formatBRL(bbSummary?.remainingCents ?? 0n)}`}>
+                    <span className="forecast-bb-mini__icon" aria-hidden="true"><Coins size={19}/></span>
+                    <span className="forecast-bb-mini__content">
+                      <span className="forecast-bb-mini__label">Verba BB a Reembolsar</span>
+                      <strong className="forecast-bb-mini__value">{formatBRL(bbSummary?.remainingCents ?? 0n)}</strong>
+                    </span>
+                    <ChevronRight className="forecast-bb-mini__more" size={14} aria-hidden="true"/>
+                  </button>
+                </div>
+              </div>
+              <ForecastCard metric={indicators.activeStores} onClick={setOpenIndicator}/>
             </div>
           </ForecastSection>
           <ForecastSection color="purple" title="Planejamento Orçamentário" icon={<ClipboardList size={18}/>}>
@@ -326,6 +382,42 @@ export function BudgetForecastDashboardPage() {
             </div>
           </ForecastSection>
         </>}
+      <Modal open={openBbComposition !== null && bbSummary !== null}
+        onClose={() => setOpenBbComposition(null)}
+        className="forecast-detail-modal forecast-bb-composition-modal"
+        title={`Composição — ${openBbComposition === 'received' ? 'Valor Reembolsado'
+          : openBbComposition === 'remaining' ? 'Verba BB a Reembolsar' : 'Verba BB Total'}`}
+        description="Composição por loja, respeitando filtros e ondas selecionadas. Valores efetivamente recebidos, sem deduzir perdas absorvidas.">
+        {bbSummary && openBbComposition && <div className="forecast-bb-composition">
+          <div className="forecast-detail__total">
+            <strong>Total: {formatBRL(openBbComposition === 'received'
+              ? bbSummary.receivedCents
+              : openBbComposition === 'remaining' ? bbSummary.remainingCents : bbSummary.totalCents)}</strong>
+            <small>{bbCompositionRows.length} {bbCompositionRows.length === 1 ? 'loja' : 'lojas'}</small>
+          </div>
+          {bbCompositionRows.length ? <div className="forecast-bb-composition__scroll">
+            <table>
+              <thead><tr><th>Loja</th><th>UF</th><th>Verba BB Total</th>
+                <th>Valor Reembolsado</th><th>Verba BB a Reembolsar</th></tr></thead>
+              <tbody>{bbCompositionRows.map((row) => <tr key={row.storeId}>
+                <td data-label="Loja"><strong>{row.storeCode}</strong> · {row.storeName}</td>
+                <td data-label="UF">{row.state}</td>
+                <td data-label="Verba BB Total">{formatBRL(row.totalCents)}</td>
+                <td data-label="Valor Reembolsado" className="forecast-bb-composition__received">
+                  {formatBRL(row.receivedCents)}</td>
+                <td data-label="Verba BB a Reembolsar" className="forecast-bb-composition__remaining">
+                  {formatBRL(row.remainingCents)}</td>
+              </tr>)}</tbody>
+              <tfoot><tr>
+                <th colSpan={2}>Total das lojas exibidas</th>
+                <th>{formatBRL(bbCompositionSums.totalCents)}</th>
+                <th className="forecast-bb-composition__received">{formatBRL(bbCompositionSums.receivedCents)}</th>
+                <th className="forecast-bb-composition__remaining">{formatBRL(bbCompositionSums.remainingCents)}</th>
+              </tr></tfoot>
+            </table>
+          </div> : <p>Nenhuma loja com reembolso recebido para os filtros e ondas selecionados.</p>}
+        </div>}
+      </Modal>
       <Modal open={Boolean(modalData)} onClose={()=>setOpenIndicator(null)}
         className="forecast-detail-modal"
         title={modalData ? `Composição — ${modalData.indicator.label}` : 'Composição'}

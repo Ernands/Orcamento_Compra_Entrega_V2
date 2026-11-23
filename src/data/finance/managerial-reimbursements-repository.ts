@@ -1,5 +1,6 @@
 import { supabase } from '../supabase/client';
 import { getWaveScopedStoreIds } from '../waves/wave-scope-repository';
+import { fetchAllPages, fetchAllPagesForIds } from '../supabase/pagination';
 import type { ManagerialReimbursementEntry, ManagerialReimbursementType } from '../../domain/managerial-reimbursements';
 type Row = {
   id:string; store_id:string; entry_type:ManagerialReimbursementType;
@@ -14,11 +15,22 @@ const map=(r:Row):ManagerialReimbursementEntry=>({
 export async function listManagerialReimbursements():Promise<ManagerialReimbursementEntry[]> {
   const storeIds = await getWaveScopedStoreIds();
   if (storeIds !== null && storeIds.length === 0) return [];
-  const query = supabase.from('finance_managerial_reimbursement_entries' as never).select('*');
-  const {data,error}=await (storeIds === null ? query : query.in('store_id',storeIds))
-    .order('created_at',{ascending:false}).limit(5000);
-  if(error) throw new Error(error.message);
-  return ((data||[]) as Row[]).map(map);
+  // Do not silently truncate receipts at the Supabase API row cap: dropping a
+  // reimbursement makes the displayed outstanding BB allowance incorrect.
+  // Page under the selected store IDs, never fall back to a global read.
+  const rows = storeIds === null
+    ? await fetchAllPages<Row>((from, to) => supabase
+      .from('finance_managerial_reimbursement_entries' as never)
+      .select('*').order('created_at', { ascending: false })
+      .order('id', { ascending: false }).range(from, to))
+    : await fetchAllPagesForIds<Row>(storeIds, (ids, from, to) => supabase
+      .from('finance_managerial_reimbursement_entries' as never)
+      .select('*').in('store_id', ids)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false }).range(from, to));
+  // Multiple ID batches may arrive in a different order than a global query.
+  rows.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+  return rows.map(map);
 }
 export async function addManagerialReimbursement(values:{
   storeId:string; type:ManagerialReimbursementType; amountCents:bigint;

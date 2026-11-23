@@ -311,7 +311,8 @@ describe('Previsão Orçamentária — indicadores financeiros reais',()=>{
   expect(page).not.toContain('Prospector');
   // Reimbursement amounts are integrated in the original five sections.
   expect(page.match(/<ForecastSection color=/g)).toHaveLength(5);
-  expect(page).toContain("(['bb','activeStores','reimbursed'] as const)");
+  expect(page).toContain('className="forecast-card-grid forecast-card-grid--bb-breakdown"');
+  expect(page).toContain('setOpenBbComposition');
   expect(page).toContain('Perda absorvida: ');
   expect(page).not.toContain('Situação do reembolso');
   expect(page).not.toContain('Reembolsos — Visão gerencial');
