@@ -215,7 +215,7 @@ describe('Dashboard gerencial de reembolso',()=>{
     expect(migration).toContain('reversal_of uuid unique');
     expect(forecast).toContain('Considerar reembolsos');
     expect(forecast).toContain('buildBudgetForecast');
-    expect(forecast).toContain('managerialSettlementsByStore(dataset.managerialEntries,dataset.overview)');
+    expect(forecast).toContain('managerialSettlementsByStore(dataset.managerialEntries, dataset.overview)');
     expect(forecast).toContain('Perda absorvida: ');
     expect(page).toContain('Marcar como finalizado');
     expect(page).toContain('finalizeReimbursementAndCloseStore({');
