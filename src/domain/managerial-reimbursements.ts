@@ -32,6 +32,27 @@ export const reimbursementStatusLabels: Record<ReimbursementStatus,string> = {
   not_requested:'Não solicitado', requested:'Solicitado',
   partial:'Parcialmente reembolsado', received:'Reembolsado', finalized:'Finalizado', divergent:'Divergência',
 };
+
+/**
+ * "Com reembolso recebido" is a consultation filter, never a new workflow
+ * status: finalized and partially reimbursed stores may have positive cash
+ * receipts. Respect all existing filters and the wave-scoped rows provided
+ * by the repositories. Net receipts of zero (including full reversals) are
+ * intentionally excluded.
+ */
+export type ManagerialReimbursementFilter = ReimbursementStatus | 'all' | 'with_received';
+export function filterManagerialReimbursements(
+  rows: readonly ManagerialReimbursementRow[],
+  filters: { uf: string; storeId: string; status: ManagerialReimbursementFilter },
+): ManagerialReimbursementRow[] {
+  return rows.filter((row) =>
+    (!filters.uf || row.state === filters.uf)
+    && (!filters.storeId || row.storeId === filters.storeId)
+    && (filters.status === 'all'
+      || (filters.status === 'with_received'
+        ? row.receivedCents > 0n
+        : row.reimbursementStatus === filters.status)));
+}
 export function reimbursementStatus(requested: bigint, received: bigint): ReimbursementStatus {
   if (requested < 0n || received < 0n || received > requested) return 'divergent';
   if (requested === 0n) return received === 0n ? 'not_requested' : 'divergent';
