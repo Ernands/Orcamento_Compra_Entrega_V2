@@ -11,10 +11,10 @@ import { buildFinanceStoreRows } from '../domain/finance-calculations';
 import { buildFinanceOverviewRows } from '../domain/finance-overview';
 import { addManagerialReimbursement, finalizeReimbursementAndCloseStore,
   listManagerialReimbursements } from '../data/finance/managerial-reimbursements-repository';
-import { buildManagerialReimbursements, managerialTotals, reimbursementStatusLabels,
-  reimbursementBalanceLines, reimbursementWorkflowStatus,
+import { buildManagerialReimbursements, filterManagerialReimbursements,
+  managerialTotals, reimbursementStatusLabels, reimbursementBalanceLines, reimbursementWorkflowStatus,
   type ManagerialReimbursementEntry, type ManagerialReimbursementRow, type ManagerialReimbursementMovementType,
-  type ReimbursementStatus } from '../domain/managerial-reimbursements';
+  type ManagerialReimbursementFilter } from '../domain/managerial-reimbursements';
 import { formatBRL, moneyToCents } from '../domain/supply-calculations';
 import { FinanceAmount } from '../components/finance-amount';
 import type { Store } from '../domain/types';
@@ -34,7 +34,7 @@ export function ManagerialReimbursementPage() {
   const [error,setError]=useState<string|null>(null);
   const [uf,setUf]=useState('');
   const [storeId,setStoreId]=useState('');
-  const [status,setStatus]=useState<ReimbursementStatus|'all'>('all');
+  const [status,setStatus]=useState<ManagerialReimbursementFilter>('all');
   const [selected,setSelected]=useState<ManagerialReimbursementRow|null>(null);
   const [kind,setKind]=useState<ManagerialReimbursementMovementType>('requested');
   const [amount,setAmount]=useState('');
@@ -64,8 +64,8 @@ export function ManagerialReimbursementPage() {
   useEffect(()=>{void load();},[load]);
   const allRows=useMemo(()=>data?buildManagerialReimbursements(data.stores,data.overview,data.entries):[],[data]);
   const states=useMemo(()=>[...new Set(allRows.map(r=>r.state))].sort(),[allRows]);
-  const shown=useMemo(()=>allRows.filter(r=>(!uf||r.state===uf)&&(!storeId||r.storeId===storeId)
-    &&(status==='all'||r.reimbursementStatus===status)),[allRows,uf,storeId,status]);
+  const shown=useMemo(()=>filterManagerialReimbursements(allRows,{uf,storeId,status}),
+    [allRows,uf,storeId,status]);
   const totals=useMemo(()=>managerialTotals(shown),[shown]);
   const open=(row:ManagerialReimbursementRow)=>{
     setSelected(row);setKind('requested');setAmount('');setEntryDate(today());
@@ -171,7 +171,9 @@ export function ManagerialReimbursementPage() {
           <option value="">Todas</option>{allRows.filter(r=>!uf||r.state===uf).map(r=>
             <option key={r.storeId} value={r.storeId}>{r.code} · {r.city}/{r.state}</option>)}</select></label>
         <label>Situação do reembolso <select value={status} onChange={e=>setStatus(e.target.value as typeof status)}>
-          <option value="all">Todas</option>{Object.entries(reimbursementStatusLabels).map(([key,label])=>
+          <option value="all">Todas</option>
+          <option value="with_received">Com reembolso recebido</option>
+          {Object.entries(reimbursementStatusLabels).map(([key,label])=>
             <option key={key} value={key}>{label}</option>)}</select></label>
         <button className="button button--secondary" onClick={()=>{
           setUf('');setStoreId('');setStatus('all');}}>Limpar</button>
