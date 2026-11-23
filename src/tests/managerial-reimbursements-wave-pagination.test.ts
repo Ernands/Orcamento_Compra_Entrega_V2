@@ -13,7 +13,7 @@ const db = vi.hoisted<{
 }>(() => ({ storeIds: ['store-1'], rows: [], requests: [] }));
 
 vi.mock('../data/waves/wave-scope-repository', () => ({
-  getWaveScopedStoreIds: async () => db.storeIds,
+  getWaveScopedStoreIds: () => Promise.resolve(db.storeIds),
 }));
 vi.mock('../data/supabase/client', () => ({
   supabase: {
